@@ -57,6 +57,26 @@ describe("TrekMailClient", () => {
     expect(headers["Idempotency-Key"]).toBe("put-key");
   });
 
+  it("sends Idempotency-Key on PATCH requests when provided", async () => {
+    await (client as unknown as {
+      request: (
+        method: string,
+        path: string,
+        opts: { body: Record<string, unknown>; idempotencyKey: string },
+      ) => Promise<unknown>;
+    }).request("PATCH", "test-patch", { body: { enabled: true }, idempotencyKey: "patch-key" });
+    const headers = getLastFetchHeaders(mockFetch);
+    expect(headers["Idempotency-Key"]).toBe("patch-key");
+  });
+
+  it("sends generated Idempotency-Key on DELETE helper methods", async () => {
+    await client.deleteMessage(42, { folder: "INBOX" });
+    const headers = getLastFetchHeaders(mockFetch);
+    expect(headers["Idempotency-Key"]).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+  });
+
   it("builds correct URL for list endpoints with query params", async () => {
     await client.listDomains({ status: "active", page: 2, per_page: 10 });
     const { url } = getLastFetchCall(mockFetch);
@@ -111,6 +131,21 @@ describe("TrekMailClient", () => {
       // This won't actually run because the first assertion catches it,
       // but the above expect is sufficient
     }
+  });
+
+  it("surfaces a short hint for non-JSON API errors", async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response("<html><body>Bad gateway from proxy</body></html>", {
+        status: 502,
+        headers: { "Content-Type": "text/html" },
+      }),
+    );
+
+    await expect(client.getDomain(999)).rejects.toMatchObject({
+      code: "non_json_response",
+      statusCode: 502,
+      hint: expect.stringContaining("Bad gateway from proxy"),
+    });
   });
 
   it("includes password_mode in createMailboxGeneratedPassword body", async () => {

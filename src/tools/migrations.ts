@@ -91,7 +91,11 @@ export function registerMigrationTools(
         source_email: z.string().email().max(255).describe("Source email address"),
         source_username: z.string().max(255).optional().describe("IMAP username (defaults to source_email)"),
         source_password: z.string().max(255).describe("Source IMAP password or app password"),
-        target_password: z.string().max(255).describe("Target TrekMail mailbox password"),
+        // Audit finding #17: target_password was previously a required
+        // parameter, but the API ignores it — Dovecot uses a master-user
+        // and MigrationOrchestrationService hard-codes target_password=null.
+        // Removed entirely so agents don't ask the user for credentials
+        // they shouldn't be touching.
         selected_folders: z.array(z.string().max(255)).optional().describe("Folders to migrate (empty = all folders)"),
         import_since: z.string().optional().describe("Only import messages from this date (YYYY-MM-DD)"),
         skip_duplicates: z.boolean().optional().describe("Skip messages already in target (default: true)"),
@@ -99,7 +103,7 @@ export function registerMigrationTools(
         idempotency_key: z.string().optional().describe("Optional idempotency key"),
       },
     },
-    async ({ mailbox_id, provider, source_host, source_port, source_security, source_email, source_username, source_password, target_password, selected_folders, import_since, skip_duplicates, confirm_start, idempotency_key }) => {
+    async ({ mailbox_id, provider, source_host, source_port, source_security, source_email, source_username, source_password, selected_folders, import_since, skip_duplicates, confirm_start, idempotency_key }) => {
       if (!config.allowMigration) {
         return errorResult(
           "Migration operations are disabled. Set TREKMAIL_ALLOW_MIGRATION=true to enable email migrations via the MCP server.",
@@ -115,7 +119,7 @@ export function registerMigrationTools(
       }
       const idemKey = idempotencyKey("start_migration", { mailbox_id, source_host, source_email }, idempotency_key);
       return callApi(() => client.startMigration(
-        { mailbox_id, provider, source_host, source_port, source_security, source_email, source_username, source_password, target_password, selected_folders, import_since, skip_duplicates },
+        { mailbox_id, provider, source_host, source_port, source_security, source_email, source_username, source_password, selected_folders, import_since, skip_duplicates },
         idemKey,
       ));
     },
@@ -302,8 +306,12 @@ export function registerMigrationTools(
       if (!confirm_cancel) {
         return errorResult("Not confirmed. Set confirm_cancel=true to cancel the bulk migration.");
       }
-      const idemKey = idempotencyKey("cancel_bulk_migration", { batch_id });
-      return callApi(() => client.cancelBulkMigration(batch_id, idemKey));
+      // Audit finding #19: server route /migrations/bulk/{batch}:cancel
+      // is NOT registered with the api.idempotency middleware, so any
+      // Idempotency-Key we send is silently ignored. Don't compute one
+      // — it gives a false sense of dedup safety. (To make this real,
+      // server route must add api.idempotency middleware.)
+      return callApi(() => client.cancelBulkMigration(batch_id));
     },
   );
 
@@ -325,8 +333,8 @@ export function registerMigrationTools(
       if (!confirm_retry) {
         return errorResult("Not confirmed. Set confirm_retry=true to retry failed jobs.");
       }
-      const idemKey = idempotencyKey("retry_bulk_migration", { batch_id });
-      return callApi(() => client.retryBulkMigration(batch_id, idemKey));
+      // Audit finding #19 — server route lacks api.idempotency.
+      return callApi(() => client.retryBulkMigration(batch_id));
     },
   );
 
@@ -350,8 +358,9 @@ export function registerMigrationTools(
       if (!confirm_delete) {
         return errorResult("Deletion not confirmed. Set confirm_delete=true to delete the bulk migration batch.");
       }
-      const idemKey = idempotencyKey("delete_bulk_migration", { batch_id });
-      return callApi(() => client.deleteBulkMigration(batch_id, idemKey));
+      // Audit finding #19 — server route lacks api.idempotency. Also
+      // DELETE is not handled by ApiIdempotency at all (audit #6).
+      return callApi(() => client.deleteBulkMigration(batch_id));
     },
   );
 
@@ -392,8 +401,8 @@ export function registerMigrationTools(
       if (!confirm_resume) {
         return errorResult("Not confirmed. Set confirm_resume=true to resume the batch.");
       }
-      const idemKey = idempotencyKey("resume_bulk_migration", { batch_id });
-      return callApi(() => client.resumeBulkMigration(batch_id, idemKey));
+      // Audit finding #19 — server route lacks api.idempotency.
+      return callApi(() => client.resumeBulkMigration(batch_id));
     },
   );
 }

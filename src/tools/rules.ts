@@ -153,7 +153,7 @@ export function registerRulesTools(
           .positive()
           .describe("The filter ID to update"),
         name: z.string().max(255).optional().describe("Filter name"),
-        match_type: z.enum(["all", "any"]).describe("Match type"),
+        match_type: z.enum(["all", "any"]).default("all").describe("Match type"),
         conditions: z.array(conditionSchema).min(1).max(10).describe("Updated conditions"),
         actions: z.array(actionSchema).min(1).max(5).describe("Updated actions"),
         stop: z.boolean().optional().describe("Stop after match"),

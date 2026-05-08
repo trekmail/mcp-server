@@ -13,7 +13,7 @@ export function registerInviteTools(
     {
       title: "Create Invite",
       description:
-        "Create a setup invite for a mailbox. Sends an email to the recipient with a link to set their own password and complete mailbox setup.",
+        "Create a setup invite for a mailbox. Sends an email to the recipient with a link to set their own password and complete mailbox setup. Storage defaults to the shared account pool; pass storage_allocation_mb to pre-allocate dedicated storage that the recipient inherits at redeem.",
       inputSchema: {
         domain_id: z
           .number()
@@ -39,6 +39,14 @@ export function registerInviteTools(
           .max(720)
           .optional()
           .describe("Hours until the invite expires (1-720, default: 72)"),
+        storage_allocation_mb: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe(
+            "Optional dedicated storage allocation in MB (e.g. 5120 for 5 GB). Omit for shared pool. Pending dedicated invites count against the available pool until they are redeemed or expire.",
+          ),
         idempotency_key: z
           .string()
           .optional()
@@ -52,16 +60,17 @@ export function registerInviteTools(
       local_part,
       recipient_email,
       expires_in_hours,
+      storage_allocation_mb,
       idempotency_key,
     }) => {
       const idemKey = idempotencyKey(
         "create_invite",
-        { domain_id, local_part, recipient_email, expires_in_hours },
+        { domain_id, local_part, recipient_email, expires_in_hours, storage_allocation_mb },
         idempotency_key,
       );
       return callApi(() =>
         client.createInvite(
-          { domain_id, local_part, recipient_email, expires_in_hours },
+          { domain_id, local_part, recipient_email, expires_in_hours, storage_allocation_mb },
           idemKey,
         ),
       );
@@ -93,6 +102,14 @@ export function registerInviteTools(
                 .email()
                 .max(255)
                 .describe("The recipient's existing email address"),
+              storage_allocation_mb: z
+                .number()
+                .int()
+                .positive()
+                .optional()
+                .describe(
+                  "Optional dedicated storage allocation in MB (e.g. 5120 for 5 GB). Omit for shared pool. Sum across all items is validated against the available pool.",
+                ),
             }),
           )
           .min(1)

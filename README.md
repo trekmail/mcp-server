@@ -87,17 +87,17 @@ npm start
 ### Mailboxes (ops token)
 - **list_mailboxes** — List mailboxes with optional domain/search filters
 - **get_mailbox** — Get details for a specific mailbox
-- **create_mailbox_generated_password** — Create mailbox with auto-generated one-time password
+- **create_mailbox_generated_password** — Create mailbox with auto-generated one-time password (optional `storage_allocation_mb` carves out dedicated storage from the account pool; omit for shared)
 - **change_mailbox_password** — Change the password for a mailbox (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **update_mailbox_note** — Update the admin note on a mailbox
 - **pause_mailbox** — Disable a mailbox (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **resume_mailbox** — Re-enable a paused mailbox
 - **enable_imap** — Enable IMAP access for a mailbox (required for Message API)
-- **bulk_create_mailboxes** — Create 1-100 mailboxes at once (returns per-item results)
+- **bulk_create_mailboxes** — Create 1-100 mailboxes at once with per-item `storage_allocation_mb` (sum across the batch is validated against the available pool)
 
 ### Invites (ops token)
-- **create_invite** — Send a setup invite to a recipient
-- **create_invites_bulk** — Send up to 100 setup invites in one call
+- **create_invite** — Send a setup invite to a recipient (optional `storage_allocation_mb` pre-allocates dedicated storage; the recipient inherits it at redeem)
+- **create_invites_bulk** — Send up to 100 setup invites in one call (per-item `storage_allocation_mb` supported)
 
 ### Aliases (ops token)
 - **list_aliases** — List all aliases for a mailbox (includes primary address and plan limits)
@@ -357,10 +357,47 @@ Additionally, each write tool requires a per-call confirmation parameter (`confi
 2. set_forwarding(mailbox_id: 10, enabled: true, targets: ["alice@gmail.com"], keep_copy: true)
 ```
 
+### Create Mailbox with Dedicated Storage
+```
+# Carve out 5 GB just for this mailbox — other shared mailboxes can't grow into it.
+1. create_mailbox_generated_password(
+     domain_id: 5,
+     local_part: "ceo",
+     storage_allocation_mb: 5120
+   ) → { id: 11, email: "ceo@example.com", password: "...", is_pooled_storage: false, storage_allocation_mb: 5120 }
+```
+
+### Bulk Create with Mixed Storage Modes
+```
+# Mix shared and dedicated in one call. The sum of all storage_allocation_mb
+# across the batch is checked against the available pool — if it would
+# over-commit, the entire batch is rejected with 422 storage_pool_exceeded.
+1. bulk_create_mailboxes(items: [
+     { domain_id: 5, local_part: "support" },                                  # shared
+     { domain_id: 5, local_part: "founder",  storage_allocation_mb: 10240 },  # 10 GB dedicated
+     { domain_id: 5, local_part: "team-lead", storage_allocation_mb: 5120 },  # 5 GB dedicated
+   ])
+```
+
 ### Invite Flow
 ```
 1. create_invite(domain_id: 5, local_part: "bob", recipient_email: "bob@gmail.com")
    → { id: 1, status: "pending", invite_url: "..." }
+```
+
+### Invite with Pre-Allocated Storage
+```
+# Pending dedicated invites count against the available pool until they
+# are redeemed or expire — no over-committing.
+1. create_invite(
+     domain_id: 5,
+     local_part: "exec",
+     recipient_email: "exec@external.com",
+     storage_allocation_mb: 10240
+   ) → { id: 2, status: "pending", storage_allocation_mb: 10240 }
+# When the recipient redeems, the new mailbox inherits the 10 GB dedicated allocation.
+# If the pool no longer fits at redeem time, the new mailbox falls back to shared
+# (the recipient sees a notice on the success page) — redeem itself never fails.
 ```
 
 ### Safe Delete
@@ -396,6 +433,77 @@ Additionally, each write tool requires a per-call confirmation parameter (`confi
      idempotency_key: "weekly-report-2026-02-07"
    ) → { status: "queued", message_id: "uuid@trekmail.net", queued_at: "..." }
 ```
+
+## Drive Tools
+
+31 tools for the `/api/v1/drive/*` REST surface — see `docs/api/drive.md`
+for the full API reference.
+
+| Tool | Purpose |
+|---|---|
+| `drive_spaces_list` | List Drive spaces this token can enumerate (account_drive + per-mailbox) |
+| `drive_storage_summary` | Account-wide pool snapshot (used / limit / addon flags) |
+| `drive_space_usage` | Per-space quota snapshot |
+| `drive_browse_folder` | Cursor-paginated listing of one folder's files + subfolders |
+| `drive_folder_tree` | Flat tree of every folder in a space |
+| `drive_select_all_ids` | Bulk-select helper (capped at 5000 ids) |
+| `drive_file_get` | File metadata |
+| `drive_file_download_url` | Short-lived presigned B2 URL (forced attachment) |
+| `drive_file_rename` / `_move` / `_trash` / `_restore` / `_purge` | File CRUD |
+| `drive_folder_create` / `_update` / `_move` / `_trash` / `_restore` / `_purge` | Folder CRUD; `_update` accepts `name` and/or `color` (#RRGGBB); `_create` accepts `is_shared` to publish to the whole account immediately |
+| `drive_folder_share_with_account` / `_stop_sharing` | Toggle whether a folder is visible to every mailbox in the account (Phase H — moves the folder + subtree from mailbox-personal Drive to account-drive when needed) |
+| `drive_trash_list` / `_empty` | Trash listing + nuke |
+| `drive_bulk_trash` / `_restore` / `_move` / `_purge` | One call, N items (cap 5000) |
+| `drive_share_create` / `_list` / `_revoke` | Public share-links (raw token returned ONCE) |
+| `drive_file_upload` | **High-level: one tool, full flow.** Streams local file → presigned B2 URL(s) → registers as available. Use this by default. |
+| `drive_upload_initiate` / `_complete` / `_refresh_parts` / `_abort` | Low-level multipart upload primitives — for agents that PUT bytes themselves |
+| `drive_addon_get` / `_pricing` / `_cancellation_preview` | Drive Storage Add-on (read-only; purchase / resize / cancel are dashboard-only by product decision) |
+
+`{space}` parameters accept `"account"` (account-drive singleton),
+`"mailbox:N"` (mailbox-personal), or a numeric `DriveSpace.id`.
+
+### Plan / addon gating
+
+Drive scopes light up for any account on a paid plan **OR** with an
+active Drive Storage Add-on (mirrors how `verify:*` works for the
+Email Verifier). Free + addon active is a fully supported path —
+mint a token with `drive:account:read` etc. and it works. When the
+addon enters its 7-day post-cancellation grace window, write/share/
+purge tokens lose access; read tokens keep working.
+
+### Upload flow
+
+**Default — `drive_file_upload`** (one tool, all three steps):
+
+```
+drive_file_upload(space="account", local_path="/path/to/report.pdf",
+                  folder_id=42, client_mime="application/pdf")
+```
+
+The wrapper:
+1. Reads file size and calls `drive_upload_initiate`.
+2. **Streams** the file straight to B2 via the presigned URL(s).
+   Bytes do NOT pass through MCP infrastructure beyond the wrapper
+   process — and they never touch the API server. Memory stays
+   bounded for files of any size (tested with multi-GB).
+3. For files ≥ 100 MB, uses multipart: 50 MB chunks, captures each
+   B2 ETag, refreshes any expired part URL once before failing.
+4. Calls `drive_upload_complete` to register the file as available.
+5. On any error along the way, calls `drive_upload_abort` to release
+   the quota reservation. (The reservation is also reclaimed by the
+   server's hourly GC job — abort is a fast path, not a guarantee.)
+
+**Low-level primitives** (`drive_upload_initiate` etc.) stay available
+for agents that want to drive the PUT phase themselves — e.g. uploads
+from a remote source instead of the MCP host's filesystem.
+
+### Audit attribution
+
+Every mutating Drive tool stamps `actor_type='api_token'` and
+`api_token_id=<token id>` on the audit row, so the dashboard's API
+audit tab can filter by token. The mailbox/user context the token
+is acting on behalf of is preserved in the existing `mailbox_id` /
+`metadata.actor_user_id` fields.
 
 ## Development
 

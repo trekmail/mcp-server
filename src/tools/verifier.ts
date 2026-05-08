@@ -189,7 +189,7 @@ export function registerVerifierTools(
     {
       title: "Download Verification Results",
       description:
-        "Get a download URL for verification results as CSV. Available filters: all, safe, safe_risky.",
+        "Returns the verification results as raw CSV body in the response (NOT a URL). Filters: all, safe, safe_risky. For very large jobs (>10MB) the response can be slow — consider filtering down to safe-only first.",
       inputSchema: {
         job_id: z
           .number()

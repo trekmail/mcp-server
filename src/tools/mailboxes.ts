@@ -68,7 +68,7 @@ export function registerMailboxTools(
     {
       title: "Create Mailbox",
       description:
-        "Create a new mailbox with an auto-generated one-time password. The password is returned once and must be saved immediately — it cannot be retrieved later.",
+        "Create a new mailbox with an auto-generated one-time password. The password is returned once and must be saved immediately — it cannot be retrieved later. Storage defaults to the shared account pool; pass storage_allocation_mb to carve out a dedicated allocation.",
       inputSchema: {
         domain_id: z
           .number()
@@ -87,6 +87,14 @@ export function registerMailboxTools(
           .max(255)
           .optional()
           .describe("Optional display name for the mailbox"),
+        storage_allocation_mb: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe(
+            "Optional dedicated storage allocation in megabytes (e.g. 5120 for 5 GB). Omit for shared pool (default). Validated against the live account pool minus other dedicated allocations and pending dedicated invites.",
+          ),
         idempotency_key: z
           .string()
           .optional()
@@ -95,15 +103,15 @@ export function registerMailboxTools(
           ),
       },
     },
-    async ({ domain_id, local_part, display_name, idempotency_key }) => {
+    async ({ domain_id, local_part, display_name, storage_allocation_mb, idempotency_key }) => {
       const idemKey = idempotencyKey(
         "create_mailbox_generated_password",
-        { domain_id, local_part, display_name },
+        { domain_id, local_part, display_name, storage_allocation_mb },
         idempotency_key,
       );
       return callApi(() =>
         client.createMailboxGeneratedPassword(
-          { domain_id, local_part, display_name },
+          { domain_id, local_part, display_name, storage_allocation_mb },
           idemKey,
         ),
       );
@@ -245,8 +253,14 @@ export function registerMailboxTools(
     {
       title: "Bulk Create Mailboxes",
       description:
-        "Create multiple mailboxes at once (1-100). Each item specifies a domain and local part. Returns per-item results with status codes (200 created, 207 partial success, 422 all failed).",
+        "Create multiple mailboxes at once (1-100). Each item specifies a domain and local part. password_mode='generated_one_time' lets the server generate one-time passwords (returned in each result row); 'user_supplied' requires items.*.password (default if omitted, for backward compat). Per-item storage_allocation_mb is optional — items without it use the shared account pool; the sum of all dedicated allocations across the batch is validated against the available pool. Returns per-item results with status codes (200 created, 207 partial success, 422 all failed).",
       inputSchema: {
+        password_mode: z
+          .enum(["user_supplied", "generated_one_time"])
+          .optional()
+          .describe(
+            "How passwords are sourced. 'generated_one_time' returns one_time_password per created row (store immediately, the server doesn't keep them). Default: 'user_supplied'.",
+          ),
         items: z
           .array(
             z.object({
@@ -260,12 +274,23 @@ export function registerMailboxTools(
                 .max(64)
                 .regex(/^[a-z0-9._-]+$/)
                 .describe("Local part of the email address (before the @)"),
+              // Optional now — required only when password_mode is
+              // 'user_supplied' (or omitted). Server enforces via
+              // 'required_unless:password_mode,generated_one_time'.
               password: z
                 .string()
                 .min(12)
                 .optional()
                 .describe(
-                  "Optional password. If omitted, a one-time password is generated and returned.",
+                  "Required when password_mode='user_supplied' (default). Min 12 chars, must contain upper/lower/digit. Omit if password_mode='generated_one_time'.",
+                ),
+              storage_allocation_mb: z
+                .number()
+                .int()
+                .positive()
+                .optional()
+                .describe(
+                  "Optional dedicated storage allocation in MB (e.g. 5120 for 5 GB). Omit for shared pool. Sum across all items is validated against the available pool.",
                 ),
             }),
           )
@@ -280,13 +305,13 @@ export function registerMailboxTools(
           ),
       },
     },
-    async ({ items, idempotency_key }) => {
+    async ({ password_mode, items, idempotency_key }) => {
       const idemKey = idempotencyKey(
         "bulk_create_mailboxes",
-        { count: items.length, first: items[0]?.local_part },
+        { mode: password_mode ?? "user_supplied", count: items.length, first: items[0]?.local_part },
         idempotency_key,
       );
-      return callApi(() => client.bulkCreateMailboxes(items, idemKey));
+      return callApi(() => client.bulkCreateMailboxes(items, idemKey, password_mode));
     },
   );
 

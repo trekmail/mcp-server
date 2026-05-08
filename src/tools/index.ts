@@ -29,6 +29,7 @@ import { registerMessageTokenTools } from "./message-tokens.js";
 import { registerSpamStatsTools } from "./spam-stats.js";
 import { registerVerifierTools } from "./verifier.js";
 import { registerCloudflareTools } from "./cloudflare.js";
+import { registerDriveTools } from "./drive.js";
 
 /**
  * Register infrastructure tools (domains, DNS, mailboxes, invites, forwarding, delete).
@@ -57,6 +58,7 @@ export function registerInfraTools(
   registerSpamStatsTools(server, client);
   registerVerifierTools(server, client);
   registerCloudflareTools(server, client, config);
+  registerDriveTools(server, client, { allowDestructive: config.allowDestructive });
 }
 
 /**

@@ -28,6 +28,8 @@ export interface CreateMailboxParams {
   domain_id: number;
   local_part: string;
   display_name?: string;
+  /** Optional dedicated allocation in MB; omit for shared pool. */
+  storage_allocation_mb?: number;
 }
 
 export interface CreateInviteParams {
@@ -35,6 +37,8 @@ export interface CreateInviteParams {
   local_part: string;
   recipient_email: string;
   expires_in_hours?: number;
+  /** Optional dedicated allocation in MB; omit for shared pool. */
+  storage_allocation_mb?: number;
 }
 
 export interface CreateInvitesBulkParams {
@@ -42,6 +46,8 @@ export interface CreateInvitesBulkParams {
   items: Array<{
     local_part: string;
     recipient_email: string;
+    /** Optional dedicated allocation in MB; omit for shared pool. */
+    storage_allocation_mb?: number;
   }>;
   expires_in_hours?: number;
 }
@@ -70,7 +76,10 @@ export interface StartMigrationParams {
   source_email: string;
   source_username?: string;
   source_password: string;
-  target_password: string;
+  // Audit finding #17: target_password removed. The API ignores it
+  // (Dovecot uses a master-user; MigrationOrchestrationService hard-
+  // codes target_password=null). Listing it here misled MCP agents
+  // into thinking they needed to collect a credential they shouldn't.
   selected_folders?: string[];
   import_since?: string;
   skip_duplicates?: boolean;
@@ -322,11 +331,21 @@ export class TrekMailClient {
   }
 
   async bulkCreateMailboxes(
-    items: Array<{ domain_id: number; local_part: string; password?: string }>,
+    items: Array<{
+      domain_id: number;
+      local_part: string;
+      password?: string;
+      /** Optional dedicated allocation in MB; omit for shared pool. */
+      storage_allocation_mb?: number;
+    }>,
     idempotencyKey: string,
+    passwordMode?: "user_supplied" | "generated_one_time",
   ): Promise<unknown> {
     return this.request("POST", "mailboxes:bulk", {
-      body: { items },
+      body: {
+        items,
+        ...(passwordMode ? { password_mode: passwordMode } : {}),
+      },
       idempotencyKey,
     });
   }
@@ -414,7 +433,9 @@ export class TrekMailClient {
   }
 
   async deleteMailRule(mailboxId: number, ruleId: number): Promise<unknown> {
-    return this.request("DELETE", `mailboxes/${mailboxId}/rules/${ruleId}`);
+    return this.request("DELETE", `mailboxes/${mailboxId}/rules/${ruleId}`, {
+      idempotencyKey: randomUUID(),
+    });
   }
 
   async reorderMailRules(
@@ -578,20 +599,22 @@ export class TrekMailClient {
     return this.request("GET", `migrations/bulk/${id}`);
   }
 
-  async cancelBulkMigration(id: number, idempotencyKey: string): Promise<unknown> {
-    return this.request("POST", `migrations/bulk/${id}:cancel`, { idempotencyKey });
+  async cancelBulkMigration(id: number): Promise<unknown> {
+    return this.request("POST", `migrations/bulk/${id}:cancel`);
   }
 
-  async retryBulkMigration(id: number, idempotencyKey: string): Promise<unknown> {
-    return this.request("POST", `migrations/bulk/${id}:retry`, { idempotencyKey });
+  async retryBulkMigration(id: number): Promise<unknown> {
+    return this.request("POST", `migrations/bulk/${id}:retry`);
   }
 
-  async resumeBulkMigration(id: number, idempotencyKey: string): Promise<unknown> {
-    return this.request("POST", `migrations/bulk/${id}:resume`, { idempotencyKey });
+  async resumeBulkMigration(id: number): Promise<unknown> {
+    return this.request("POST", `migrations/bulk/${id}:resume`);
   }
 
-  async deleteBulkMigration(id: number, idempotencyKey: string): Promise<unknown> {
-    return this.request("DELETE", `migrations/bulk/${id}`, { idempotencyKey });
+  async deleteBulkMigration(id: number): Promise<unknown> {
+    return this.request("DELETE", `migrations/bulk/${id}`, {
+      idempotencyKey: randomUUID(),
+    });
   }
 
   async updateBulkMigrationJobPassword(
@@ -720,6 +743,7 @@ export class TrekMailClient {
   async deleteMessage(uid: number, params?: { folder?: string }): Promise<unknown> {
     return this.request("DELETE", `messages/${uid}`, {
       query: params ? { ...params } : undefined,
+      idempotencyKey: randomUUID(),
     });
   }
 
@@ -777,7 +801,9 @@ export class TrekMailClient {
   }
 
   async deleteFolder(path: string): Promise<unknown> {
-    return this.request("DELETE", `messages/folders/${encodeURIComponent(path)}`);
+    return this.request("DELETE", `messages/folders/${encodeURIComponent(path)}`, {
+      idempotencyKey: randomUUID(),
+    });
   }
 
   async saveDraft(body: Record<string, unknown>): Promise<unknown> {
@@ -859,7 +885,9 @@ export class TrekMailClient {
   }
 
   async deleteContactGroup(id: number): Promise<unknown> {
-    return this.request("DELETE", `messages/contact-groups/${id}`);
+    return this.request("DELETE", `messages/contact-groups/${id}`, {
+      idempotencyKey: randomUUID(),
+    });
   }
 
   async addContactGroupMembers(id: number, body: Record<string, unknown>): Promise<unknown> {
@@ -867,7 +895,10 @@ export class TrekMailClient {
   }
 
   async removeContactGroupMembers(id: number, body: Record<string, unknown>): Promise<unknown> {
-    return this.request("DELETE", `messages/contact-groups/${id}/members`, { body });
+    return this.request("DELETE", `messages/contact-groups/${id}/members`, {
+      body,
+      idempotencyKey: randomUUID(),
+    });
   }
 
   // --- Identities ---
@@ -885,7 +916,9 @@ export class TrekMailClient {
   }
 
   async deleteIdentity(id: number): Promise<unknown> {
-    return this.request("DELETE", `messages/identities/${id}`);
+    return this.request("DELETE", `messages/identities/${id}`, {
+      idempotencyKey: randomUUID(),
+    });
   }
 
   // --- Templates ---
@@ -903,7 +936,9 @@ export class TrekMailClient {
   }
 
   async deleteTemplate(id: number): Promise<unknown> {
-    return this.request("DELETE", `messages/templates/${id}`);
+    return this.request("DELETE", `messages/templates/${id}`, {
+      idempotencyKey: randomUUID(),
+    });
   }
 
   // --- Blocked Senders ---
@@ -917,7 +952,9 @@ export class TrekMailClient {
   }
 
   async unblockSender(id: number): Promise<unknown> {
-    return this.request("DELETE", `messages/blocked-senders/${id}`);
+    return this.request("DELETE", `messages/blocked-senders/${id}`, {
+      idempotencyKey: randomUUID(),
+    });
   }
 
   // --- Scheduled Send ---
@@ -937,7 +974,9 @@ export class TrekMailClient {
   }
 
   async cancelScheduled(id: number): Promise<unknown> {
-    return this.request("DELETE", `messages/scheduled/${id}`);
+    return this.request("DELETE", `messages/scheduled/${id}`, {
+      idempotencyKey: randomUUID(),
+    });
   }
 
   // --- Contacts ---
@@ -957,7 +996,9 @@ export class TrekMailClient {
   }
 
   async deleteContact(id: number): Promise<unknown> {
-    return this.request("DELETE", `messages/contacts/${id}`);
+    return this.request("DELETE", `messages/contacts/${id}`, {
+      idempotencyKey: randomUUID(),
+    });
   }
 
   async importContacts(body: Record<string, unknown>): Promise<unknown> {
@@ -987,7 +1028,9 @@ export class TrekMailClient {
   }
 
   async deleteCalendarEvent(id: number): Promise<unknown> {
-    return this.request("DELETE", `messages/calendar/events/${id}`);
+    return this.request("DELETE", `messages/calendar/events/${id}`, {
+      idempotencyKey: randomUUID(),
+    });
   }
 
   // --- Message Tokens ---
@@ -1013,7 +1056,9 @@ export class TrekMailClient {
   }
 
   async revokeMessageToken(tokenId: number): Promise<unknown> {
-    return this.request("DELETE", `message-tokens/${tokenId}`);
+    return this.request("DELETE", `message-tokens/${tokenId}`, {
+      idempotencyKey: randomUUID(),
+    });
   }
 
   // --- Spam Metrics ---
@@ -1081,7 +1126,9 @@ export class TrekMailClient {
   }
 
   async deleteVerifyJob(jobId: number): Promise<unknown> {
-    return this.request("DELETE", `verify/bulk/${jobId}`);
+    return this.request("DELETE", `verify/bulk/${jobId}`, {
+      idempotencyKey: randomUUID(),
+    });
   }
 
   async getVerifyJobDownload(
@@ -1143,7 +1190,286 @@ export class TrekMailClient {
   }
 
   async deleteCloudflareToken(tokenId: number): Promise<unknown> {
-    return this.request("DELETE", `cloudflare/tokens/${tokenId}`);
+    return this.request("DELETE", `cloudflare/tokens/${tokenId}`, {
+      idempotencyKey: randomUUID(),
+    });
+  }
+
+  // --- Drive (PR #8) ---
+  //
+  // {space} URL segment accepts "account" | "mailbox:N" | "<spaceId>" —
+  // see EnforceDriveSpaceAccess middleware. Methods accept it as a
+  // free-form string so callers don't have to think about the encoding.
+
+  async listDriveSpaces(): Promise<unknown> {
+    return this.request("GET", "drive/spaces");
+  }
+
+  async getDriveStorage(): Promise<unknown> {
+    return this.request("GET", "drive/storage");
+  }
+
+  async getDriveSpaceUsage(space: string): Promise<unknown> {
+    return this.request("GET", `drive/spaces/${encodeURIComponent(space)}/usage`);
+  }
+
+  async listDriveFolder(
+    space: string,
+    folderId?: number | null,
+    params?: { sort?: string; dir?: string; per_page?: number; cursor?: string },
+  ): Promise<unknown> {
+    const path = folderId
+      ? `drive/spaces/${encodeURIComponent(space)}/folders/${folderId}`
+      : `drive/spaces/${encodeURIComponent(space)}/folders`;
+    return this.request("GET", path, { query: params ? { ...params } : undefined });
+  }
+
+  async getDriveFolderTree(space: string): Promise<unknown> {
+    return this.request("GET", `drive/spaces/${encodeURIComponent(space)}/folder-tree`);
+  }
+
+  async getDriveAllIds(space: string, folderId?: number | null): Promise<unknown> {
+    const path = folderId
+      ? `drive/spaces/${encodeURIComponent(space)}/folders/${folderId}/all-ids`
+      : `drive/spaces/${encodeURIComponent(space)}/all-ids`;
+    return this.request("GET", path);
+  }
+
+  async listDriveTrash(
+    space: string,
+    params?: { per_page?: number; cursor?: string },
+  ): Promise<unknown> {
+    return this.request("GET", `drive/spaces/${encodeURIComponent(space)}/trash`, {
+      query: params ? { ...params } : undefined,
+    });
+  }
+
+  async getDriveFile(fileId: number): Promise<unknown> {
+    return this.request("GET", `drive/files/${fileId}`);
+  }
+
+  async getDriveFileDownload(fileId: number): Promise<unknown> {
+    return this.request("GET", `drive/files/${fileId}/download`);
+  }
+
+  async createDriveFolder(
+    space: string,
+    name: string,
+    parentId?: number | null,
+    color?: string,
+    isShared?: boolean,
+    idempotencyKey?: string,
+  ): Promise<unknown> {
+    return this.request("POST", `drive/spaces/${encodeURIComponent(space)}/folders`, {
+      body: {
+        name,
+        ...(parentId !== undefined ? { parent_id: parentId } : {}),
+        ...(color ? { color } : {}),
+        ...(isShared !== undefined ? { is_shared: isShared } : {}),
+      },
+      idempotencyKey,
+    });
+  }
+
+  async updateDriveFolder(
+    folderId: number,
+    changes: { name?: string; color?: string | null },
+  ): Promise<unknown> {
+    return this.request("PATCH", `drive/folders/${folderId}`, { body: changes });
+  }
+
+  async moveDriveFolder(
+    folderId: number,
+    parentId: number | null,
+    idempotencyKey?: string,
+  ): Promise<unknown> {
+    return this.request("POST", `drive/folders/${folderId}:move`, {
+      body: { parent_id: parentId },
+      idempotencyKey,
+    });
+  }
+
+  async trashDriveFolder(folderId: number): Promise<unknown> {
+    return this.request("DELETE", `drive/folders/${folderId}`, {
+      idempotencyKey: randomUUID(),
+    });
+  }
+
+  async restoreDriveFolder(folderId: number, idempotencyKey?: string): Promise<unknown> {
+    return this.request("POST", `drive/folders/${folderId}:restore`, { idempotencyKey });
+  }
+
+  async purgeDriveFolder(folderId: number): Promise<unknown> {
+    return this.request("DELETE", `drive/folders/${folderId}:purge`, {
+      idempotencyKey: randomUUID(),
+    });
+  }
+
+  async shareDriveFolderWithAccount(folderId: number, idempotencyKey?: string): Promise<unknown> {
+    return this.request("POST", `drive/folders/${folderId}:share-with-account`, { idempotencyKey });
+  }
+
+  async stopSharingDriveFolder(folderId: number, idempotencyKey?: string): Promise<unknown> {
+    return this.request("POST", `drive/folders/${folderId}:stop-sharing`, { idempotencyKey });
+  }
+
+  async renameDriveFile(fileId: number, name: string): Promise<unknown> {
+    return this.request("PATCH", `drive/files/${fileId}`, { body: { name } });
+  }
+
+  async moveDriveFile(
+    fileId: number,
+    folderId: number | null,
+    idempotencyKey?: string,
+  ): Promise<unknown> {
+    return this.request("POST", `drive/files/${fileId}:move`, {
+      body: { folder_id: folderId },
+      idempotencyKey,
+    });
+  }
+
+  async trashDriveFile(fileId: number): Promise<unknown> {
+    return this.request("DELETE", `drive/files/${fileId}`, {
+      idempotencyKey: randomUUID(),
+    });
+  }
+
+  async restoreDriveFile(fileId: number, idempotencyKey?: string): Promise<unknown> {
+    return this.request("POST", `drive/files/${fileId}:restore`, { idempotencyKey });
+  }
+
+  async purgeDriveFile(fileId: number): Promise<unknown> {
+    return this.request("DELETE", `drive/files/${fileId}:purge`, {
+      idempotencyKey: randomUUID(),
+    });
+  }
+
+  async emptyDriveTrash(space: string): Promise<unknown> {
+    return this.request("DELETE", `drive/spaces/${encodeURIComponent(space)}/trash`, {
+      idempotencyKey: randomUUID(),
+    });
+  }
+
+  async bulkDriveTrash(
+    space: string,
+    fileIds: number[],
+    folderIds: number[],
+    idempotencyKey?: string,
+  ): Promise<unknown> {
+    return this.request("POST", `drive/spaces/${encodeURIComponent(space)}/bulk:trash`, {
+      body: { file_ids: fileIds, folder_ids: folderIds },
+      idempotencyKey,
+    });
+  }
+
+  async bulkDriveRestore(
+    space: string,
+    fileIds: number[],
+    folderIds: number[],
+    idempotencyKey?: string,
+  ): Promise<unknown> {
+    return this.request("POST", `drive/spaces/${encodeURIComponent(space)}/bulk:restore`, {
+      body: { file_ids: fileIds, folder_ids: folderIds },
+      idempotencyKey,
+    });
+  }
+
+  async bulkDriveMove(
+    space: string,
+    fileIds: number[],
+    folderIds: number[],
+    targetFolderId: number | null,
+    idempotencyKey?: string,
+  ): Promise<unknown> {
+    return this.request("POST", `drive/spaces/${encodeURIComponent(space)}/bulk:move`, {
+      body: { file_ids: fileIds, folder_ids: folderIds, target_folder_id: targetFolderId },
+      idempotencyKey,
+    });
+  }
+
+  async bulkDrivePurge(
+    space: string,
+    fileIds: number[],
+    folderIds: number[],
+    idempotencyKey?: string,
+  ): Promise<unknown> {
+    return this.request("POST", `drive/spaces/${encodeURIComponent(space)}/bulk:purge`, {
+      body: { file_ids: fileIds, folder_ids: folderIds },
+      idempotencyKey,
+    });
+  }
+
+  async createDriveShareLink(
+    fileId: number,
+    options: { expires_at?: string; max_downloads?: number },
+    idempotencyKey?: string,
+  ): Promise<unknown> {
+    return this.request("POST", `drive/files/${fileId}/share-links`, {
+      body: options,
+      idempotencyKey,
+    });
+  }
+
+  async listDriveShareLinks(fileId: number): Promise<unknown> {
+    return this.request("GET", `drive/files/${fileId}/share-links`);
+  }
+
+  async revokeDriveShareLink(linkId: number): Promise<unknown> {
+    return this.request("DELETE", `drive/share-links/${linkId}`, {
+      idempotencyKey: randomUUID(),
+    });
+  }
+
+  async initiateDriveUpload(
+    space: string,
+    name: string,
+    sizeBytes: number,
+    folderId?: number | null,
+    clientMime?: string,
+    idempotencyKey?: string,
+  ): Promise<unknown> {
+    return this.request("POST", `drive/spaces/${encodeURIComponent(space)}/uploads:initiate`, {
+      body: {
+        name,
+        size_bytes: sizeBytes,
+        ...(folderId !== undefined ? { folder_id: folderId } : {}),
+        ...(clientMime ? { client_mime: clientMime } : {}),
+      },
+      idempotencyKey,
+    });
+  }
+
+  async completeDriveUpload(
+    fileId: number,
+    parts?: Array<{ part_number: number; etag: string }>,
+  ): Promise<unknown> {
+    return this.request("POST", `drive/uploads/${fileId}:complete`, {
+      body: parts ? { parts } : {},
+    });
+  }
+
+  async refreshDriveUploadParts(fileId: number, partNumbers: number[]): Promise<unknown> {
+    return this.request("POST", `drive/uploads/${fileId}:refresh-parts`, {
+      body: { part_numbers: partNumbers },
+    });
+  }
+
+  async abortDriveUpload(fileId: number): Promise<unknown> {
+    return this.request("POST", `drive/uploads/${fileId}:abort`);
+  }
+
+  async getDriveAddon(): Promise<unknown> {
+    return this.request("GET", "drive/addon");
+  }
+
+  async getDriveAddonPricing(currency?: string): Promise<unknown> {
+    return this.request("GET", "drive/addon/pricing", {
+      query: currency ? { currency } : undefined,
+    });
+  }
+
+  async getDriveAddonCancellationPreview(): Promise<unknown> {
+    return this.request("GET", "drive/addon/cancellation-preview");
   }
 
   // --- Core Request ---
@@ -1180,7 +1506,7 @@ export class TrekMailClient {
       headers["Content-Type"] = "application/json";
     }
 
-    if (opts.idempotencyKey && (method === "POST" || method === "PUT" || method === "DELETE")) {
+    if (opts.idempotencyKey && (method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE")) {
       headers["Idempotency-Key"] = opts.idempotencyKey;
     }
 
@@ -1207,7 +1533,14 @@ export class TrekMailClient {
         try {
           data = JSON.parse(text);
         } catch {
-          data = { raw: text };
+          const snippet = text.slice(0, 200);
+          data = {
+            error: {
+              code: "non_json_response",
+              message: `API returned a non-JSON response with HTTP ${response.status}.`,
+              hint: snippet ? `First 200 chars: ${snippet}` : "Response body was empty.",
+            },
+          };
         }
 
         if (!response.ok) {
