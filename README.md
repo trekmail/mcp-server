@@ -1,6 +1,6 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 143 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 181 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
 ## Quickstart
 
@@ -36,7 +36,7 @@ The MCP server supports two independent token types. At least one is required:
 
 | Token | Env Var | Prefix | Unlocks |
 |-------|---------|--------|---------|
-| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 91 infrastructure tools (domains, DNS, mailboxes, invites, aliases, forwarding, mail filters, auto-reply, sieve, delete intents, migrations, SMTP, tickets, account, billing, spam stats, verifier, message token management, Cloudflare DNS) |
+| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 129 infrastructure tools (domains, DNS, mailboxes, invites, aliases, forwarding, mail filters, auto-reply, sieve, delete intents, migrations, SMTP, tickets, account, billing, spam stats, verifier, message token management, Cloudflare DNS, and Drive) |
 | **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 52 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, identities, templates, blocked senders) |
 
 Tools are registered conditionally — only token types you provide get their tools. You can supply one or both:
@@ -63,11 +63,11 @@ npm start
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
 | `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.0.0` | User-Agent header |
-| `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable destructive tools (delete intents, domain delete, password change, pause, SMTP config, revoke token, delete Cloudflare token) |
+| `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable destructive tools (delete intents, domain delete, password change, pause, SMTP config, revoke token, delete Cloudflare token, Drive trash/purge/empty-trash, message deletes) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable `send_message` tool |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
 
-## Tools (143)
+## Tools (181)
 
 ### Domains (ops token)
 - **list_domains** — List domains with optional status/search filters
@@ -436,8 +436,10 @@ Additionally, each write tool requires a per-call confirmation parameter (`confi
 
 ## Drive Tools
 
-31 tools for the `/api/v1/drive/*` REST surface — see `docs/api/drive.md`
-for the full API reference.
+38 tools for the `/api/v1/drive/*` REST surface. Drive is available through
+both the TrekMail REST API and this MCP server when the ops token has the
+matching Drive scopes. See the TrekMail app/API docs for the full REST
+reference.
 
 | Tool | Purpose |
 |---|---|
@@ -470,6 +472,20 @@ Email Verifier). Free + addon active is a fully supported path —
 mint a token with `drive:account:read` etc. and it works. When the
 addon enters its 7-day post-cancellation grace window, write/share/
 purge tokens lose access; read tokens keep working.
+
+Drive API/MCP scopes:
+
+| Scope | Enables |
+|---|---|
+| `drive:account:read` | Browse Account Drive, inspect metadata, list folders/trash/share links, and request download URLs |
+| `drive:account:write` | Upload files, create/update/move/trash/restore files and folders in Account Drive |
+| `drive:account:share` | Create and revoke public share links for Account Drive files |
+| `drive:account:purge` | Permanently purge trashed Account Drive files/folders and empty trash |
+| `drive:mailbox:read` | Browse mailbox Drive spaces allowed by token mailbox constraints |
+| `drive:mailbox:write` | Upload and mutate files/folders in allowed mailbox Drive spaces |
+| `drive:mailbox:share` | Create and revoke public share links for allowed mailbox Drive files |
+| `drive:mailbox:purge` | Permanently purge trashed files/folders in allowed mailbox Drive spaces |
+| `drive:addon:read` | Read Drive Storage Add-on status, pricing, and cancellation preview |
 
 ### Upload flow
 
