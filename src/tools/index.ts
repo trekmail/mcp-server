@@ -30,6 +30,7 @@ import { registerSpamStatsTools } from "./spam-stats.js";
 import { registerVerifierTools } from "./verifier.js";
 import { registerCloudflareTools } from "./cloudflare.js";
 import { registerDriveTools } from "./drive.js";
+import { registerDriveDeviceTools } from "./drive-devices.js";
 
 /**
  * Register infrastructure tools (domains, DNS, mailboxes, invites, forwarding, delete).
@@ -59,6 +60,7 @@ export function registerInfraTools(
   registerVerifierTools(server, client);
   registerCloudflareTools(server, client, config);
   registerDriveTools(server, client, { allowDestructive: config.allowDestructive });
+  registerDriveDeviceTools(server, client, { allowDestructive: config.allowDestructive });
 }
 
 /**

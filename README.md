@@ -1,6 +1,6 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 181 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 185 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
 ## Quickstart
 
@@ -36,7 +36,7 @@ The MCP server supports two independent token types. At least one is required:
 
 | Token | Env Var | Prefix | Unlocks |
 |-------|---------|--------|---------|
-| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 129 infrastructure tools (domains, DNS, mailboxes, invites, aliases, forwarding, mail filters, auto-reply, sieve, delete intents, migrations, SMTP, tickets, account, billing, spam stats, verifier, message token management, Cloudflare DNS, and Drive) |
+| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 133 infrastructure tools (domains, DNS, mailboxes, invites, aliases, forwarding, mail filters, auto-reply, sieve, delete intents, migrations, SMTP, tickets, account, billing, spam stats, verifier, message token management, Cloudflare DNS, Drive, and Drive sync-device passwords) |
 | **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 52 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, identities, templates, blocked senders) |
 
 Tools are registered conditionally — only token types you provide get their tools. You can supply one or both:
@@ -62,12 +62,12 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.0.0` | User-Agent header |
-| `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable destructive tools (delete intents, domain delete, password change, pause, SMTP config, revoke token, delete Cloudflare token, Drive trash/purge/empty-trash, message deletes) |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.1.0` | User-Agent header |
+| `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable destructive tools (delete intents, domain delete, password change, pause, SMTP config, revoke token, delete Cloudflare token, Drive trash/purge/empty-trash, Drive sync-device revoke/rotate, message deletes) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable `send_message` tool |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
 
-## Tools (181)
+## Tools (185)
 
 ### Domains (ops token)
 - **list_domains** — List domains with optional status/search filters
@@ -436,10 +436,11 @@ Additionally, each write tool requires a per-call confirmation parameter (`confi
 
 ## Drive Tools
 
-38 tools for the `/api/v1/drive/*` REST surface. Drive is available through
-both the TrekMail REST API and this MCP server when the ops token has the
-matching Drive scopes. See the TrekMail app/API docs for the full REST
-reference.
+42 tools for the `/api/v1/drive/*` REST surface (38 file/folder/share/addon
+tools + 4 sync-device password tools added 2026-05-23). Drive is available
+through both the TrekMail REST API and this MCP server when the ops token
+has the matching Drive scopes. See the TrekMail app/API docs for the full
+REST reference.
 
 | Tool | Purpose |
 |---|---|
@@ -460,6 +461,9 @@ reference.
 | `drive_file_upload` | **High-level: one tool, full flow.** Streams local file → returned upload URL(s) → registers as available. Use this by default. |
 | `drive_upload_initiate` / `_complete` / `_refresh_parts` / `_abort` | Low-level multipart upload primitives — for agents that PUT bytes themselves |
 | `drive_addon_get` / `_pricing` / `_cancellation_preview` | Drive Storage Add-on (read-only; purchase / resize / cancel are dashboard-only by product decision) |
+| `drive_device_list` | List Drive sync-device passwords (label, scopes, mailbox binding, last-used, expiry, revoked-at; never plaintext) |
+| `drive_device_create` | Mint a new `dsync_…` credential for rclone / Cyberduck / X-Plore / DAVx⁵ / Documents / FolderSync. Plaintext returned ONCE in `data.password`. Rate-limited 20/h per account |
+| `drive_device_revoke` / `_rotate` | Revoke a device password (idempotent) or atomically rotate (revoke old + mint new, inherits label / scopes / mailbox). Both gated by `TREKMAIL_ALLOW_DESTRUCTIVE=true`. Rotate is rate-limited 10/h per account |
 
 `{space}` parameters accept `"account"` (account-drive singleton),
 `"mailbox:N"` (mailbox-personal), or a numeric `DriveSpace.id`.

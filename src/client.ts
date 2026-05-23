@@ -1472,6 +1472,36 @@ export class TrekMailClient {
     return this.request("GET", "drive/addon/cancellation-preview");
   }
 
+  // ─── Drive Sync Devices (drive:devices:read / drive:devices:write) ───
+
+  async listDriveDevices(): Promise<unknown> {
+    return this.request("GET", "drive/devices");
+  }
+
+  async createDriveDevice(
+    body: {
+      label: string;
+      scopes: string[];
+      mailbox_id?: number | null;
+      expires_in_days?: number | null;
+    },
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", "drive/devices", { body, idempotencyKey });
+  }
+
+  async revokeDriveDevice(deviceId: number, idempotencyKey: string): Promise<unknown> {
+    return this.request("DELETE", `drive/devices/${deviceId}`, { idempotencyKey });
+  }
+
+  async rotateDriveDevice(
+    deviceId: number,
+    body: { expires_in_days?: number | null },
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", `drive/devices/${deviceId}:rotate`, { body, idempotencyKey });
+  }
+
   // --- Core Request ---
 
   private async request(
