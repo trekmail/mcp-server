@@ -450,14 +450,14 @@ reference.
 | `drive_folder_tree` | Flat tree of every folder in a space |
 | `drive_select_all_ids` | Bulk-select helper (capped at 5000 ids) |
 | `drive_file_get` | File metadata |
-| `drive_file_download_url` | Short-lived presigned B2 URL (forced attachment) |
+| `drive_file_download_url` | Short-lived download URL (forced attachment) |
 | `drive_file_rename` / `_move` / `_trash` / `_restore` / `_purge` | File CRUD |
 | `drive_folder_create` / `_update` / `_move` / `_trash` / `_restore` / `_purge` | Folder CRUD; `_update` accepts `name` and/or `color` (#RRGGBB); `_create` accepts `is_shared` to publish to the whole account immediately |
 | `drive_folder_share_with_account` / `_stop_sharing` | Toggle whether a folder is visible to every mailbox in the account (Phase H — moves the folder + subtree from mailbox-personal Drive to account-drive when needed) |
 | `drive_trash_list` / `_empty` | Trash listing + nuke |
 | `drive_bulk_trash` / `_restore` / `_move` / `_purge` | One call, N items (cap 5000) |
 | `drive_share_create` / `_list` / `_revoke` | Public share-links (raw token returned ONCE) |
-| `drive_file_upload` | **High-level: one tool, full flow.** Streams local file → presigned B2 URL(s) → registers as available. Use this by default. |
+| `drive_file_upload` | **High-level: one tool, full flow.** Streams local file → returned upload URL(s) → registers as available. Use this by default. |
 | `drive_upload_initiate` / `_complete` / `_refresh_parts` / `_abort` | Low-level multipart upload primitives — for agents that PUT bytes themselves |
 | `drive_addon_get` / `_pricing` / `_cancellation_preview` | Drive Storage Add-on (read-only; purchase / resize / cancel are dashboard-only by product decision) |
 
@@ -498,16 +498,16 @@ drive_file_upload(space="account", local_path="/path/to/report.pdf",
 
 The wrapper:
 1. Reads file size and calls `drive_upload_initiate`.
-2. **Streams** the file straight to B2 via the presigned URL(s).
+2. **Streams** the file straight to the returned upload URL(s).
    Bytes do NOT pass through MCP infrastructure beyond the wrapper
    process — and they never touch the API server. Memory stays
    bounded for files of any size (tested with multi-GB).
 3. For files ≥ 100 MB, uses multipart: 50 MB chunks, captures each
-   B2 ETag, refreshes any expired part URL once before failing.
+   upload part ETag, refreshes any expired part URL once before failing.
 4. Calls `drive_upload_complete` to register the file as available.
 5. On any error along the way, calls `drive_upload_abort` to release
    the quota reservation. (The reservation is also reclaimed by the
-   server's hourly GC job — abort is a fast path, not a guarantee.)
+   server-side cleanup — abort is a fast path, not a guarantee.)
 
 **Low-level primitives** (`drive_upload_initiate` etc.) stay available
 for agents that want to drive the PUT phase themselves — e.g. uploads

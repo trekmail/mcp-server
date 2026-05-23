@@ -131,6 +131,7 @@ export function registerTicketTools(
           .optional()
           .describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ subject, category, message, priority, idempotency_key }) => {
       const idemKey = idempotencyKey(
@@ -166,6 +167,7 @@ export function registerTicketTools(
           .optional()
           .describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ ticket_id, message, idempotency_key }) => {
       const idemKey = idempotencyKey(
@@ -196,6 +198,7 @@ export function registerTicketTools(
           .optional()
           .describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ ticket_id, idempotency_key }) => {
       const idemKey = idempotencyKey(

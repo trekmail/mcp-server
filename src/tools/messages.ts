@@ -268,6 +268,7 @@ export function registerMessageToolHandlers(
           .max(255)
           .describe("Destination IMAP folder path"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ uid, folder, destination }) => {
       return callApi(() =>
@@ -315,6 +316,7 @@ export function registerMessageToolHandlers(
           .optional()
           .describe("Mark as starred (true) or unstarred (false)"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ uid, folder, seen, flagged }) => {
       if (seen === undefined && flagged === undefined) {
@@ -469,6 +471,7 @@ export function registerMessageToolHandlers(
           .optional()
           .describe("File attachments (base64-encoded, max 25 MB total)"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ to, cc, bcc, subject, body_text, body_html, attachments }) => {
       const body: Record<string, unknown> = {};
@@ -513,6 +516,7 @@ export function registerMessageToolHandlers(
           .max(20)
           .optional(),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ uid, to, cc, bcc, subject, body_text, body_html, attachments }) => {
       const body: Record<string, unknown> = {};
@@ -548,6 +552,7 @@ export function registerMessageToolHandlers(
           .optional()
           .describe("Source IMAP folder (default: INBOX)"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ uid, folder }) => {
       return callApi(() => client.reportSpam(uid, { folder }));
@@ -572,6 +577,7 @@ export function registerMessageToolHandlers(
           .optional()
           .describe("Source IMAP folder (default: Junk)"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ uid, folder }) => {
       return callApi(() => client.reportHam(uid, { folder }));
@@ -605,6 +611,7 @@ export function registerMessageToolHandlers(
           .optional()
           .describe("Destination folder (required for 'move' action)"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ folder, uids, action, destination }) => {
       if (action === "delete" && !config.allowDestructive) {

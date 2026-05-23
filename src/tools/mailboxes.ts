@@ -102,6 +102,7 @@ export function registerMailboxTools(
             "Optional idempotency key. If omitted, a deterministic key is generated from the params to prevent duplicates on retries.",
           ),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ domain_id, local_part, display_name, storage_allocation_mb, idempotency_key }) => {
       const idemKey = idempotencyKey(
@@ -179,6 +180,7 @@ export function registerMailboxTools(
           .nullable()
           .describe("The note text (max 120 chars) or null to clear"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, note }) => {
       return callApi(() => client.updateMailboxNote(mailbox_id, note));
@@ -202,6 +204,7 @@ export function registerMailboxTools(
           .optional()
           .describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, idempotency_key }) => {
       if (!config?.allowDestructive) {
@@ -236,6 +239,7 @@ export function registerMailboxTools(
           .optional()
           .describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, idempotency_key }) => {
       const timeBucket = Math.floor(Date.now() / (5 * 60 * 1000));
@@ -304,6 +308,7 @@ export function registerMailboxTools(
             "Optional idempotency key. If omitted, a deterministic key is generated.",
           ),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ password_mode, items, idempotency_key }) => {
       const idemKey = idempotencyKey(
@@ -335,6 +340,7 @@ export function registerMailboxTools(
           .optional()
           .describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, password, idempotency_key }) => {
       const idemKey = idempotencyKey(

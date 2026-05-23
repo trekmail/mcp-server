@@ -67,6 +67,7 @@ export function registerAutoReplyTools(
           .optional()
           .describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async (inputs) => {
       const idemKey = idempotencyKey(

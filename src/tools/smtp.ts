@@ -143,6 +143,7 @@ export function registerSmtpTools(
           .optional()
           .describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ host, port, encryption, username, password, idempotency_key }) => {
       if (!config.allowDestructive) {

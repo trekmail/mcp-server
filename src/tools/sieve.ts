@@ -50,6 +50,7 @@ export function registerSieveTools(
           .optional()
           .describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, script, idempotency_key }) => {
       const idemKey = idempotencyKey(

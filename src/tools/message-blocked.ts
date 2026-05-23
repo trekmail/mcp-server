@@ -24,6 +24,7 @@ export function registerMessageBlockedTools(
         .max(255)
         .describe("Email address or @domain to block"),
     },
+      annotations: { destructiveHint: true },
   }, async ({ email_or_domain }) => {
     return callApi(() => client.blockSender({ email_or_domain }));
   });

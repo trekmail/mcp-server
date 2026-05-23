@@ -54,6 +54,7 @@ export function registerInviteTools(
             "Optional idempotency key. If omitted, a deterministic key is generated from the params.",
           ),
       },
+      annotations: { destructiveHint: true },
     },
     async ({
       domain_id,
@@ -129,6 +130,7 @@ export function registerInviteTools(
             "Optional idempotency key. If omitted, a deterministic key is generated from the params.",
           ),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ domain_id, items, expires_in_hours, idempotency_key }) => {
       const idemKey = idempotencyKey(

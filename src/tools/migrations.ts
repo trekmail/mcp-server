@@ -25,6 +25,7 @@ export function registerMigrationTools(
         source_password: z.string().max(255).describe("IMAP password or app password"),
         idempotency_key: z.string().optional().describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ source_host, source_port, source_security, source_email, source_username, source_password, idempotency_key }) => {
       if (!config.allowMigration) {
@@ -102,6 +103,7 @@ export function registerMigrationTools(
         confirm_start: z.boolean().describe("Must be true to start migration. Safety gate."),
         idempotency_key: z.string().optional().describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, provider, source_host, source_port, source_security, source_email, source_username, source_password, selected_folders, import_since, skip_duplicates, confirm_start, idempotency_key }) => {
       if (!config.allowMigration) {
@@ -136,6 +138,7 @@ export function registerMigrationTools(
         confirm_cancel: z.boolean().describe("Must be true to cancel. Safety gate."),
         idempotency_key: z.string().optional().describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ migration_id, confirm_cancel, idempotency_key }) => {
       // No allowMigration gate here — cancel is a safety/abort operation
@@ -159,6 +162,7 @@ export function registerMigrationTools(
         confirm_retry: z.boolean().describe("Must be true to retry. Safety gate."),
         idempotency_key: z.string().optional().describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ migration_id, confirm_retry, idempotency_key }) => {
       if (!config.allowMigration) {
@@ -183,6 +187,7 @@ export function registerMigrationTools(
         confirm_delete: z.boolean().describe("Must be true to delete. Safety gate."),
         idempotency_key: z.string().optional().describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ migration_id, confirm_delete, idempotency_key }) => {
       if (!config.allowMigration) {
@@ -217,6 +222,7 @@ export function registerMigrationTools(
         import_since: z.string().optional().describe("Only import emails after this date (YYYY-MM-DD)"),
         skip_duplicates: z.boolean().optional().describe("Skip duplicate messages (default: true)"),
       },
+      annotations: { destructiveHint: true },
     },
     async (params) => {
       if (!config.allowMigration) {
@@ -247,6 +253,7 @@ export function registerMigrationTools(
         confirm_start: z.boolean().describe("Must be true to start. Safety gate."),
         idempotency_key: z.string().optional().describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ confirm_start, idempotency_key, ...params }) => {
       if (!config.allowMigration) {
@@ -301,6 +308,7 @@ export function registerMigrationTools(
         batch_id: z.number().int().positive().describe("The batch ID to cancel"),
         confirm_cancel: z.boolean().describe("Must be true to cancel. Safety gate."),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ batch_id, confirm_cancel }) => {
       if (!confirm_cancel) {
@@ -325,6 +333,7 @@ export function registerMigrationTools(
         batch_id: z.number().int().positive().describe("The batch ID"),
         confirm_retry: z.boolean().describe("Must be true to retry. Safety gate."),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ batch_id, confirm_retry }) => {
       if (!config.allowMigration) {
@@ -348,6 +357,7 @@ export function registerMigrationTools(
         batch_id: z.number().int().positive().describe("The batch ID to delete"),
         confirm_delete: z.boolean().describe("Must be true to delete. Safety gate."),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ batch_id, confirm_delete }) => {
       if (!config.allowMigration) {
@@ -375,6 +385,7 @@ export function registerMigrationTools(
         job_id: z.number().int().positive().describe("The job ID within the batch"),
         source_password: z.string().max(255).describe("New source IMAP password or app password"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ batch_id, job_id, source_password }) => {
       if (!config.allowMigration) {
@@ -396,6 +407,7 @@ export function registerMigrationTools(
         batch_id: z.number().int().positive().describe("The batch ID to resume"),
         confirm_resume: z.boolean().describe("Must be true to resume. Safety gate."),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ batch_id, confirm_resume }) => {
       if (!confirm_resume) {

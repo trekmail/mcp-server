@@ -74,6 +74,7 @@ export function registerAliasTools(
             "Optional idempotency key to prevent duplicate creation on retries",
           ),
       },
+      annotations: { destructiveHint: true },
     },
     async ({
       mailbox_id,
@@ -132,6 +133,7 @@ export function registerAliasTools(
             "Whether the alias is active (false = disabled, stops receiving and sending)",
           ),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, alias_id, can_receive, can_send, is_active }) => {
       return callApi(() =>

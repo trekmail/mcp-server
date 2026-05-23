@@ -25,6 +25,7 @@ export function registerMessageIdentityTools(
       signature_html: z.string().max(10000).optional(),
       signature_enabled: z.boolean().optional(),
     },
+      annotations: { destructiveHint: true },
   }, async (params) => callApi(() => client.createIdentity(params)));
 
   server.registerTool("update_identity", {
@@ -38,6 +39,7 @@ export function registerMessageIdentityTools(
       signature_enabled: z.boolean().optional(),
       is_default: z.boolean().optional(),
     },
+      annotations: { destructiveHint: true },
   }, async ({ id, ...rest }) => callApi(() => client.updateIdentity(id, rest)));
 
   server.registerTool("delete_identity", {

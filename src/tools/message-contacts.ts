@@ -40,6 +40,7 @@ export function registerMessageContactTools(
         birthday: z.string().optional().describe("Date in YYYY-MM-DD format"),
         notes: z.string().max(5000).optional(),
       },
+      annotations: { destructiveHint: true },
     },
     async (params) => {
       return callApi(() => client.createContact(params));
@@ -62,6 +63,7 @@ export function registerMessageContactTools(
         birthday: z.string().optional(),
         notes: z.string().max(5000).optional(),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ id, ...rest }) => {
       return callApi(() => client.updateContact(id, rest));
@@ -95,6 +97,7 @@ export function registerMessageContactTools(
         content_base64: z.string().describe("Base64-encoded file content"),
         format: z.enum(["csv", "vcf"]).describe("File format"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ content_base64, format }) => {
       return callApi(() => client.importContacts({ content_base64, format }));

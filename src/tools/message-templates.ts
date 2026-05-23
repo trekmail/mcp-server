@@ -23,6 +23,7 @@ export function registerMessageTemplateTools(
       subject: z.string().max(500).optional().describe("Default subject line"),
       body_html: z.string().max(50000).describe("HTML body content"),
     },
+      annotations: { destructiveHint: true },
   }, async (params) => callApi(() => client.createTemplate(params)));
 
   server.registerTool("update_template", {
@@ -34,6 +35,7 @@ export function registerMessageTemplateTools(
       subject: z.string().max(500).optional(),
       body_html: z.string().max(50000).optional(),
     },
+      annotations: { destructiveHint: true },
   }, async ({ id, ...rest }) => callApi(() => client.updateTemplate(id, rest)));
 
   server.registerTool("delete_template", {

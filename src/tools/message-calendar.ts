@@ -40,6 +40,7 @@ export function registerMessageCalendarTools(
         reminder_minutes: z.number().int().min(0).max(10080).optional().describe("Reminder in minutes before event"),
         reminder_type: z.enum(["notification", "email"]).optional(),
       },
+      annotations: { destructiveHint: true },
     },
     async (params) => {
       return callApi(() => client.createCalendarEvent(params));
@@ -63,6 +64,7 @@ export function registerMessageCalendarTools(
         reminder_minutes: z.number().int().min(0).max(10080).optional(),
         reminder_type: z.enum(["notification", "email"]).optional(),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ id, ...rest }) => {
       return callApi(() => client.updateCalendarEvent(id, rest));

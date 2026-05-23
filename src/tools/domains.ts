@@ -76,6 +76,7 @@ export function registerDomainTools(
           .optional()
           .describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ name, idempotency_key }) => {
       const idemKey = idempotencyKey(
@@ -151,6 +152,7 @@ export function registerDomainTools(
             "Destination email address (required when enabled=true)",
           ),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ domain_id, enabled, destination }) => {
       if (enabled && !destination) {
@@ -189,6 +191,7 @@ export function registerDomainTools(
           .optional()
           .describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ domain_id, idempotency_key }) => {
       const timeBucket = Math.floor(Date.now() / (5 * 60 * 1000));
@@ -219,6 +222,7 @@ export function registerDomainTools(
           .nullable()
           .describe("The note text (max 120 chars) or null to clear"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ domain_id, note }) => {
       return callApi(() => client.updateDomainNote(domain_id, note));
@@ -242,6 +246,7 @@ export function registerDomainTools(
           .optional()
           .describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ domains, idempotency_key }) => {
       const idemKey = idempotencyKey(

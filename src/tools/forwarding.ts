@@ -60,6 +60,7 @@ export function registerForwardingTools(
             "Optional idempotency key. If omitted, a deterministic key is generated from the params.",
           ),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, enabled, targets, keep_copy, idempotency_key }) => {
       const idemKey = idempotencyKey(

@@ -23,6 +23,7 @@ export function registerVerifierTools(
           .optional()
           .describe("Verification mode: quick (1 credit, default) or deep (2 credits, SMTP mailbox check)"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ email, mode }) => {
       return callApi(() => client.verifySingleEmail(email, mode));
@@ -51,6 +52,7 @@ export function registerVerifierTools(
           .optional()
           .describe("Verification mode: quick (1 credit, default) or deep (2 credits, SMTP mailbox check)"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ emails, name, mode }) => {
       return callApi(() => client.verifyBulkEmails(emails, name, mode));
@@ -159,6 +161,7 @@ export function registerVerifierTools(
           .positive()
           .describe("The verification job ID to cancel"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ job_id }) => {
       return callApi(() => client.cancelVerifyJob(job_id));
@@ -178,6 +181,7 @@ export function registerVerifierTools(
           .positive()
           .describe("The verification job ID to delete"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ job_id }) => {
       return callApi(() => client.deleteVerifyJob(job_id));

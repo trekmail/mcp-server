@@ -22,6 +22,7 @@ export function registerCloudflareTools(
           .min(1)
           .describe("The Cloudflare API token to validate"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ api_token }) => {
       return callApi(() => client.validateCloudflareToken(api_token));
@@ -77,6 +78,7 @@ export function registerCloudflareTools(
           .optional()
           .describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ api_token, selected, idempotency_key }) => {
       const idemKey = idempotencyKey(
@@ -103,6 +105,7 @@ export function registerCloudflareTools(
           .max(50)
           .describe("TrekMail domain IDs to preview DNS changes for"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ domain_ids }) => {
       return callApi(() => client.previewCloudflareDns(domain_ids));
@@ -132,6 +135,7 @@ export function registerCloudflareTools(
           .optional()
           .describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ domain_ids, confirmed_conflicts, idempotency_key }) => {
       const idemKey = idempotencyKey(

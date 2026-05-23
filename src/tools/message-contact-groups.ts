@@ -27,6 +27,7 @@ export function registerMessageContactGroupTools(
       inputSchema: {
         group_name: z.string().max(100).describe("Name for the contact group"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ group_name }) => callApi(() => client.createContactGroup({ group_name })),
   );
@@ -40,6 +41,7 @@ export function registerMessageContactGroupTools(
         id: z.number().int().positive().describe("Group ID"),
         group_name: z.string().max(100).describe("New name for the group"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ id, group_name }) => callApi(() => client.updateContactGroup(id, { group_name })),
   );
@@ -74,6 +76,7 @@ export function registerMessageContactGroupTools(
           .min(1)
           .describe("Array of contact IDs to add"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ id, contact_ids }) =>
       callApi(() => client.addContactGroupMembers(id, { contact_ids })),
@@ -91,6 +94,7 @@ export function registerMessageContactGroupTools(
           .min(1)
           .describe("Array of contact IDs to remove"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ id, contact_ids }) =>
       callApi(() => client.removeContactGroupMembers(id, { contact_ids })),

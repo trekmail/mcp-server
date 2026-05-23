@@ -41,6 +41,7 @@ export function registerMessageTokenTools(
           .optional()
           .describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, name, scopes, expires_in, idempotency_key }) => {
       const idemKey = idempotencyKey(

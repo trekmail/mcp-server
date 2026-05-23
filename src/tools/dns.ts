@@ -46,6 +46,7 @@ export function registerDnsTools(
             "Optional idempotency key. If omitted, a deterministic key is generated from the params.",
           ),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ domain_id, idempotency_key }) => {
       // Use 5-minute time buckets so repeated rechecks generate new keys

@@ -112,6 +112,7 @@ export function registerRulesTools(
           .optional()
           .describe("Optional idempotency key"),
       },
+      annotations: { destructiveHint: true },
     },
     async (inputs) => {
       const idemKey = idempotencyKey(
@@ -160,6 +161,7 @@ export function registerRulesTools(
         enabled: z.boolean().optional().describe("Whether filter is active"),
         idempotency_key: z.string().optional(),
       },
+      annotations: { destructiveHint: true },
     },
     async (inputs) => {
       const idemKey = idempotencyKey(
@@ -227,6 +229,7 @@ export function registerRulesTools(
           .array(z.number().int().positive())
           .describe("Array of filter IDs in the desired execution order"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, order }) => {
       return callApi(() => client.reorderMailRules(mailbox_id, order));

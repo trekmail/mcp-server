@@ -22,6 +22,7 @@ export function registerMessageFolderTools(
           .max(255)
           .describe("Name for the new folder"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ name }) => {
       return callApi(() => client.createFolder(name));
@@ -46,6 +47,7 @@ export function registerMessageFolderTools(
           .max(255)
           .describe("New name for the folder"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ path, name }) => {
       return callApi(() => client.renameFolder(path, name));
