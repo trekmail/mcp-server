@@ -12,7 +12,7 @@ export function registerVerifierTools(
     {
       title: "Verify Email Address",
       description:
-        "Verify a single email address against 18 checks (syntax, MX, disposable, blocklist, SPF, DMARC, gibberish detection, typo suggestion, plus-addressing, DNSBL, domain age, Gravatar, unroutable MX, etc). Returns trust score 0-100 and status (safe/valid/risky/invalid). Quick mode: 1 credit. Deep mode: 2 credits (includes SMTP mailbox verification when available).",
+        "Verify a single email address against 18 checks (syntax, MX, disposable, blocklist, SPF, DMARC, gibberish detection, typo suggestion, plus-addressing, DNSBL, domain age, Gravatar, unroutable MX, etc). Returns trust score 0-100 and status (safe/valid/risky/invalid). Quick mode: 1 credit. Deep mode: 2 credits (includes SMTP mailbox verification when available). Note: addresses at large free providers (Gmail, Yahoo, Outlook, Hotmail, iCloud, AOL, …) are charged 1 credit even in Deep mode, because those providers always accept the SMTP probe and bounce asynchronously — Deep returns the same result as Quick for them.",
       inputSchema: {
         email: z
           .string()
@@ -21,7 +21,7 @@ export function registerVerifierTools(
         mode: z
           .enum(["quick", "deep"])
           .optional()
-          .describe("Verification mode: quick (1 credit, default) or deep (2 credits, SMTP mailbox check)"),
+          .describe("Verification mode: quick (1 credit, default) or deep (2 credits, SMTP mailbox check; free-provider domains still charge 1)"),
       },
       annotations: { destructiveHint: true },
     },
@@ -35,7 +35,7 @@ export function registerVerifierTools(
     {
       title: "Verify Email List",
       description:
-        "Submit a list of email addresses for bulk verification. Returns a job ID to track progress. Quick mode: 1 credit/email. Deep mode: 2 credits/email. Max 50,000 emails per job.",
+        "Submit a list of email addresses for bulk verification. Returns a job ID to track progress, plus `credits_charged` and a `breakdown { probe, skip, deep_savings }` block. Quick mode: 1 credit/email. Deep mode: 2 credits/email for business domains; 1 credit/email for large free providers (Gmail, Yahoo, Outlook, Hotmail, iCloud, AOL, …) because Deep can't probe those mailboxes — providers always accept the probe and bounce asynchronously, so Deep returns the same result as Quick for them. Max 50,000 emails per job.",
       inputSchema: {
         emails: z
           .array(z.string().email())
@@ -50,7 +50,7 @@ export function registerVerifierTools(
         mode: z
           .enum(["quick", "deep"])
           .optional()
-          .describe("Verification mode: quick (1 credit, default) or deep (2 credits, SMTP mailbox check)"),
+          .describe("Verification mode: quick (1 credit/email) or deep (2 credits/email for business domains, 1 credit/email for free-provider domains where the SMTP probe is bypassed)"),
       },
       annotations: { destructiveHint: true },
     },

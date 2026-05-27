@@ -253,13 +253,15 @@ npm start
 
 ### Email Verifier (ops token)
 - **verify_email** — Verify a single email address
-- **verify_email_bulk** — Submit a bulk verification job
+- **verify_email_bulk** — Submit a bulk verification job. Response includes a `breakdown { probe, skip, deep_savings }` block alongside `credits_charged`.
 - **verify_job_status** — Check job progress and results
 - **verify_job_download** — Download job results as CSV
 - **verify_credits** — Check remaining credit balance
 - **verify_list_jobs** — List all verification jobs
 - **verify_cancel_job** — Cancel a running job and refund unprocessed credits
 - **verify_delete_job** — Permanently delete a job and all results (GDPR)
+
+**Pricing note for Deep mode:** addresses on Gmail, Yahoo, Outlook, iCloud, AOL and similar large free email providers are billed at 1 credit each (the Quick rate) even when submitted to `verify_email_bulk` with `mode: "deep"`. Deep Check adds value through a per-mailbox SMTP probe, but those providers don't allow it — they accept every test and only bounce fake addresses asynchronously. Business domains still cost 2 credits in Deep mode. The `breakdown` block in the response shows the split (`probe` = full-Deep addresses, `skip` = free-provider addresses billed at 1, `deep_savings` = credits saved vs. flat Deep pricing).
 
 ### Cloudflare (ops token)
 - **validate_cloudflare_token** — Validate a Cloudflare API token
