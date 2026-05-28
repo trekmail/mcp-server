@@ -26,6 +26,9 @@ export function registerMessageBlockedTools(
     },
       annotations: { destructiveHint: true },
   }, async ({ email_or_domain }) => {
+    if (!config.allowDestructive) {
+      return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to block senders.");
+    }
     return callApi(() => client.blockSender({ email_or_domain }));
   });
 

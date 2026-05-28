@@ -29,7 +29,12 @@ export function registerMessageContactGroupTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ group_name }) => callApi(() => client.createContactGroup({ group_name })),
+    async ({ group_name }) => {
+      if (!config.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to create contact groups.");
+      }
+      return callApi(() => client.createContactGroup({ group_name }));
+    },
   );
 
   server.registerTool(
@@ -43,7 +48,12 @@ export function registerMessageContactGroupTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ id, group_name }) => callApi(() => client.updateContactGroup(id, { group_name })),
+    async ({ id, group_name }) => {
+      if (!config.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update contact groups.");
+      }
+      return callApi(() => client.updateContactGroup(id, { group_name }));
+    },
   );
 
   server.registerTool(
@@ -78,8 +88,12 @@ export function registerMessageContactGroupTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ id, contact_ids }) =>
-      callApi(() => client.addContactGroupMembers(id, { contact_ids })),
+    async ({ id, contact_ids }) => {
+      if (!config.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to add contact group members.");
+      }
+      return callApi(() => client.addContactGroupMembers(id, { contact_ids }));
+    },
   );
 
   server.registerTool(
@@ -96,7 +110,11 @@ export function registerMessageContactGroupTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ id, contact_ids }) =>
-      callApi(() => client.removeContactGroupMembers(id, { contact_ids })),
+    async ({ id, contact_ids }) => {
+      if (!config.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to remove contact group members.");
+      }
+      return callApi(() => client.removeContactGroupMembers(id, { contact_ids }));
+    },
   );
 }

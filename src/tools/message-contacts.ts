@@ -43,6 +43,9 @@ export function registerMessageContactTools(
       annotations: { destructiveHint: true },
     },
     async (params) => {
+      if (!config.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to create contacts.");
+      }
       return callApi(() => client.createContact(params));
     },
   );
@@ -66,6 +69,9 @@ export function registerMessageContactTools(
       annotations: { destructiveHint: true },
     },
     async ({ id, ...rest }) => {
+      if (!config.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update contacts.");
+      }
       return callApi(() => client.updateContact(id, rest));
     },
   );
@@ -100,6 +106,9 @@ export function registerMessageContactTools(
       annotations: { destructiveHint: true },
     },
     async ({ content_base64, format }) => {
+      if (!config.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to import contacts.");
+      }
       return callApi(() => client.importContacts({ content_base64, format }));
     },
   );

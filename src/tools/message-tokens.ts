@@ -44,6 +44,24 @@ export function registerMessageTokenTools(
       annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, name, scopes, expires_in, idempotency_key }) => {
+      // #163 follow-up — scope-aware gate. Once minted, this token operates
+      // outside MCP entirely (any HTTP client can use it), so the gate must
+      // match the WORST scope being granted, not just "is creating a token
+      // generally destructive". Otherwise a prompt-injection chain could mint
+      // a messages:send token even with TREKMAIL_ALLOW_SENDING=false and
+      // exfil it for unrestricted use.
+      if (scopes.includes("messages:send") && !config.allowSending) {
+        return errorResult(
+          "Cannot mint a token with messages:send scope while TREKMAIL_ALLOW_SENDING=false. Set TREKMAIL_ALLOW_SENDING=true to permit, or omit messages:send from scopes.",
+        );
+      }
+      if (scopes.includes("messages:write") && !config.allowDestructive) {
+        return errorResult(
+          "Cannot mint a token with messages:write scope (modify/move/delete) while TREKMAIL_ALLOW_DESTRUCTIVE=false. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to permit, or omit messages:write from scopes.",
+        );
+      }
+      // messages:read alone is unrestricted — read tokens are safe to mint
+      // even when destructive/sending flags are off.
       const idemKey = idempotencyKey(
         "create_message_token",
         { mailbox_id, name, scopes: scopes.sort().join(",") },

@@ -27,6 +27,7 @@ import { registerMessageTemplateTools } from "./message-templates.js";
 import { registerMessageBlockedTools } from "./message-blocked.js";
 import { registerMessageTokenTools } from "./message-tokens.js";
 import { registerSpamStatsTools } from "./spam-stats.js";
+import { registerBounceTools } from "./bounces.js";
 import { registerVerifierTools } from "./verifier.js";
 import { registerCloudflareTools } from "./cloudflare.js";
 import { registerDriveTools } from "./drive.js";
@@ -45,21 +46,25 @@ export function registerInfraTools(
   registerDomainTools(server, client, config);
   registerDnsTools(server, client);
   registerMailboxTools(server, client, { allowDestructive: config.allowDestructive });
-  registerInviteTools(server, client);
+  registerInviteTools(server, client, { allowSending: config.allowSending });
   registerAliasTools(server, client, config);
-  registerForwardingTools(server, client);
+  registerForwardingTools(server, client, { allowDestructive: config.allowDestructive });
   registerRulesTools(server, client, config);
-  registerAutoReplyTools(server, client);
-  registerSieveTools(server, client);
+  registerAutoReplyTools(server, client, { allowDestructive: config.allowDestructive });
+  registerSieveTools(server, client, { allowDestructive: config.allowDestructive });
   registerDeleteIntentTools(server, client, config);
   registerMigrationTools(server, client, config);
-  registerTicketTools(server, client);
+  registerTicketTools(server, client, { allowDestructive: config.allowDestructive });
   registerSmtpTools(server, client, config);
   registerMessageTokenTools(server, client, config);
   registerSpamStatsTools(server, client);
-  registerVerifierTools(server, client);
+  registerBounceTools(server, client);
+  registerVerifierTools(server, client, { allowDestructive: config.allowDestructive });
   registerCloudflareTools(server, client, config);
-  registerDriveTools(server, client, { allowDestructive: config.allowDestructive });
+  registerDriveTools(server, client, {
+    allowDestructive: config.allowDestructive,
+    httpTransport: config.httpTransport,
+  });
   registerDriveDeviceTools(server, client, { allowDestructive: config.allowDestructive });
 }
 

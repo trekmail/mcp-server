@@ -2,11 +2,12 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
 import { idempotencyKey } from "../idempotency.js";
-import { callApi } from "./util.js";
+import { callApi, errorResult } from "./util.js";
 
 export function registerTicketTools(
   server: McpServer,
   client: TrekMailClient,
+  config?: { allowDestructive?: boolean },
 ): void {
   server.registerTool(
     "list_tickets",
@@ -134,6 +135,9 @@ export function registerTicketTools(
       annotations: { destructiveHint: true },
     },
     async ({ subject, category, message, priority, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to create support tickets (notifies the TrekMail team).");
+      }
       const idemKey = idempotencyKey(
         "create_ticket",
         { subject, category, message, priority },
@@ -170,6 +174,9 @@ export function registerTicketTools(
       annotations: { destructiveHint: true },
     },
     async ({ ticket_id, message, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to reply to support tickets.");
+      }
       const idemKey = idempotencyKey(
         "reply_to_ticket",
         { ticket_id, message },
@@ -201,6 +208,9 @@ export function registerTicketTools(
       annotations: { destructiveHint: true },
     },
     async ({ ticket_id, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to close support tickets.");
+      }
       const idemKey = idempotencyKey(
         "close_ticket",
         { ticket_id },

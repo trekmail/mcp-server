@@ -25,6 +25,9 @@ export function registerMessageFolderTools(
       annotations: { destructiveHint: true },
     },
     async ({ name }) => {
+      if (!config.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to create folders.");
+      }
       return callApi(() => client.createFolder(name));
     },
   );
@@ -50,6 +53,9 @@ export function registerMessageFolderTools(
       annotations: { destructiveHint: true },
     },
     async ({ path, name }) => {
+      if (!config.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to rename folders.");
+      }
       return callApi(() => client.renameFolder(path, name));
     },
   );

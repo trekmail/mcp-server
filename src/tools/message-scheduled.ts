@@ -23,13 +23,23 @@ export function registerMessageScheduledTools(
         subject: z.string().max(998).optional(),
         body_text: z.string().max(204800).optional(),
         body_html: z.string().max(512000).optional(),
-        scheduled_for: z.string().describe("ISO 8601 datetime for delivery (must be in the future)"),
+        scheduled_for: z
+          .string()
+          .describe(
+            "ISO 8601 datetime for delivery (must be in the future). If you include a UTC offset (Z or ±HH:MM) it is authoritative. If the value has no offset, the `timezone` argument decides interpretation; without it the value is treated as UTC.",
+          ),
+        timezone: z
+          .string()
+          .optional()
+          .describe(
+            "Optional IANA timezone name (e.g. 'America/New_York'). Only consulted when `scheduled_for` lacks an explicit offset; the server then interprets the naïve datetime in this zone before storing as UTC. Pass this whenever the user speaks in local time.",
+          ),
         confirm_send: z.boolean().describe("Must be true to schedule"),
         idempotency_key: z.string().optional(),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ to, cc, bcc, subject, body_text, body_html, scheduled_for, confirm_send, idempotency_key: idemKey }) => {
+    async ({ to, cc, bcc, subject, body_text, body_html, scheduled_for, timezone, confirm_send, idempotency_key: idemKey }) => {
       if (!config.allowSending) {
         return errorResult("Sending is disabled. Set TREKMAIL_ALLOW_SENDING=true to enable.");
       }
@@ -37,11 +47,12 @@ export function registerMessageScheduledTools(
         return errorResult("Schedule not confirmed. Set confirm_send=true.");
       }
       const body: Record<string, unknown> = { to, scheduled_for };
+      if (timezone) body.timezone = timezone;
       if (cc) body.cc = cc;
       if (bcc) body.bcc = bcc;
       if (subject) body.subject = subject;
       if (body_text || body_html) body.body = { text: body_text ?? null, html: body_html ?? null };
-      const key = idempotencyKey("schedule_message", { to, subject, scheduled_for }, idemKey);
+      const key = idempotencyKey("schedule_message", { to, subject, scheduled_for, timezone }, idemKey);
       return callApi(() => client.scheduleMessage(body, key));
     },
   );
@@ -55,6 +66,43 @@ export function registerMessageScheduledTools(
     },
     async () => {
       return callApi(() => client.listScheduled());
+    },
+  );
+
+  server.registerTool(
+    "reschedule_message",
+    {
+      title: "Reschedule Pending Message",
+      description:
+        "Change the delivery time of a pending scheduled message without re-sending. Use this instead of cancel + schedule when the user only wants to move the send time — it does not consume a messages:send rate-limit slot.",
+      inputSchema: {
+        id: z
+          .number()
+          .int()
+          .positive()
+          .describe("ID of the pending scheduled message to re-time."),
+        scheduled_for: z
+          .string()
+          .describe(
+            "New ISO 8601 datetime. If you include a UTC offset (Z or ±HH:MM) it is authoritative. If naïve, the `timezone` argument decides interpretation; without it the value is treated as UTC.",
+          ),
+        timezone: z
+          .string()
+          .optional()
+          .describe(
+            "Optional IANA timezone (e.g. 'America/New_York'). Only consulted when `scheduled_for` lacks an explicit offset.",
+          ),
+      },
+      // Not marked destructiveHint — moves a pending row, never sends or
+      // deletes data.
+    },
+    async ({ id, scheduled_for, timezone }) => {
+      if (!config.allowSending) {
+        return errorResult("Sending is disabled. Set TREKMAIL_ALLOW_SENDING=true to enable.");
+      }
+      const body: Record<string, unknown> = { scheduled_for };
+      if (timezone) body.timezone = timezone;
+      return callApi(() => client.rescheduleMessage(id, body));
     },
   );
 

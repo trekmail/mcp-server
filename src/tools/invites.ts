@@ -2,11 +2,12 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
 import { idempotencyKey } from "../idempotency.js";
-import { callApi } from "./util.js";
+import { callApi, errorResult } from "./util.js";
 
 export function registerInviteTools(
   server: McpServer,
   client: TrekMailClient,
+  config?: { allowSending?: boolean },
 ): void {
   server.registerTool(
     "create_invite",
@@ -64,6 +65,13 @@ export function registerInviteTools(
       storage_allocation_mb,
       idempotency_key,
     }) => {
+      // Creating an invite triggers an outbound email to recipient_email.
+      // Gate by allowSending — semantically matches send_message.
+      if (!config?.allowSending) {
+        return errorResult(
+          "Sending operations are disabled. Set TREKMAIL_ALLOW_SENDING=true to create invites (they trigger an outbound email to the recipient).",
+        );
+      }
       const idemKey = idempotencyKey(
         "create_invite",
         { domain_id, local_part, recipient_email, expires_in_hours, storage_allocation_mb },
@@ -133,6 +141,11 @@ export function registerInviteTools(
       annotations: { destructiveHint: true },
     },
     async ({ domain_id, items, expires_in_hours, idempotency_key }) => {
+      if (!config?.allowSending) {
+        return errorResult(
+          "Sending operations are disabled. Set TREKMAIL_ALLOW_SENDING=true to bulk-create invites (each triggers an outbound email to its recipient).",
+        );
+      }
       const idemKey = idempotencyKey(
         "create_invites_bulk",
         { domain_id, items, expires_in_hours },

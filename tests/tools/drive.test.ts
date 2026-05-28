@@ -231,7 +231,7 @@ describe("drive_file_upload tool — high-level wrapper", () => {
       return originalRegister(name, _def as any, handler);
     }) as typeof server.registerTool;
 
-    registerDriveTools(server, stubClient);
+    registerDriveTools(server, stubClient, { allowDestructive: true });
     const handler = toolHandlers.get("drive_file_upload");
     expect(handler).toBeDefined();
 
@@ -282,7 +282,7 @@ describe("drive_file_upload tool — high-level wrapper", () => {
       return originalRegister(name, _def as any, handler);
     }) as typeof server.registerTool;
 
-    registerDriveTools(server, stubClient);
+    registerDriveTools(server, stubClient, { allowDestructive: true });
     const handler = toolHandlers.get("drive_file_upload")!;
 
     const result = (await handler({ space: "account", local_path: smallFile })) as {
@@ -296,5 +296,246 @@ describe("drive_file_upload tool — high-level wrapper", () => {
     expect(stubClient.completeDriveUpload).not.toHaveBeenCalled();
 
     fetchSpy.mockRestore();
+  });
+});
+
+import { symlinkSync, rmSync } from "node:fs";
+
+/**
+ * Ticket #170 (2026-05-28): drive_file_upload accepted any absolute path
+ * (z.string() — no validation) and streamed it into Drive. Combined with
+ * prompt-injection in mailbox content this exfiltrated `/proc/self/
+ * environ`, `~/.ssh/id_rsa`, and `.env` files.
+ *
+ * Tests below cover the path-allowlist added in the same patch:
+ *   - hard denylist (/etc, /proc, ~/.ssh, …)
+ *   - .env-name rejection
+ *   - allowlist defaults to $HOME ∪ $TMPDIR
+ *   - TREKMAIL_UPLOAD_DIR override
+ *   - symlinks resolve to their canonical target before allow/deny check
+ *   - HTTP transport: tool is not registered at all
+ */
+describe("drive_file_upload — path allowlist (ticket #170)", () => {
+  let tmpDir: string;
+
+  function makeHandler(
+    opts: { allowDestructive?: boolean; httpTransport?: boolean } = { allowDestructive: true },
+  ) {
+    const stubClient = {
+      initiateDriveUpload: vi.fn().mockResolvedValue({
+        file_id: 1,
+        multipart: false,
+        upload_url: "https://b2.example/upload",
+        headers: {},
+        part_size_bytes: 0,
+        parts: [],
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+      }),
+      completeDriveUpload: vi.fn().mockResolvedValue({ id: 1, status: "available" }),
+      abortDriveUpload: vi.fn().mockResolvedValue({ aborted: true }),
+      refreshDriveUploadParts: vi.fn(),
+    } as unknown as TrekMailClient;
+
+    const server = new McpServer({ name: "test", version: "0.0.0" });
+    const handlers = new Map<string, (a: Record<string, unknown>) => Promise<unknown>>();
+    const originalRegister = server.registerTool.bind(server);
+    server.registerTool = ((name: string, _def: unknown, handler: any) => {
+      handlers.set(name, handler);
+      return originalRegister(name, _def as any, handler);
+    }) as typeof server.registerTool;
+
+    registerDriveTools(server, stubClient, opts);
+    return { handler: handlers.get("drive_file_upload"), client: stubClient };
+  }
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "drive-allowlist-"));
+    process.env.TREKMAIL_UPLOAD_DIR = tmpDir;
+  });
+
+  afterEach(() => {
+    delete process.env.TREKMAIL_UPLOAD_DIR;
+    try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+  });
+
+  it("rejects /etc/passwd even when allowlist is the whole homedir", async () => {
+    delete process.env.TREKMAIL_UPLOAD_DIR; // fall back to default $HOME ∪ $TMPDIR
+    const { handler, client } = makeHandler();
+    const r = (await handler!({ space: "account", local_path: "/etc/passwd" })) as {
+      isError: boolean;
+      content: Array<{ text: string }>;
+    };
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text).toMatch(/restricted location/i);
+    expect(client.initiateDriveUpload).not.toHaveBeenCalled();
+  });
+
+  it("rejects /proc/self/environ", async () => {
+    delete process.env.TREKMAIL_UPLOAD_DIR;
+    const { handler, client } = makeHandler();
+    const r = (await handler!({ space: "account", local_path: "/proc/self/environ" })) as {
+      isError: boolean;
+      content: Array<{ text: string }>;
+    };
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text).toMatch(/restricted location/i);
+    expect(client.initiateDriveUpload).not.toHaveBeenCalled();
+  });
+
+  it("rejects a file literally named .env even inside the allowlist", async () => {
+    const envPath = join(tmpDir, ".env");
+    writeFileSync(envPath, "APP_KEY=secret");
+    const { handler, client } = makeHandler();
+    const r = (await handler!({ space: "account", local_path: envPath })) as {
+      isError: boolean;
+      content: Array<{ text: string }>;
+    };
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text).toMatch(/Refusing to upload \.env/i);
+    expect(client.initiateDriveUpload).not.toHaveBeenCalled();
+  });
+
+  it("rejects .env.production (any .env.* suffix)", async () => {
+    const envPath = join(tmpDir, ".env.production");
+    writeFileSync(envPath, "DB_PASS=secret");
+    const { handler, client } = makeHandler();
+    const r = (await handler!({ space: "account", local_path: envPath })) as {
+      isError: boolean;
+      content: Array<{ text: string }>;
+    };
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text).toMatch(/Refusing to upload \.env/i);
+    expect(client.initiateDriveUpload).not.toHaveBeenCalled();
+  });
+
+  it("rejects a path outside the allowlist", async () => {
+    // TREKMAIL_UPLOAD_DIR is set to tmpDir; pick a path outside it.
+    const outside = join(tmpdir(), `not-in-allow-${Date.now()}.txt`);
+    writeFileSync(outside, "hello");
+    try {
+      const { handler, client } = makeHandler();
+      const r = (await handler!({ space: "account", local_path: outside })) as {
+        isError: boolean;
+        content: Array<{ text: string }>;
+      };
+      expect(r.isError).toBe(true);
+      expect(r.content[0].text).toMatch(/outside the upload allowlist/i);
+      expect(client.initiateDriveUpload).not.toHaveBeenCalled();
+    } finally {
+      try { unlinkSync(outside); } catch {}
+    }
+  });
+
+  it("rejects a symlink pointing to a denied file (realpath canonicalisation)", async () => {
+    // Place the symlink inside the allowlist; its target is in /etc.
+    const link = join(tmpDir, "sneaky");
+    symlinkSync("/etc/hostname", link);
+    const { handler, client } = makeHandler();
+    const r = (await handler!({ space: "account", local_path: link })) as {
+      isError: boolean;
+      content: Array<{ text: string }>;
+    };
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text).toMatch(/restricted location/i);
+    expect(client.initiateDriveUpload).not.toHaveBeenCalled();
+  });
+
+  it("accepts a file inside the allowlist (TREKMAIL_UPLOAD_DIR=tmpDir)", async () => {
+    const good = join(tmpDir, "ok.txt");
+    writeFileSync(good, "hello");
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("", { status: 200, headers: { etag: '"abc"' } }));
+    const { handler } = makeHandler();
+    const r = (await handler!({ space: "account", local_path: good })) as
+      | { isError?: boolean; content: Array<{ text: string }> }
+      | undefined;
+    expect(r).toBeTruthy();
+    expect((r as { isError?: boolean }).isError).toBeFalsy();
+    fetchSpy.mockRestore();
+  });
+
+  it("accepts a file under default allowlist ($TMPDIR) when env override is unset", async () => {
+    delete process.env.TREKMAIL_UPLOAD_DIR;
+    const good = join(tmpDir, "ok2.txt");
+    writeFileSync(good, "hi");
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("", { status: 200, headers: { etag: '"abc"' } }));
+    const { handler } = makeHandler();
+    const r = (await handler!({ space: "account", local_path: good })) as
+      | { isError?: boolean }
+      | undefined;
+    expect(r).toBeTruthy();
+    expect((r as { isError?: boolean }).isError).toBeFalsy();
+    fetchSpy.mockRestore();
+  });
+
+  it("respects colon-separated TREKMAIL_UPLOAD_DIR", async () => {
+    const dir2 = mkdtempSync(join(tmpdir(), "drive-allowlist-2-"));
+    try {
+      process.env.TREKMAIL_UPLOAD_DIR = `${tmpDir}:${dir2}`;
+      const good = join(dir2, "ok.txt");
+      writeFileSync(good, "hi");
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(new Response("", { status: 200, headers: { etag: '"abc"' } }));
+      const { handler } = makeHandler();
+      const r = (await handler!({ space: "account", local_path: good })) as
+        | { isError?: boolean }
+        | undefined;
+      expect(r).toBeTruthy();
+      expect((r as { isError?: boolean }).isError).toBeFalsy();
+      fetchSpy.mockRestore();
+    } finally {
+      try { rmSync(dir2, { recursive: true, force: true }); } catch {}
+    }
+  });
+
+  it("returns a clear error for a non-existent path", async () => {
+    const { handler, client } = makeHandler();
+    const r = (await handler!({
+      space: "account",
+      local_path: join(tmpDir, "does-not-exist.bin"),
+    })) as { isError: boolean; content: Array<{ text: string }> };
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text).toMatch(/does not exist|unreadable/i);
+    expect(client.initiateDriveUpload).not.toHaveBeenCalled();
+  });
+});
+
+describe("drive_file_upload — HTTP transport (ticket #170)", () => {
+  it("does NOT register drive_file_upload when httpTransport=true", () => {
+    const stubClient = {} as unknown as TrekMailClient;
+    const server = new McpServer({ name: "test", version: "0.0.0" });
+    const names = new Set<string>();
+    const originalRegister = server.registerTool.bind(server);
+    server.registerTool = ((name: string, _def: unknown, handler: any) => {
+      names.add(name);
+      return originalRegister(name, _def as any, handler);
+    }) as typeof server.registerTool;
+
+    registerDriveTools(server, stubClient, { allowDestructive: true, httpTransport: true });
+
+    expect(names.has("drive_file_upload")).toBe(false);
+    // Spot-check that other Drive tools are still registered — we're
+    // only suppressing the local-filesystem reader.
+    expect(names.has("drive_folder_create")).toBe(true);
+    expect(names.has("drive_file_download_url")).toBe(true);
+  });
+
+  it("DOES register drive_file_upload when httpTransport is unset (stdio default)", () => {
+    const stubClient = {} as unknown as TrekMailClient;
+    const server = new McpServer({ name: "test", version: "0.0.0" });
+    const names = new Set<string>();
+    const originalRegister = server.registerTool.bind(server);
+    server.registerTool = ((name: string, _def: unknown, handler: any) => {
+      names.add(name);
+      return originalRegister(name, _def as any, handler);
+    }) as typeof server.registerTool;
+
+    registerDriveTools(server, stubClient, { allowDestructive: true });
+
+    expect(names.has("drive_file_upload")).toBe(true);
   });
 });

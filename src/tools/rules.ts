@@ -115,6 +115,9 @@ export function registerRulesTools(
       annotations: { destructiveHint: true },
     },
     async (inputs) => {
+      if (!config.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to create mail filters.");
+      }
       const idemKey = idempotencyKey(
         "create_mail_rule",
         { mailbox_id: inputs.mailbox_id, name: inputs.name, conditions: inputs.conditions, actions: inputs.actions },
@@ -164,6 +167,9 @@ export function registerRulesTools(
       annotations: { destructiveHint: true },
     },
     async (inputs) => {
+      if (!config.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update mail filters.");
+      }
       const idemKey = idempotencyKey(
         "update_mail_rule",
         { mailbox_id: inputs.mailbox_id, rule_id: inputs.rule_id },
@@ -232,6 +238,9 @@ export function registerRulesTools(
       annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, order }) => {
+      if (!config.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to reorder mail filters.");
+      }
       return callApi(() => client.reorderMailRules(mailbox_id, order));
     },
   );

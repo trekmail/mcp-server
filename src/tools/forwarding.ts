@@ -2,11 +2,12 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
 import { idempotencyKey } from "../idempotency.js";
-import { callApi } from "./util.js";
+import { callApi, errorResult } from "./util.js";
 
 export function registerForwardingTools(
   server: McpServer,
   client: TrekMailClient,
+  config?: { allowDestructive?: boolean },
 ): void {
   server.registerTool(
     "get_forwarding",
@@ -44,9 +45,11 @@ export function registerForwardingTools(
           .describe("Whether forwarding should be enabled"),
         targets: z
           .array(z.string().email())
-          .max(1)
+          .max(30)
           .optional()
-          .describe("Email address to forward to (exactly 1). Required when enabled=true, omit when disabling."),
+          .describe(
+            "Email addresses to forward to. Plan tier sets the cap: Starter 5, Pro 15, Agency 30. Required when enabled=true (at least 1). Omit when disabling.",
+          ),
         keep_copy: z
           .boolean()
           .default(true)
@@ -63,6 +66,11 @@ export function registerForwardingTools(
       annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, enabled, targets, keep_copy, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to change mailbox forwarding (mail will start routing to the configured targets).",
+        );
+      }
       const idemKey = idempotencyKey(
         "set_forwarding",
         { mailbox_id, enabled, targets, keep_copy },

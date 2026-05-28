@@ -271,6 +271,11 @@ export function registerMessageToolHandlers(
       annotations: { destructiveHint: true },
     },
     async ({ uid, folder, destination }) => {
+      if (!config.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to move messages.",
+        );
+      }
       return callApi(() =>
         client.moveMessage(uid, { folder, destination }),
       );
@@ -319,6 +324,11 @@ export function registerMessageToolHandlers(
       annotations: { destructiveHint: true },
     },
     async ({ uid, folder, seen, flagged }) => {
+      if (!config.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update message flags.",
+        );
+      }
       if (seen === undefined && flagged === undefined) {
         return errorResult(
           "At least one flag (seen, flagged) must be specified.",
@@ -474,6 +484,11 @@ export function registerMessageToolHandlers(
       annotations: { destructiveHint: true },
     },
     async ({ to, cc, bcc, subject, body_text, body_html, attachments }) => {
+      if (!config.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to save drafts (writes to the Drafts folder).",
+        );
+      }
       const body: Record<string, unknown> = {};
       if (to) body.to = to;
       if (cc) body.cc = cc;
@@ -519,6 +534,11 @@ export function registerMessageToolHandlers(
       annotations: { destructiveHint: true },
     },
     async ({ uid, to, cc, bcc, subject, body_text, body_html, attachments }) => {
+      if (!config.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update drafts (replaces the existing draft).",
+        );
+      }
       const body: Record<string, unknown> = {};
       if (to) body.to = to;
       if (cc) body.cc = cc;
@@ -555,6 +575,11 @@ export function registerMessageToolHandlers(
       annotations: { destructiveHint: true },
     },
     async ({ uid, folder }) => {
+      if (!config.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to report spam (moves message and trains the anti-spam filter).",
+        );
+      }
       return callApi(() => client.reportSpam(uid, { folder }));
     },
   );
@@ -580,6 +605,11 @@ export function registerMessageToolHandlers(
       annotations: { destructiveHint: true },
     },
     async ({ uid, folder }) => {
+      if (!config.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to report ham (moves message and trains the anti-spam filter).",
+        );
+      }
       return callApi(() => client.reportHam(uid, { folder }));
     },
   );

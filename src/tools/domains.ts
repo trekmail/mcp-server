@@ -79,6 +79,11 @@ export function registerDomainTools(
       annotations: { destructiveHint: true },
     },
     async ({ name, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to create domains.",
+        );
+      }
       const idemKey = idempotencyKey(
         "create_domain",
         { name },
@@ -155,6 +160,11 @@ export function registerDomainTools(
       annotations: { destructiveHint: true },
     },
     async ({ domain_id, enabled, destination }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to change domain catch-all (intercepts all unmatched mail to a single destination).",
+        );
+      }
       if (enabled && !destination) {
         return {
           content: [
@@ -194,6 +204,11 @@ export function registerDomainTools(
       annotations: { destructiveHint: true },
     },
     async ({ domain_id, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to retry DKIM provisioning (regenerates keys and updates DNS).",
+        );
+      }
       const timeBucket = Math.floor(Date.now() / (5 * 60 * 1000));
       const idemKey = idempotencyKey(
         "retry_domain_dkim",
@@ -225,6 +240,11 @@ export function registerDomainTools(
       annotations: { destructiveHint: true },
     },
     async ({ domain_id, note }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update domain notes.",
+        );
+      }
       return callApi(() => client.updateDomainNote(domain_id, note));
     },
   );
@@ -249,6 +269,11 @@ export function registerDomainTools(
       annotations: { destructiveHint: true },
     },
     async ({ domains, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to bulk-add domains.",
+        );
+      }
       const idemKey = idempotencyKey(
         "bulk_add_domains",
         { domains },

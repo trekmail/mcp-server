@@ -43,6 +43,9 @@ export function registerMessageCalendarTools(
       annotations: { destructiveHint: true },
     },
     async (params) => {
+      if (!config.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to create calendar events.");
+      }
       return callApi(() => client.createCalendarEvent(params));
     },
   );
@@ -67,6 +70,9 @@ export function registerMessageCalendarTools(
       annotations: { destructiveHint: true },
     },
     async ({ id, ...rest }) => {
+      if (!config.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update calendar events.");
+      }
       return callApi(() => client.updateCalendarEvent(id, rest));
     },
   );

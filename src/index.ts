@@ -9,8 +9,8 @@ import { registerInfraTools, registerMessageTools } from "./tools/index.js";
 const config = loadConfig();
 
 const server = new McpServer({
-  name: "trekmail",
-  version: "1.0.0",
+  name: "TrekMail",
+  version: "1.0.2",
 });
 
 // Create clients conditionally based on available tokens

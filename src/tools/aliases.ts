@@ -84,6 +84,11 @@ export function registerAliasTools(
       can_send,
       idempotency_key,
     }) => {
+      if (!config.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to create aliases.",
+        );
+      }
       const idemKey = idempotencyKey(
         "create_alias",
         { mailbox_id, local_part, domain_id },
@@ -136,6 +141,11 @@ export function registerAliasTools(
       annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, alias_id, can_receive, can_send, is_active }) => {
+      if (!config.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update aliases.",
+        );
+      }
       return callApi(() =>
         client.updateAlias(mailbox_id, alias_id, {
           can_receive,
