@@ -252,6 +252,21 @@ export class TrekMailClient {
     });
   }
 
+  async getDomainSignature(domainId: number): Promise<unknown> {
+    return this.request("GET", `domains/${domainId}/signature`);
+  }
+
+  async updateDomainSignature(
+    domainId: number,
+    body: {
+      signature_mode: "off" | "default" | "enforced";
+      signature_position?: "before_reply" | "after_reply";
+      signature_html?: string | null;
+    },
+  ): Promise<unknown> {
+    return this.request("PATCH", `domains/${domainId}/signature`, { body });
+  }
+
   // --- DNS ---
 
   async getDnsRequirements(domainId: number): Promise<unknown> {

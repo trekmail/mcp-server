@@ -250,6 +250,70 @@ export function registerDomainTools(
   );
 
   server.registerTool(
+    "get_domain_signature",
+    {
+      title: "Get Domain Signature",
+      description:
+        "Get the per-domain email signature settings (mode, position, html). Returns mode='off' when no signature is configured.",
+      inputSchema: {
+        domain_id: z
+          .number()
+          .int()
+          .positive()
+          .describe("The domain ID to read the signature for"),
+      },
+    },
+    async ({ domain_id }) => {
+      return callApi(() => client.getDomainSignature(domain_id));
+    },
+  );
+
+  server.registerTool(
+    "update_domain_signature",
+    {
+      title: "Update Domain Signature",
+      description:
+        "Set the per-domain email signature. mode=off disables; mode=default seeds newly-created mailbox identities; mode=enforced overrides per-mailbox signatures on the webmail compose path. signature_html accepts safe HTML (up to 10000 chars); unsafe tags are stripped.",
+      inputSchema: {
+        domain_id: z
+          .number()
+          .int()
+          .positive()
+          .describe("The domain ID to update"),
+        signature_mode: z
+          .enum(["off", "default", "enforced"])
+          .describe("How the signature is applied for this domain"),
+        signature_position: z
+          .enum(["before_reply", "after_reply"])
+          .optional()
+          .describe(
+            "Where to render the signature in reply emails (default: before_reply)",
+          ),
+        signature_html: z
+          .string()
+          .max(10000)
+          .optional()
+          .describe("Signature HTML (sanitised server-side)"),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ domain_id, signature_mode, signature_position, signature_html }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update the domain signature.",
+        );
+      }
+      return callApi(() =>
+        client.updateDomainSignature(domain_id, {
+          signature_mode,
+          signature_position,
+          signature_html: signature_html ?? null,
+        }),
+      );
+    },
+  );
+
+  server.registerTool(
     "bulk_add_domains",
     {
       title: "Bulk Add Domains",
