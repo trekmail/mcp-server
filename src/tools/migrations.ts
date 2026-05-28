@@ -228,6 +228,14 @@ export function registerMigrationTools(
       if (!config.allowMigration) {
         return errorResult("Migration operations are disabled. Set TREKMAIL_ALLOW_MIGRATION=true.");
       }
+      // Mirrors the SSRF early-fail on test_migration_connection +
+      // start_migration (ticket #174, 2026-05-28). The backend's
+      // App\Rules\SafeExternalHost still re-validates per IMAP connection
+      // attempt — including per-row hosts when per_row_server=true (those
+      // are not parsed here on purpose; CSV is the wrong layer for that).
+      if (params.source_host && isPrivateHost(params.source_host)) {
+        return errorResult("Cannot connect to private/internal network addresses.");
+      }
       const idemKey = idempotencyKey("preview_bulk_migration", { data_len: params.data.length });
       return callApi(() => client.previewBulkMigration(params, idemKey));
     },
@@ -261,6 +269,14 @@ export function registerMigrationTools(
       }
       if (!confirm_start) {
         return errorResult("Not confirmed. Set confirm_start=true to start the bulk migration.");
+      }
+      // Mirrors the SSRF early-fail on test_migration_connection +
+      // start_migration (ticket #174, 2026-05-28). The backend's
+      // App\Rules\SafeExternalHost still re-validates per IMAP connection
+      // attempt — including per-row hosts when per_row_server=true (those
+      // are not parsed here on purpose; CSV is the wrong layer for that).
+      if (params.source_host && isPrivateHost(params.source_host)) {
+        return errorResult("Cannot connect to private/internal network addresses.");
       }
       const idemKey = idempotencyKey("start_bulk_migration", { data_len: params.data.length }, idempotency_key);
       return callApi(() => client.startBulkMigration(params, idemKey));
