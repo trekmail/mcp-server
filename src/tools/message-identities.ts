@@ -26,7 +26,12 @@ export function registerMessageIdentityTools(
       signature_enabled: z.boolean().optional(),
     },
       annotations: { destructiveHint: true },
-  }, async (params) => callApi(() => client.createIdentity(params)));
+  }, async (params) => {
+    if (!config.allowDestructive) {
+      return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to create identities.");
+    }
+    return callApi(() => client.createIdentity(params));
+  });
 
   server.registerTool("update_identity", {
     title: "Update Identity",
@@ -40,7 +45,12 @@ export function registerMessageIdentityTools(
       is_default: z.boolean().optional(),
     },
       annotations: { destructiveHint: true },
-  }, async ({ id, ...rest }) => callApi(() => client.updateIdentity(id, rest)));
+  }, async ({ id, ...rest }) => {
+    if (!config.allowDestructive) {
+      return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update identities.");
+    }
+    return callApi(() => client.updateIdentity(id, rest));
+  });
 
   server.registerTool("delete_identity", {
     title: "Delete Identity",

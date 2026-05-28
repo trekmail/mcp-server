@@ -46,7 +46,9 @@ export function registerDnsTools(
             "Optional idempotency key. If omitted, a deterministic key is generated from the params.",
           ),
       },
-      annotations: { destructiveHint: true },
+      // dns_recheck enqueues an async DNS verification job; nothing is
+      // mutated in the user's DNS or in trekmail state. Annotation
+      // removed during the 2026-05-28 safety-gate sweep.
     },
     async ({ domain_id, idempotency_key }) => {
       // Use 5-minute time buckets so repeated rechecks generate new keys

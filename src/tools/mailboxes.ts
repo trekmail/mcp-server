@@ -105,6 +105,11 @@ export function registerMailboxTools(
       annotations: { destructiveHint: true },
     },
     async ({ domain_id, local_part, display_name, storage_allocation_mb, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to create mailboxes.",
+        );
+      }
       const idemKey = idempotencyKey(
         "create_mailbox_generated_password",
         { domain_id, local_part, display_name, storage_allocation_mb },
@@ -183,6 +188,11 @@ export function registerMailboxTools(
       annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, note }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update mailbox notes.",
+        );
+      }
       return callApi(() => client.updateMailboxNote(mailbox_id, note));
     },
   );
@@ -242,6 +252,11 @@ export function registerMailboxTools(
       annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to resume mailboxes.",
+        );
+      }
       const timeBucket = Math.floor(Date.now() / (5 * 60 * 1000));
       const idemKey = idempotencyKey(
         "resume_mailbox",
@@ -311,6 +326,14 @@ export function registerMailboxTools(
       annotations: { destructiveHint: true },
     },
     async ({ password_mode, items, idempotency_key }) => {
+      // #163 followup CLAIM 2 — runtime gate matches the destructiveHint
+      // annotation. Without this, prompt injection could spawn 100 mailboxes
+      // (billing grows), and the delete path IS gated → stuck-in-paid-loop.
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to bulk-create mailboxes (creates entries that will be billed and cannot be auto-deleted while this flag remains off).",
+        );
+      }
       const idemKey = idempotencyKey(
         "bulk_create_mailboxes",
         { mode: password_mode ?? "user_supplied", count: items.length, first: items[0]?.local_part },
@@ -343,6 +366,11 @@ export function registerMailboxTools(
       annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, password, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to enable IMAP (opens an external SMTP/IMAP attack surface on the mailbox).",
+        );
+      }
       const idemKey = idempotencyKey(
         "enable_imap",
         { mailbox_id },

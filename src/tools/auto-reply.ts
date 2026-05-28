@@ -2,11 +2,12 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
 import { idempotencyKey } from "../idempotency.js";
-import { callApi } from "./util.js";
+import { callApi, errorResult } from "./util.js";
 
 export function registerAutoReplyTools(
   server: McpServer,
   client: TrekMailClient,
+  config?: { allowDestructive?: boolean },
 ): void {
   server.registerTool(
     "get_auto_reply",
@@ -70,6 +71,11 @@ export function registerAutoReplyTools(
       annotations: { destructiveHint: true },
     },
     async (inputs) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to set auto-reply (mail will start auto-responding from this mailbox).",
+        );
+      }
       const idemKey = idempotencyKey(
         "set_auto_reply",
         { mailbox_id: inputs.mailbox_id, enabled: inputs.enabled },

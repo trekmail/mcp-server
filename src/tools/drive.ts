@@ -1,10 +1,80 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { randomUUID } from "node:crypto";
-import { createReadStream, statSync } from "node:fs";
+import { createReadStream, realpathSync, statSync } from "node:fs";
+import { resolve as resolvePath, sep } from "node:path";
+import { homedir, tmpdir } from "node:os";
 import { Readable } from "node:stream";
 import type { TrekMailClient } from "../client.js";
 import { callApi, errorResult } from "./util.js";
+
+/**
+ * Path-allowlist for `drive_file_upload` (ticket #170, 2026-05-28).
+ *
+ * Threat model: an attacker reaches the stdio MCP either by (a) directly
+ * invoking the tool with a sensitive `local_path` after compromising an
+ * agent's credentials, or (b) via prompt injection in an email body that
+ * the user's agent reads and acts on. Both classes try to exfiltrate
+ * `/proc/self/environ`, `~/.ssh/id_rsa`, `.env`, etc.
+ *
+ * Strategy (all checks run on `realpathSync` canonical form, so a
+ * symlink dropped inside an allowed dir cannot point at a denied file):
+ *   1. Hard denylist of sensitive system paths regardless of allowlist.
+ *   2. Files literally named `.env` (or `.env.*`) rejected.
+ *   3. Allowlist defaults to $HOME ∪ $TMPDIR. Operators can override via
+ *      `TREKMAIL_UPLOAD_DIR` (colon-separated list).
+ *
+ * Not registered on HTTP transport at all (see `httpTransport` flag) —
+ * "local file" semantics are meaningless server-side.
+ */
+function assertUploadPathAllowed(localPath: string): void {
+  let real: string;
+  try {
+    real = realpathSync(resolvePath(localPath));
+  } catch (e) {
+    throw new Error(`Path does not exist or is unreadable: ${localPath}`);
+  }
+
+  const denyPrefixes = [
+    "/proc",
+    "/sys",
+    "/dev",
+    "/etc",
+    "/root",
+    "/boot",
+    resolvePath(homedir(), ".ssh"),
+    resolvePath(homedir(), ".aws"),
+    resolvePath(homedir(), ".config", "gcloud"),
+    resolvePath(homedir(), ".config", "rclone"),
+    resolvePath(homedir(), ".docker"),
+    resolvePath(homedir(), ".kube"),
+    resolvePath(homedir(), ".gnupg"),
+  ];
+  for (const deny of denyPrefixes) {
+    if (real === deny || real.startsWith(deny + sep)) {
+      throw new Error(`Path is in a restricted location: ${localPath}`);
+    }
+  }
+
+  const basename = real.split(sep).pop() ?? "";
+  if (basename === ".env" || basename.startsWith(".env.")) {
+    throw new Error(`Refusing to upload ${basename} (sensitive file)`);
+  }
+
+  const envOverride = process.env.TREKMAIL_UPLOAD_DIR;
+  const allowed: string[] = envOverride
+    ? envOverride.split(":").filter(Boolean).map((p) => realpathSync(resolvePath(p)))
+    : [realpathSync(resolvePath(homedir())), realpathSync(resolvePath(tmpdir()))];
+
+  const inAllowed = allowed.some(
+    (a) => real === a || real.startsWith(a + sep),
+  );
+  if (!inAllowed) {
+    throw new Error(
+      `Path is outside the upload allowlist. Set TREKMAIL_UPLOAD_DIR (colon-separated) to an allowed directory, or move the file under one of: ${allowed.join(", ")}`,
+    );
+  }
+}
 
 /**
  * Drive API + MCP rollout, PR #8.
@@ -21,7 +91,7 @@ import { callApi, errorResult } from "./util.js";
 export function registerDriveTools(
   server: McpServer,
   client: TrekMailClient,
-  config?: { allowDestructive?: boolean },
+  config?: { allowDestructive?: boolean; httpTransport?: boolean },
 ): void {
   // Audit finding #45: every other destructive MCP tool (mailbox delete,
   // password change, etc.) requires TREKMAIL_ALLOW_DESTRUCTIVE=true. The
@@ -160,7 +230,11 @@ export function registerDriveTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ file_id, name }) => callApi(() => client.renameDriveFile(file_id, name)),
+    async ({ file_id, name }) => {
+      const blocked = requireDestructive("file rename");
+      if (blocked) return blocked;
+      return callApi(() => client.renameDriveFile(file_id, name));
+    },
   );
 
   server.registerTool(
@@ -174,8 +248,11 @@ export function registerDriveTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ file_id, folder_id }) =>
-      callApi(() => client.moveDriveFile(file_id, folder_id, randomUUID())),
+    async ({ file_id, folder_id }) => {
+      const blocked = requireDestructive("file move");
+      if (blocked) return blocked;
+      return callApi(() => client.moveDriveFile(file_id, folder_id, randomUUID()));
+    },
   );
 
   server.registerTool(
@@ -201,7 +278,11 @@ export function registerDriveTools(
       inputSchema: { file_id: z.number().int().positive() },
       annotations: { destructiveHint: true },
     },
-    async ({ file_id }) => callApi(() => client.restoreDriveFile(file_id, randomUUID())),
+    async ({ file_id }) => {
+      const blocked = requireDestructive("file restore");
+      if (blocked) return blocked;
+      return callApi(() => client.restoreDriveFile(file_id, randomUUID()));
+    },
   );
 
   server.registerTool(
@@ -237,8 +318,11 @@ export function registerDriveTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ space, name, parent_id, color, is_shared }) =>
-      callApi(() => client.createDriveFolder(space, name, parent_id ?? null, color, is_shared, randomUUID())),
+    async ({ space, name, parent_id, color, is_shared }) => {
+      const blocked = requireDestructive("folder create");
+      if (blocked) return blocked;
+      return callApi(() => client.createDriveFolder(space, name, parent_id ?? null, color, is_shared, randomUUID()));
+    },
   );
 
   server.registerTool(
@@ -254,6 +338,8 @@ export function registerDriveTools(
       annotations: { destructiveHint: true },
     },
     async ({ folder_id, name, color }) => {
+      const blocked = requireDestructive("folder update");
+      if (blocked) return blocked;
       const changes: { name?: string; color?: string | null } = {};
       if (name !== undefined) changes.name = name;
       if (color !== undefined) changes.color = color;
@@ -272,8 +358,11 @@ export function registerDriveTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ folder_id, parent_id }) =>
-      callApi(() => client.moveDriveFolder(folder_id, parent_id, randomUUID())),
+    async ({ folder_id, parent_id }) => {
+      const blocked = requireDestructive("folder move");
+      if (blocked) return blocked;
+      return callApi(() => client.moveDriveFolder(folder_id, parent_id, randomUUID()));
+    },
   );
 
   server.registerTool(
@@ -299,7 +388,11 @@ export function registerDriveTools(
       inputSchema: { folder_id: z.number().int().positive() },
       annotations: { destructiveHint: true },
     },
-    async ({ folder_id }) => callApi(() => client.restoreDriveFolder(folder_id, randomUUID())),
+    async ({ folder_id }) => {
+      const blocked = requireDestructive("folder restore");
+      if (blocked) return blocked;
+      return callApi(() => client.restoreDriveFolder(folder_id, randomUUID()));
+    },
   );
 
   server.registerTool(
@@ -327,8 +420,11 @@ export function registerDriveTools(
       inputSchema: { folder_id: z.number().int().positive() },
       annotations: { destructiveHint: true },
     },
-    async ({ folder_id }) =>
-      callApi(() => client.shareDriveFolderWithAccount(folder_id, randomUUID())),
+    async ({ folder_id }) => {
+      const blocked = requireDestructive("folder share-with-account");
+      if (blocked) return blocked;
+      return callApi(() => client.shareDriveFolderWithAccount(folder_id, randomUUID()));
+    },
   );
 
   server.registerTool(
@@ -340,8 +436,11 @@ export function registerDriveTools(
       inputSchema: { folder_id: z.number().int().positive() },
       annotations: { destructiveHint: true },
     },
-    async ({ folder_id }) =>
-      callApi(() => client.stopSharingDriveFolder(folder_id, randomUUID())),
+    async ({ folder_id }) => {
+      const blocked = requireDestructive("folder stop-sharing");
+      if (blocked) return blocked;
+      return callApi(() => client.stopSharingDriveFolder(folder_id, randomUUID()));
+    },
   );
 
   // ─── Trash ────────────────────────────────────────────────────────
@@ -391,8 +490,11 @@ export function registerDriveTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ space, file_ids, folder_ids }) =>
-      callApi(() => client.bulkDriveTrash(space, file_ids, folder_ids, randomUUID())),
+    async ({ space, file_ids, folder_ids }) => {
+      const blocked = requireDestructive("bulk trash");
+      if (blocked) return blocked;
+      return callApi(() => client.bulkDriveTrash(space, file_ids, folder_ids, randomUUID()));
+    },
   );
 
   server.registerTool(
@@ -407,8 +509,11 @@ export function registerDriveTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ space, file_ids, folder_ids }) =>
-      callApi(() => client.bulkDriveRestore(space, file_ids, folder_ids, randomUUID())),
+    async ({ space, file_ids, folder_ids }) => {
+      const blocked = requireDestructive("bulk restore");
+      if (blocked) return blocked;
+      return callApi(() => client.bulkDriveRestore(space, file_ids, folder_ids, randomUUID()));
+    },
   );
 
   server.registerTool(
@@ -425,10 +530,13 @@ export function registerDriveTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ space, file_ids, folder_ids, target_folder_id }) =>
-      callApi(() =>
+    async ({ space, file_ids, folder_ids, target_folder_id }) => {
+      const blocked = requireDestructive("bulk move");
+      if (blocked) return blocked;
+      return callApi(() =>
         client.bulkDriveMove(space, file_ids, folder_ids, target_folder_id, randomUUID()),
-      ),
+      );
+    },
   );
 
   server.registerTool(
@@ -466,14 +574,17 @@ export function registerDriveTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ file_id, expires_at, max_downloads }) =>
-      callApi(() =>
+    async ({ file_id, expires_at, max_downloads }) => {
+      const blocked = requireDestructive("share-link create");
+      if (blocked) return blocked;
+      return callApi(() =>
         client.createDriveShareLink(
           file_id,
           { expires_at, max_downloads },
           randomUUID(),
         ),
-      ),
+      );
+    },
   );
 
   server.registerTool(
@@ -495,7 +606,11 @@ export function registerDriveTools(
       inputSchema: { link_id: z.number().int().positive() },
       annotations: { destructiveHint: true },
     },
-    async ({ link_id }) => callApi(() => client.revokeDriveShareLink(link_id)),
+    async ({ link_id }) => {
+      const blocked = requireDestructive("share-link revoke");
+      if (blocked) return blocked;
+      return callApi(() => client.revokeDriveShareLink(link_id));
+    },
   );
 
   // ─── Uploads (low-level — high-level wrapper deferred) ────────────
@@ -515,10 +630,13 @@ export function registerDriveTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ space, name, size_bytes, folder_id, client_mime }) =>
-      callApi(() =>
+    async ({ space, name, size_bytes, folder_id, client_mime }) => {
+      const blocked = requireDestructive("upload initiate");
+      if (blocked) return blocked;
+      return callApi(() =>
         client.initiateDriveUpload(space, name, size_bytes, folder_id ?? null, client_mime, randomUUID()),
-      ),
+      );
+    },
   );
 
   server.registerTool(
@@ -535,7 +653,11 @@ export function registerDriveTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ file_id, parts }) => callApi(() => client.completeDriveUpload(file_id, parts)),
+    async ({ file_id, parts }) => {
+      const blocked = requireDestructive("upload complete");
+      if (blocked) return blocked;
+      return callApi(() => client.completeDriveUpload(file_id, parts));
+    },
   );
 
   server.registerTool(
@@ -550,8 +672,11 @@ export function registerDriveTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ file_id, part_numbers }) =>
-      callApi(() => client.refreshDriveUploadParts(file_id, part_numbers)),
+    async ({ file_id, part_numbers }) => {
+      const blocked = requireDestructive("upload refresh-parts");
+      if (blocked) return blocked;
+      return callApi(() => client.refreshDriveUploadParts(file_id, part_numbers));
+    },
   );
 
   server.registerTool(
@@ -562,7 +687,11 @@ export function registerDriveTools(
       inputSchema: { file_id: z.number().int().positive() },
       annotations: { destructiveHint: true },
     },
-    async ({ file_id }) => callApi(() => client.abortDriveUpload(file_id)),
+    async ({ file_id }) => {
+      const blocked = requireDestructive("upload abort");
+      if (blocked) return blocked;
+      return callApi(() => client.abortDriveUpload(file_id));
+    },
   );
 
   // ─── Drive add-on ─────────────────────────────────────────────────
@@ -603,41 +732,56 @@ export function registerDriveTools(
   );
 
   // ─── High-level upload (one tool, three API calls + B2 PUT(s)) ────
-
-  server.registerTool(
-    "drive_file_upload",
-    {
-      title: "Upload File to Drive (high-level)",
-      description:
-        "Upload a local file to Drive in one tool call. Internally chains drive_upload_initiate → direct PUT(s) to B2 → drive_upload_complete. Bytes go straight to B2 — they do NOT pass through the API server (the server is only touched at the start and end of the upload). Files >100 MB use multipart (50 MB chunks); the wrapper streams from disk so memory stays bounded regardless of file size. On any error the wrapper calls drive_upload_abort to release the reservation.",
-      inputSchema: {
-        space: z.string().describe("'account' | 'mailbox:N' | numeric space id"),
-        local_path: z.string().describe("Absolute path to the file on the MCP host"),
-        name: z.string().min(1).max(255).optional().describe("Display name in Drive (defaults to basename of local_path)"),
-        folder_id: z.number().int().positive().nullable().optional(),
-        client_mime: z.string().max(255).optional(),
+  //
+  // Stdio-only tool: `local_path` semantically means "a file on the
+  // machine running the MCP". On the hosted HTTP MCP that machine is
+  // our server — exposing the tool there lets any OAuth-connected agent
+  // read `/proc/self/environ` / `.env` / SSH keys (ticket #170). Skipped
+  // unconditionally when `httpTransport` is set; the scope-map regex
+  // still sees the registerTool call statically so coverage stays intact.
+  if (!config?.httpTransport) {
+    server.registerTool(
+      "drive_file_upload",
+      {
+        title: "Upload File to Drive (high-level)",
+        description:
+          "Upload a local file to Drive in one tool call. Internally chains drive_upload_initiate → direct PUT(s) to B2 → drive_upload_complete. Bytes go straight to B2 — they do NOT pass through the API server (the server is only touched at the start and end of the upload). Files >100 MB use multipart (50 MB chunks); the wrapper streams from disk so memory stays bounded regardless of file size. On any error the wrapper calls drive_upload_abort to release the reservation.",
+        inputSchema: {
+          space: z.string().describe("'account' | 'mailbox:N' | numeric space id"),
+          local_path: z.string().describe("Absolute path to the file on the MCP host"),
+          name: z.string().min(1).max(255).optional().describe("Display name in Drive (defaults to basename of local_path)"),
+          folder_id: z.number().int().positive().nullable().optional(),
+          client_mime: z.string().max(255).optional(),
+        },
+        annotations: { destructiveHint: true },
       },
-      annotations: { destructiveHint: true },
-    },
-    async ({ space, local_path, name, folder_id, client_mime }) => {
-      try {
-        const result = await uploadFileFromPath(client, {
-          space,
-          localPath: local_path,
-          name,
-          folderId: folder_id ?? null,
-          clientMime: client_mime,
-        });
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        };
-      } catch (err) {
-        return errorResult(
-          `Upload failed: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    },
-  );
+      async ({ space, local_path, name, folder_id, client_mime }) => {
+        const blocked = requireDestructive("file upload");
+        if (blocked) return blocked;
+        try {
+          assertUploadPathAllowed(local_path);
+        } catch (err) {
+          return errorResult(err instanceof Error ? err.message : String(err));
+        }
+        try {
+          const result = await uploadFileFromPath(client, {
+            space,
+            localPath: local_path,
+            name,
+            folderId: folder_id ?? null,
+            clientMime: client_mime,
+          });
+          return {
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          };
+        } catch (err) {
+          return errorResult(
+            `Upload failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      },
+    );
+  }
 }
 
 /**

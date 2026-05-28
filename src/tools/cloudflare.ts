@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
 import type { Config } from "../config.js";
 import { idempotencyKey } from "../idempotency.js";
-import { callApi } from "./util.js";
+import { callApi, errorResult } from "./util.js";
 
 export function registerCloudflareTools(
   server: McpServer,
@@ -22,7 +22,10 @@ export function registerCloudflareTools(
           .min(1)
           .describe("The Cloudflare API token to validate"),
       },
-      annotations: { destructiveHint: true },
+      // Read-only: validates token via Cloudflare's /user/tokens/verify
+      // (no mutation). destructiveHint removed during the 2026-05-28
+      // safety-gate sweep (was misleading clients into prompting users
+      // for confirmation on a pure read).
     },
     async ({ api_token }) => {
       return callApi(() => client.validateCloudflareToken(api_token));
@@ -81,6 +84,11 @@ export function registerCloudflareTools(
       annotations: { destructiveHint: true },
     },
     async ({ api_token, selected, idempotency_key }) => {
+      if (!config.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to connect Cloudflare domains (creates TrekMail domains + writes DNS records).",
+        );
+      }
       const idemKey = idempotencyKey(
         "cloudflare_connect",
         { zones: selected.map((s) => s.zone_name).sort() },
@@ -105,7 +113,9 @@ export function registerCloudflareTools(
           .max(50)
           .describe("TrekMail domain IDs to preview DNS changes for"),
       },
-      annotations: { destructiveHint: true },
+      // Read-only: previewCloudflareDns calls Cloudflare's DNS-list API
+      // and computes the diff in memory; no records mutated. Annotation
+      // removed during the 2026-05-28 sweep.
     },
     async ({ domain_ids }) => {
       return callApi(() => client.previewCloudflareDns(domain_ids));
@@ -138,6 +148,11 @@ export function registerCloudflareTools(
       annotations: { destructiveHint: true },
     },
     async ({ domain_ids, confirmed_conflicts, idempotency_key }) => {
+      if (!config.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to apply Cloudflare DNS changes (mutates live DNS records — MX, SPF, DKIM, DMARC).",
+        );
+      }
       const idemKey = idempotencyKey(
         "cloudflare_apply",
         { domain_ids: domain_ids.sort() },

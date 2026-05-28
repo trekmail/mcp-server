@@ -252,6 +252,21 @@ export class TrekMailClient {
     });
   }
 
+  async getDomainSignature(domainId: number): Promise<unknown> {
+    return this.request("GET", `domains/${domainId}/signature`);
+  }
+
+  async updateDomainSignature(
+    domainId: number,
+    body: {
+      signature_mode: "off" | "default" | "enforced";
+      signature_position?: "before_reply" | "after_reply";
+      signature_html?: string | null;
+    },
+  ): Promise<unknown> {
+    return this.request("PATCH", `domains/${domainId}/signature`, { body });
+  }
+
   // --- DNS ---
 
   async getDnsRequirements(domainId: number): Promise<unknown> {
@@ -979,6 +994,12 @@ export class TrekMailClient {
     });
   }
 
+  async rescheduleMessage(id: number, body: Record<string, unknown>): Promise<unknown> {
+    return this.request("PATCH", `messages/scheduled/${id}`, {
+      body,
+    });
+  }
+
   // --- Contacts ---
 
   async listContacts(params?: { q?: string; per_page?: number; page?: number }): Promise<unknown> {
@@ -1078,6 +1099,59 @@ export class TrekMailClient {
   ): Promise<unknown> {
     return this.request("GET", `domains/${domainId}/spam-metrics/summary`, {
       query: { days: days ?? 30 },
+    });
+  }
+
+  // --- Outbound Deliverability & Bounces ---
+
+  async getDomainDeliverability(
+    domainId: number,
+    days?: number,
+  ): Promise<unknown> {
+    return this.request("GET", `domains/${domainId}/deliverability`, {
+      query: { days: days ?? 30 },
+    });
+  }
+
+  async listDomainBounces(
+    domainId: number,
+    opts: {
+      days?: number;
+      type?: "hard" | "soft" | "all";
+      recipient?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<unknown> {
+    return this.request("GET", `domains/${domainId}/bounces`, {
+      query: {
+        days: opts.days ?? 30,
+        ...(opts.type ? { type: opts.type } : {}),
+        ...(opts.recipient ? { recipient: opts.recipient } : {}),
+        limit: opts.limit ?? 50,
+        offset: opts.offset ?? 0,
+      },
+    });
+  }
+
+  async listMailboxBounces(
+    mailboxId: number,
+    opts: {
+      days?: number;
+      type?: "hard" | "soft" | "all";
+      recipient?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<unknown> {
+    return this.request("GET", `mailboxes/${mailboxId}/bounces`, {
+      query: {
+        days: opts.days ?? 30,
+        ...(opts.type ? { type: opts.type } : {}),
+        ...(opts.recipient ? { recipient: opts.recipient } : {}),
+        limit: opts.limit ?? 50,
+        offset: opts.offset ?? 0,
+      },
     });
   }
 

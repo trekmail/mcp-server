@@ -1,6 +1,6 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 185 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 191 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
 ## Quickstart
 
@@ -62,12 +62,12 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.1.0` | User-Agent header |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.2.0` | User-Agent header |
 | `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable destructive tools (delete intents, domain delete, password change, pause, SMTP config, revoke token, delete Cloudflare token, Drive trash/purge/empty-trash, Drive sync-device revoke/rotate, message deletes) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable `send_message` tool |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
 
-## Tools (185)
+## Tools (191)
 
 ### Domains (ops token)
 - **list_domains** — List domains with optional status/search filters
@@ -77,6 +77,8 @@ npm start
 - **update_domain_catch_all** — Configure or clear the catch-all address
 - **retry_domain_dkim** — Retry DKIM key provisioning
 - **update_domain_note** — Update the admin note on a domain
+- **get_domain_signature** — Read per-domain email signature settings (mode, position, HTML)
+- **update_domain_signature** — Set per-domain signature (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **bulk_add_domains** — Add up to 20 domains in one call
 
 ### DNS (ops token)
@@ -106,8 +108,8 @@ npm start
 - **delete_alias** — Permanently remove an alias (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 
 ### Forwarding (ops token)
-- **get_forwarding** — Get forwarding config for a mailbox
-- **set_forwarding** — Configure forwarding targets, enable/disable, keep-copy
+- **get_forwarding** — Read the current forwarding config for a mailbox. Returns the `targets` array (one or more destinations), `keep_copy`, and `destination_limit` (the plan-tier cap so the agent can preflight an `set_forwarding` call without trial-and-error).
+- **set_forwarding** — Configure one or more forwarding destinations for a mailbox, plus enable/disable and keep-copy. The `targets` array accepts up to 30 entries client-side; the server enforces the actual per-plan cap — Starter **5**, Pro **15**, Agency **30** — and returns a 422 `limit_exceeded` error with the cap if you pass more. CRLF / loop / self-forward / MX validation is run per destination, so a single bad entry rejects the whole save.
 
 ### Mail Filters (ops token)
 - **list_mail_rules** — List all mail filters for a mailbox
@@ -153,8 +155,9 @@ npm start
 - **empty_folder** — Empty all messages from a folder without deleting the folder
 
 ### Scheduled Messages (message token)
-- **schedule_message** — Schedule a message to be sent at a future time
+- **schedule_message** — Schedule a message to be sent at a future time (optional IANA `timezone` resolves naïve datetimes; explicit ISO offset always wins)
 - **list_scheduled** — List pending scheduled messages
+- **reschedule_message** — Re-time a pending scheduled message in place (no resend, lighter throttle than schedule + cancel)
 - **cancel_scheduled** — Cancel a scheduled message before it sends
 
 ### Contacts (message token)
@@ -253,15 +256,13 @@ npm start
 
 ### Email Verifier (ops token)
 - **verify_email** — Verify a single email address
-- **verify_email_bulk** — Submit a bulk verification job. Response includes a `breakdown { probe, skip, deep_savings }` block alongside `credits_charged`.
+- **verify_email_bulk** — Submit a bulk verification job
 - **verify_job_status** — Check job progress and results
 - **verify_job_download** — Download job results as CSV
 - **verify_credits** — Check remaining credit balance
 - **verify_list_jobs** — List all verification jobs
 - **verify_cancel_job** — Cancel a running job and refund unprocessed credits
 - **verify_delete_job** — Permanently delete a job and all results (GDPR)
-
-**Pricing note for Deep mode:** addresses on Gmail, Yahoo, Outlook, iCloud, AOL and similar large free email providers are billed at 1 credit each (the Quick rate) even when submitted to `verify_email_bulk` with `mode: "deep"`. Deep Check adds value through a per-mailbox SMTP probe, but those providers don't allow it — they accept every test and only bounce fake addresses asynchronously. Business domains still cost 2 credits in Deep mode. The `breakdown` block in the response shows the split (`probe` = full-Deep addresses, `skip` = free-provider addresses billed at 1, `deep_savings` = credits saved vs. flat Deep pricing).
 
 ### Cloudflare (ops token)
 - **validate_cloudflare_token** — Validate a Cloudflare API token
@@ -352,11 +353,26 @@ Additionally, each write tool requires a per-call confirmation parameter (`confi
 3. (wait) get_dns_check(check_id: 42) → { status: "complete", results: {...} }
 ```
 
-### Create Mailbox + Forwarding
+### Create Mailbox + Forwarding (single destination)
 ```
 1. create_mailbox_generated_password(domain_id: 5, local_part: "alice")
    → { id: 10, email: "alice@example.com", password: "..." }
 2. set_forwarding(mailbox_id: 10, enabled: true, targets: ["alice@gmail.com"], keep_copy: true)
+```
+
+### Create Mailbox + Multi-Destination Forwarding
+```
+# Fan one shared mailbox out to several humans.
+1. create_mailbox_generated_password(domain_id: 5, local_part: "sales")
+   → { id: 14, email: "sales@example.com", password: "..." }
+2. get_forwarding(mailbox_id: 14)
+   → { enabled: false, targets: [], keep_copy: false, destination_limit: 15 }   # Pro plan
+3. set_forwarding(
+     mailbox_id: 14,
+     enabled: true,
+     targets: ["alice@example.com", "bob@example.com", "carol@example.com"],
+     keep_copy: true        # also leave a copy in sales@ for record-keeping
+   )
 ```
 
 ### Create Mailbox with Dedicated Storage

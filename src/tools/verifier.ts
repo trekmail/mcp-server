@@ -1,18 +1,19 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
-import { callApi } from "./util.js";
+import { callApi, errorResult } from "./util.js";
 
 export function registerVerifierTools(
   server: McpServer,
   client: TrekMailClient,
+  config?: { allowDestructive?: boolean },
 ): void {
   server.registerTool(
     "verify_email",
     {
       title: "Verify Email Address",
       description:
-        "Verify a single email address against 18 checks (syntax, MX, disposable, blocklist, SPF, DMARC, gibberish detection, typo suggestion, plus-addressing, DNSBL, domain age, Gravatar, unroutable MX, etc). Returns trust score 0-100 and status (safe/valid/risky/invalid). Quick mode: 1 credit. Deep mode: 2 credits (includes SMTP mailbox verification when available). Note: addresses at large free providers (Gmail, Yahoo, Outlook, Hotmail, iCloud, AOL, …) are charged 1 credit even in Deep mode, because those providers always accept the SMTP probe and bounce asynchronously — Deep returns the same result as Quick for them.",
+        "Verify a single email address against 18 checks (syntax, MX, disposable, blocklist, SPF, DMARC, gibberish detection, typo suggestion, plus-addressing, DNSBL, domain age, Gravatar, unroutable MX, etc). Returns trust score 0-100 and status (safe/valid/risky/invalid). Quick mode: 1 credit. Deep mode: 2 credits (includes SMTP mailbox verification when available).",
       inputSchema: {
         email: z
           .string()
@@ -21,11 +22,14 @@ export function registerVerifierTools(
         mode: z
           .enum(["quick", "deep"])
           .optional()
-          .describe("Verification mode: quick (1 credit, default) or deep (2 credits, SMTP mailbox check; free-provider domains still charge 1)"),
+          .describe("Verification mode: quick (1 credit, default) or deep (2 credits, SMTP mailbox check)"),
       },
       annotations: { destructiveHint: true },
     },
     async ({ email, mode }) => {
+      if (!config?.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to verify emails (consumes credits from the account balance).");
+      }
       return callApi(() => client.verifySingleEmail(email, mode));
     },
   );
@@ -35,7 +39,7 @@ export function registerVerifierTools(
     {
       title: "Verify Email List",
       description:
-        "Submit a list of email addresses for bulk verification. Returns a job ID to track progress, plus `credits_charged` and a `breakdown { probe, skip, deep_savings }` block. Quick mode: 1 credit/email. Deep mode: 2 credits/email for business domains; 1 credit/email for large free providers (Gmail, Yahoo, Outlook, Hotmail, iCloud, AOL, …) because Deep can't probe those mailboxes — providers always accept the probe and bounce asynchronously, so Deep returns the same result as Quick for them. Max 50,000 emails per job.",
+        "Submit a list of email addresses for bulk verification. Returns a job ID to track progress. Quick mode: 1 credit/email. Deep mode: 2 credits/email. Max 50,000 emails per job.",
       inputSchema: {
         emails: z
           .array(z.string().email())
@@ -50,11 +54,14 @@ export function registerVerifierTools(
         mode: z
           .enum(["quick", "deep"])
           .optional()
-          .describe("Verification mode: quick (1 credit/email) or deep (2 credits/email for business domains, 1 credit/email for free-provider domains where the SMTP probe is bypassed)"),
+          .describe("Verification mode: quick (1 credit, default) or deep (2 credits, SMTP mailbox check)"),
       },
       annotations: { destructiveHint: true },
     },
     async ({ emails, name, mode }) => {
+      if (!config?.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to bulk-verify emails (consumes credits from the account balance — up to 50,000/job).");
+      }
       return callApi(() => client.verifyBulkEmails(emails, name, mode));
     },
   );
@@ -164,6 +171,9 @@ export function registerVerifierTools(
       annotations: { destructiveHint: true },
     },
     async ({ job_id }) => {
+      if (!config?.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to cancel verification jobs (unprocessed credits are refunded).");
+      }
       return callApi(() => client.cancelVerifyJob(job_id));
     },
   );
@@ -184,6 +194,9 @@ export function registerVerifierTools(
       annotations: { destructiveHint: true },
     },
     async ({ job_id }) => {
+      if (!config?.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to delete verification jobs (permanent, results are wiped).");
+      }
       return callApi(() => client.deleteVerifyJob(job_id));
     },
   );

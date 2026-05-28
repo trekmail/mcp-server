@@ -79,6 +79,11 @@ export function registerDomainTools(
       annotations: { destructiveHint: true },
     },
     async ({ name, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to create domains.",
+        );
+      }
       const idemKey = idempotencyKey(
         "create_domain",
         { name },
@@ -155,6 +160,11 @@ export function registerDomainTools(
       annotations: { destructiveHint: true },
     },
     async ({ domain_id, enabled, destination }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to change domain catch-all (intercepts all unmatched mail to a single destination).",
+        );
+      }
       if (enabled && !destination) {
         return {
           content: [
@@ -194,6 +204,11 @@ export function registerDomainTools(
       annotations: { destructiveHint: true },
     },
     async ({ domain_id, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to retry DKIM provisioning (regenerates keys and updates DNS).",
+        );
+      }
       const timeBucket = Math.floor(Date.now() / (5 * 60 * 1000));
       const idemKey = idempotencyKey(
         "retry_domain_dkim",
@@ -225,7 +240,76 @@ export function registerDomainTools(
       annotations: { destructiveHint: true },
     },
     async ({ domain_id, note }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update domain notes.",
+        );
+      }
       return callApi(() => client.updateDomainNote(domain_id, note));
+    },
+  );
+
+  server.registerTool(
+    "get_domain_signature",
+    {
+      title: "Get Domain Signature",
+      description:
+        "Get the per-domain email signature settings (mode, position, html). Returns mode='off' when no signature is configured.",
+      inputSchema: {
+        domain_id: z
+          .number()
+          .int()
+          .positive()
+          .describe("The domain ID to read the signature for"),
+      },
+    },
+    async ({ domain_id }) => {
+      return callApi(() => client.getDomainSignature(domain_id));
+    },
+  );
+
+  server.registerTool(
+    "update_domain_signature",
+    {
+      title: "Update Domain Signature",
+      description:
+        "Set the per-domain email signature. mode=off disables; mode=default seeds newly-created mailbox identities; mode=enforced overrides per-mailbox signatures on the webmail compose path. signature_html accepts safe HTML (up to 10000 chars); unsafe tags are stripped.",
+      inputSchema: {
+        domain_id: z
+          .number()
+          .int()
+          .positive()
+          .describe("The domain ID to update"),
+        signature_mode: z
+          .enum(["off", "default", "enforced"])
+          .describe("How the signature is applied for this domain"),
+        signature_position: z
+          .enum(["before_reply", "after_reply"])
+          .optional()
+          .describe(
+            "Where to render the signature in reply emails (default: before_reply)",
+          ),
+        signature_html: z
+          .string()
+          .max(10000)
+          .optional()
+          .describe("Signature HTML (sanitised server-side)"),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ domain_id, signature_mode, signature_position, signature_html }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update the domain signature.",
+        );
+      }
+      return callApi(() =>
+        client.updateDomainSignature(domain_id, {
+          signature_mode,
+          signature_position,
+          signature_html: signature_html ?? null,
+        }),
+      );
     },
   );
 
@@ -249,6 +333,11 @@ export function registerDomainTools(
       annotations: { destructiveHint: true },
     },
     async ({ domains, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to bulk-add domains.",
+        );
+      }
       const idemKey = idempotencyKey(
         "bulk_add_domains",
         { domains },

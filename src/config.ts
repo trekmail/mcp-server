@@ -9,7 +9,7 @@ const configSchema = z
     apiToken: z.string().startsWith("tm_live_").optional(),
     messageToken: z.string().startsWith("tm_msg_").optional(),
     timeoutMs: z.coerce.number().int().positive().default(30_000),
-    userAgent: z.string().default("trekmail-mcp/1.1.0"),
+    userAgent: z.string().default("trekmail-mcp/1.2.0"),
     allowDestructive: z
       .enum(["true", "false"])
       .default("false")
@@ -22,6 +22,11 @@ const configSchema = z
       .enum(["true", "false"])
       .default("false")
       .transform((v) => v === "true"),
+    // Internal flag — set by mcp-http when wrapping the stdio tools
+    // behind the HTTP transport. Tools that operate on the MCP host
+    // filesystem (drive_file_upload) skip registration when true,
+    // because "local" means "our server" in that context (ticket #170).
+    httpTransport: z.boolean().optional().default(false),
   })
   .refine((data) => data.apiToken || data.messageToken, {
     message:

@@ -2,11 +2,12 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
 import { idempotencyKey } from "../idempotency.js";
-import { callApi } from "./util.js";
+import { callApi, errorResult } from "./util.js";
 
 export function registerSieveTools(
   server: McpServer,
   client: TrekMailClient,
+  config?: { allowDestructive?: boolean },
 ): void {
   server.registerTool(
     "get_sieve_script",
@@ -53,6 +54,11 @@ export function registerSieveTools(
       annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, script, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to upload Sieve scripts (replaces all visual filters for the mailbox).",
+        );
+      }
       const idemKey = idempotencyKey(
         "upload_sieve_script",
         { mailbox_id },

@@ -94,9 +94,14 @@ export function registerDriveDeviceTools(
           .optional()
           .describe("Optional client-supplied idempotency key. Otherwise derived from {label, scopes, mailbox_id}."),
       },
-      annotations: { destructiveHint: false },
+      annotations: { destructiveHint: true },
     },
     async ({ label, scopes, mailbox_id, expires_in_days, idempotency_key }) => {
+      // Minting a Drive sync device password is credential issuance —
+      // the resulting `dsync_…` can be used outside MCP (rclone etc.)
+      // until revoked or expired. Gate same as revoke/rotate.
+      const gated = requireDestructive("create");
+      if (gated !== null) return gated;
       const idemKey = idempotencyKey(
         "drive_device_create",
         { label, scopes: scopes.slice().sort().join(","), mailbox_id: mailbox_id ?? null },

@@ -24,7 +24,12 @@ export function registerMessageTemplateTools(
       body_html: z.string().max(50000).describe("HTML body content"),
     },
       annotations: { destructiveHint: true },
-  }, async (params) => callApi(() => client.createTemplate(params)));
+  }, async (params) => {
+    if (!config.allowDestructive) {
+      return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to create templates.");
+    }
+    return callApi(() => client.createTemplate(params));
+  });
 
   server.registerTool("update_template", {
     title: "Update Template",
@@ -36,7 +41,12 @@ export function registerMessageTemplateTools(
       body_html: z.string().max(50000).optional(),
     },
       annotations: { destructiveHint: true },
-  }, async ({ id, ...rest }) => callApi(() => client.updateTemplate(id, rest)));
+  }, async ({ id, ...rest }) => {
+    if (!config.allowDestructive) {
+      return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update templates.");
+    }
+    return callApi(() => client.updateTemplate(id, rest));
+  });
 
   server.registerTool("delete_template", {
     title: "Delete Template",
