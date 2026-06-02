@@ -168,6 +168,52 @@ export function registerMailboxTools(
   );
 
   server.registerTool(
+    "update_mailbox",
+    {
+      title: "Update Mailbox",
+      description:
+        "Update write-safe fields on a mailbox. Currently supports display_name (used in the From header of outbound mail). Does NOT touch identity (address/local_part), password, storage, or domain — use the dedicated endpoints for those.",
+      inputSchema: {
+        mailbox_id: z
+          .number()
+          .int()
+          .positive()
+          .describe("The mailbox ID"),
+        display_name: z
+          .string()
+          .max(255)
+          .nullable()
+          .optional()
+          .describe(
+            "The mailbox display name shown in the From header (e.g. 'Alex Murray'). Pass null to clear. Leave undefined to leave unchanged.",
+          ),
+        idempotency_key: z
+          .string()
+          .optional()
+          .describe("Optional idempotency key"),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ mailbox_id, display_name, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update mailbox fields.",
+        );
+      }
+      const fields: { display_name?: string | null } = {};
+      if (display_name !== undefined) {
+        fields.display_name = display_name;
+      }
+      const idemKey = idempotencyKey(
+        "update_mailbox",
+        { mailbox_id, ...fields },
+        idempotency_key,
+      );
+      return callApi(() => client.updateMailbox(mailbox_id, fields, idemKey));
+    },
+  );
+
+  server.registerTool(
     "update_mailbox_note",
     {
       title: "Update Mailbox Note",

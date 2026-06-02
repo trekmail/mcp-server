@@ -134,6 +134,12 @@ export function registerMessageToolHandlers(
           .max(500)
           .optional()
           .describe("Message-ID to reply to (sets In-Reply-To and References headers)"),
+        headers: z
+          .record(z.string(), z.string().max(998))
+          .optional()
+          .describe(
+            "Optional whitelisted outbound headers. Allowed: 'List-Unsubscribe', 'List-Unsubscribe-Post' (RFC 8058), 'Reply-To', and any 'X-*' custom tracking header. Values must not contain CR/LF and are capped at 998 chars per RFC 2822. Managed headers (From, Subject, Date, Message-Id, Authentication-Results, DKIM-Signature, etc.) are rejected with 422.",
+          ),
         confirm_send: z
           .boolean()
           .describe(
@@ -159,6 +165,7 @@ export function registerMessageToolHandlers(
       body_html,
       attachments,
       reply_to_message_id,
+      headers,
       confirm_send,
       idempotency_key,
     }) => {
@@ -204,11 +211,12 @@ export function registerMessageToolHandlers(
       if (bcc && bcc.length > 0) body.bcc = bcc;
       if (attachments && attachments.length > 0) body.attachments = attachments;
       if (reply_to_message_id) body.reply_to_message_id = reply_to_message_id;
+      if (headers && Object.keys(headers).length > 0) body.headers = headers;
 
       // Generate idempotency key (exclude confirm_send from hash)
       const idemKey = idempotencyKey(
         "send_message",
-        { to, cc, bcc, subject, body_text, body_html, attachments, reply_to_message_id },
+        { to, cc, bcc, subject, body_text, body_html, attachments, reply_to_message_id, headers },
         idempotency_key,
       );
 

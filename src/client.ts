@@ -316,6 +316,17 @@ export class TrekMailClient {
     });
   }
 
+  async updateMailbox(
+    mailboxId: number,
+    fields: { display_name?: string | null },
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("PATCH", `mailboxes/${mailboxId}`, {
+      body: fields,
+      idempotencyKey,
+    });
+  }
+
   async pauseMailbox(
     mailboxId: number,
     idempotencyKey: string,
