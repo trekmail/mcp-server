@@ -1,6 +1,6 @@
 {
   "name": "@trekmail/mcp-server",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Model Context Protocol (MCP) server for TrekMail. Exposes 191 agent tools covering domains, DNS, mailboxes, aliases, forwarding, mail filters, auto-reply, sieve, migrations, SMTP, tickets, account, billing, spam stats, email verifier, Cloudflare DNS, Drive (files + sync-device passwords), per-domain email signatures, and the full webmail surface (messages, attachments, drafts, scheduled send, contacts, calendar, identities, templates, blocked senders).",
   "type": "module",
   "private": true,

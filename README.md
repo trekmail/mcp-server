@@ -268,8 +268,8 @@ npm start
 - **validate_cloudflare_token** — Validate a Cloudflare API token
 - **list_cloudflare_zones** — List DNS zones accessible by a Cloudflare token
 - **connect_cloudflare_domains** — Connect domains to a Cloudflare account (creates new domains if needed)
-- **preview_cloudflare_dns** — Preview DNS changes that would be applied via Cloudflare
-- **apply_cloudflare_dns** — Apply DNS changes to Cloudflare-managed zones
+- **preview_cloudflare_dns** — Preview DNS changes that would be applied via Cloudflare. Optional `included_records` (`{ domain_id: [record_ids] }`) previews only selected records
+- **apply_cloudflare_dns** — Apply DNS changes to Cloudflare-managed zones. Use `included_records` to write only chosen records and skip the rest (e.g. MX now, DKIM later); omit it to apply all. `confirmed_conflicts` authorises replacing records flagged as conflicting
 - **list_cloudflare_tokens** — List stored Cloudflare tokens
 - **delete_cloudflare_token** — Delete a stored Cloudflare token (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 

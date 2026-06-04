@@ -1250,9 +1250,15 @@ export class TrekMailClient {
     });
   }
 
-  async previewCloudflareDns(domainIds: number[]): Promise<unknown> {
+  async previewCloudflareDns(
+    domainIds: number[],
+    includedRecords?: Record<string, string[]>,
+  ): Promise<unknown> {
     return this.request("POST", "cloudflare/preview", {
-      body: { domain_ids: domainIds },
+      body: {
+        domain_ids: domainIds,
+        ...(includedRecords ? { included_records: includedRecords } : {}),
+      },
     });
   }
 
@@ -1260,11 +1266,13 @@ export class TrekMailClient {
     domainIds: number[],
     confirmedConflicts?: Record<string, string[]>,
     idempotencyKey?: string,
+    includedRecords?: Record<string, string[]>,
   ): Promise<unknown> {
     return this.request("POST", "cloudflare/apply", {
       body: {
         domain_ids: domainIds,
         ...(confirmedConflicts ? { confirmed_conflicts: confirmedConflicts } : {}),
+        ...(includedRecords ? { included_records: includedRecords } : {}),
       },
       idempotencyKey,
     });

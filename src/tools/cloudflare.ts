@@ -112,13 +112,21 @@ export function registerCloudflareTools(
           .min(1)
           .max(50)
           .describe("TrekMail domain IDs to preview DNS changes for"),
+        included_records: z
+          .record(z.array(z.string()))
+          .optional()
+          .describe(
+            "Optional per-domain allowlist: map of domain_id to array of record IDs (e.g. 'mx_primary', 'spf_record') to preview. Omitted = preview all records.",
+          ),
       },
       // Read-only: previewCloudflareDns calls Cloudflare's DNS-list API
       // and computes the diff in memory; no records mutated. Annotation
       // removed during the 2026-05-28 sweep.
     },
-    async ({ domain_ids }) => {
-      return callApi(() => client.previewCloudflareDns(domain_ids));
+    async ({ domain_ids, included_records }) => {
+      return callApi(() =>
+        client.previewCloudflareDns(domain_ids, included_records),
+      );
     },
   );
 
@@ -140,6 +148,12 @@ export function registerCloudflareTools(
           .describe(
             "Map of domain_id to array of record IDs to force-replace. Only needed when preview shows conflicts.",
           ),
+        included_records: z
+          .record(z.array(z.string()))
+          .optional()
+          .describe(
+            "Optional per-domain allowlist: map of domain_id to array of record IDs (e.g. 'mx_primary', 'spf_record') to write. Records left out are skipped. Omitted = write all records.",
+          ),
         idempotency_key: z
           .string()
           .optional()
@@ -147,7 +161,7 @@ export function registerCloudflareTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ domain_ids, confirmed_conflicts, idempotency_key }) => {
+    async ({ domain_ids, confirmed_conflicts, included_records, idempotency_key }) => {
       if (!config.allowDestructive) {
         return errorResult(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to apply Cloudflare DNS changes (mutates live DNS records — MX, SPF, DKIM, DMARC).",
@@ -159,7 +173,12 @@ export function registerCloudflareTools(
         idempotency_key,
       );
       return callApi(() =>
-        client.applyCloudflareDns(domain_ids, confirmed_conflicts, idemKey),
+        client.applyCloudflareDns(
+          domain_ids,
+          confirmed_conflicts,
+          idemKey,
+          included_records,
+        ),
       );
     },
   );
