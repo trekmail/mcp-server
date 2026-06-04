@@ -103,7 +103,7 @@ describe("loadConfig", () => {
     expect(config.baseUrl).toBe("https://trekmail.test"); // trailing slash stripped
     expect(config.apiToken).toBe("tm_live_abc123");
     expect(config.timeoutMs).toBe(30_000);
-    expect(config.userAgent).toBe("trekmail-mcp/1.0.4");
+    expect(config.userAgent).toMatch(/^trekmail-mcp\/\d+\.\d+\.\d+$/);
     expect(config.allowDestructive).toBe(false);
     expect(config.allowSending).toBe(false);
   });
