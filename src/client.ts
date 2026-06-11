@@ -46,6 +46,8 @@ export interface CreateInvitesBulkParams {
   items: Array<{
     local_part: string;
     recipient_email: string;
+    /** Optional target domain for this item, overriding the batch domain_id. */
+    domain_id?: number;
     /** Optional dedicated allocation in MB; omit for shared pool. */
     storage_allocation_mb?: number;
   }>;
@@ -523,6 +525,84 @@ export class TrekMailClient {
     idempotencyKey: string,
   ): Promise<unknown> {
     return this.request("DELETE", `mailboxes/${mailboxId}/aliases/${aliasId}`, {
+      idempotencyKey,
+    });
+  }
+
+  // --- Shared mailbox members ---
+
+  async listSharedMailboxMembers(mailboxId: number): Promise<unknown> {
+    return this.request("GET", `mailboxes/${mailboxId}/members`);
+  }
+
+  async addSharedMailboxMember(
+    mailboxId: number,
+    params: { member_mailbox_id: number; can_send?: boolean },
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", `mailboxes/${mailboxId}/members`, {
+      body: { ...params },
+      idempotencyKey,
+    });
+  }
+
+  async updateSharedMailboxMember(
+    mailboxId: number,
+    memberId: number,
+    params: { can_send: boolean },
+  ): Promise<unknown> {
+    return this.request("PATCH", `mailboxes/${mailboxId}/members/${memberId}`, {
+      body: { ...params },
+    });
+  }
+
+  async removeSharedMailboxMember(
+    mailboxId: number,
+    memberId: number,
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("DELETE", `mailboxes/${mailboxId}/members/${memberId}`, {
+      idempotencyKey,
+    });
+  }
+
+  // --- Shared mailbox lifecycle ---
+
+  async createSharedMailbox(
+    params: {
+      domain_id: number;
+      local_part: string;
+      display_name?: string;
+      member_mailbox_ids: number[];
+      storage_shared?: boolean;
+      storage_mb?: number;
+    },
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", "shared-mailboxes", {
+      body: { ...params },
+      idempotencyKey,
+    });
+  }
+
+  async convertMailboxToShared(
+    mailboxId: number,
+    params: { member_mailbox_ids: number[] },
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", `mailboxes/${mailboxId}/convert-to-shared`, {
+      body: { ...params },
+      idempotencyKey,
+    });
+  }
+
+  async convertSharedMailboxToRegular(
+    mailboxId: number,
+    params: { password: string },
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", `mailboxes/${mailboxId}/convert-to-regular`, {
+      body: { ...params },
       idempotencyKey,
     });
   }

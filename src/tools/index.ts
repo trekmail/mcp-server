@@ -7,6 +7,8 @@ import { registerDnsTools } from "./dns.js";
 import { registerMailboxTools } from "./mailboxes.js";
 import { registerInviteTools } from "./invites.js";
 import { registerAliasTools } from "./aliases.js";
+import { registerSharedMailboxMemberTools } from "./shared-mailbox-members.js";
+import { registerSharedMailboxLifecycleTools } from "./shared-mailbox-lifecycle.js";
 import { registerForwardingTools } from "./forwarding.js";
 import { registerRulesTools } from "./rules.js";
 import { registerAutoReplyTools } from "./auto-reply.js";
@@ -48,6 +50,8 @@ export function registerInfraTools(
   registerMailboxTools(server, client, { allowDestructive: config.allowDestructive });
   registerInviteTools(server, client, { allowSending: config.allowSending });
   registerAliasTools(server, client, config);
+  registerSharedMailboxMemberTools(server, client, config);
+  registerSharedMailboxLifecycleTools(server, client, config);
   registerForwardingTools(server, client, { allowDestructive: config.allowDestructive });
   registerRulesTools(server, client, config);
   registerAutoReplyTools(server, client, { allowDestructive: config.allowDestructive });

@@ -91,13 +91,13 @@ export function registerInviteTools(
     {
       title: "Create Invites (Bulk)",
       description:
-        "Create multiple setup invites in a single request. Each item specifies a local_part and recipient_email. Returns results for each item.",
+        "Create multiple setup invites in a single request. Each item specifies a local_part and recipient_email, and may optionally override the target domain via domain_id (otherwise the batch domain_id is used) — so one call can invite people onto several of your domains. Returns results for each item.",
       inputSchema: {
         domain_id: z
           .number()
           .int()
           .positive()
-          .describe("The domain ID to create invites for"),
+          .describe("The default domain ID for invites. Items may override it with their own domain_id."),
         items: z
           .array(
             z.object({
@@ -111,6 +111,14 @@ export function registerInviteTools(
                 .email()
                 .max(255)
                 .describe("The recipient's existing email address"),
+              domain_id: z
+                .number()
+                .int()
+                .positive()
+                .optional()
+                .describe(
+                  "Optional target domain ID for this recipient, overriding the batch-level domain_id. Must be one of your account's domains.",
+                ),
               storage_allocation_mb: z
                 .number()
                 .int()

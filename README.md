@@ -1,6 +1,6 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 192 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 199 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
 ## Quickstart
 
@@ -36,7 +36,7 @@ The MCP server supports two independent token types. At least one is required:
 
 | Token | Env Var | Prefix | Unlocks |
 |-------|---------|--------|---------|
-| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 133 infrastructure tools (domains, DNS, mailboxes, invites, aliases, forwarding, mail filters, auto-reply, sieve, delete intents, migrations, SMTP, tickets, account, billing, spam stats, verifier, message token management, Cloudflare DNS, Drive, and Drive sync-device passwords) |
+| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 137 infrastructure tools (domains, DNS, mailboxes, invites, aliases, shared mailbox members, forwarding, mail filters, auto-reply, sieve, delete intents, migrations, SMTP, tickets, account, billing, spam stats, verifier, message token management, Cloudflare DNS, Drive, and Drive sync-device passwords) |
 | **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 52 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, identities, templates, blocked senders) |
 
 Tools are registered conditionally — only token types you provide get their tools. You can supply one or both:
@@ -67,7 +67,7 @@ npm start
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable `send_message` tool |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
 
-## Tools (192)
+## Tools (199)
 
 ### Domains (ops token)
 - **list_domains** — List domains with optional status/search filters
@@ -106,6 +106,12 @@ npm start
 - **create_alias** — Add an alias to a mailbox (cross-domain supported, Starter+ plans)
 - **update_alias** — Toggle receiving, sending, or active/inactive status
 - **delete_alias** — Permanently remove an alias (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+
+### Shared Mailbox Members (ops token)
+- **list_shared_mailbox_members** — List the members of a shared (team) mailbox, with each member's role and read/send/manage permissions
+- **add_shared_mailbox_member** — Add an existing user mailbox to a shared mailbox, optionally as `manager` (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **update_shared_mailbox_member** — Change a member's role or toggle their send-as permission (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **remove_shared_mailbox_member** — Remove a member from a shared mailbox; the last member cannot be removed (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 
 ### Forwarding (ops token)
 - **get_forwarding** — Read the current forwarding config for a mailbox. Returns the `targets` array (one or more destinations), `keep_copy`, and `destination_limit` (the plan-tier cap so the agent can preflight an `set_forwarding` call without trial-and-error).
