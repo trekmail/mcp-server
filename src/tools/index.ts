@@ -17,6 +17,7 @@ import { registerDeleteIntentTools } from "./delete-intents.js";
 import { registerMigrationTools } from "./migrations.js";
 import { registerTicketTools } from "./tickets.js";
 import { registerSmtpTools } from "./smtp.js";
+import { registerDomainSmtpTools } from "./domain-smtp.js";
 import { registerMessageToolHandlers } from "./messages.js";
 import { registerMessageFolderTools } from "./message-folders.js";
 import { registerMessageScheduledTools } from "./message-scheduled.js";
@@ -60,6 +61,7 @@ export function registerInfraTools(
   registerMigrationTools(server, client, config);
   registerTicketTools(server, client, { allowDestructive: config.allowDestructive });
   registerSmtpTools(server, client, config);
+  registerDomainSmtpTools(server, client, config);
   registerMessageTokenTools(server, client, config);
   registerSpamStatsTools(server, client);
   registerBounceTools(server, client);

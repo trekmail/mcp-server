@@ -771,6 +771,25 @@ export class TrekMailClient {
     return this.request("GET", "smtp");
   }
 
+  // Account-wide default outbound route (Domain-SMTP).
+  async getAccountSmtpDefault(): Promise<unknown> {
+    return this.request("GET", "smtp/default");
+  }
+
+  async setAccountSmtpDefault(
+    params: {
+      smtp_mode: string;
+      smtp_connection_id?: number;
+      apply_to_all?: boolean;
+    },
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("PUT", "smtp/default", {
+      body: { ...params },
+      idempotencyKey,
+    });
+  }
+
   async updateSmtpConfig(
     params: {
       mode: string;
@@ -810,6 +829,57 @@ export class TrekMailClient {
 
   async getSmtpTestStatus(jobId: string): Promise<unknown> {
     return this.request("GET", `smtp:test-status/${jobId}`);
+  }
+
+  // --- Per-domain SMTP (Domain-SMTP feature) ---
+
+  async getDomainSmtp(domainId: number): Promise<unknown> {
+    return this.request("GET", `domains/${domainId}/smtp`);
+  }
+
+  async setDomainSmtp(
+    domainId: number,
+    body: { smtp_mode: string; smtp_connection_id?: number | null },
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("PUT", `domains/${domainId}/smtp`, { body, idempotencyKey });
+  }
+
+  async listDomainSmtpProfiles(domainId: number): Promise<unknown> {
+    return this.request("GET", `domains/${domainId}/smtp/profiles`);
+  }
+
+  async createDomainSmtpProfile(
+    domainId: number,
+    body: { name: string; host: string; port: number; encryption: string; username: string; password: string },
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", `domains/${domainId}/smtp/profiles`, { body, idempotencyKey });
+  }
+
+  async updateDomainSmtpProfile(
+    domainId: number,
+    profileId: number,
+    body: { name: string; host: string; port: number; encryption: string; username: string; password?: string },
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("PUT", `domains/${domainId}/smtp/profiles/${profileId}`, { body, idempotencyKey });
+  }
+
+  async deleteDomainSmtpProfile(domainId: number, profileId: number, idempotencyKey: string): Promise<unknown> {
+    return this.request("DELETE", `domains/${domainId}/smtp/profiles/${profileId}`, { idempotencyKey });
+  }
+
+  async testDomainSmtp(
+    domainId: number,
+    body: Record<string, unknown>,
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", `domains/${domainId}/smtp:test`, { body, idempotencyKey });
+  }
+
+  async getDomainSmtpTestStatus(domainId: number, jobId: string): Promise<unknown> {
+    return this.request("GET", `domains/${domainId}/smtp:test-status/${jobId}`);
   }
 
   // --- Messages ---

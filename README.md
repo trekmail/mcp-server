@@ -1,6 +1,6 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 199 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 209 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
 ## Quickstart
 
@@ -62,12 +62,12 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.0.4` | User-Agent header |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.3.0` | User-Agent header |
 | `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable destructive tools (delete intents, domain delete, password change, pause, SMTP config, revoke token, delete Cloudflare token, Drive trash/purge/empty-trash, Drive sync-device revoke/rotate, message deletes) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable `send_message` tool |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
 
-## Tools (199)
+## Tools (209)
 
 ### Domains (ops token)
 - **list_domains** — List domains with optional status/search filters
@@ -216,6 +216,20 @@ npm start
 - **delete_smtp_connection** — Delete a custom SMTP connection (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **test_smtp** — Start an async SMTP connection test (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **get_smtp_test_status** — Poll SMTP test results
+
+> The five tools above are the legacy account-level SMTP controls — **deprecated for routing** (kept for back-compat only). Use the per-domain SMTP routing + account-default tools below for outbound delivery configuration.
+
+### Domain SMTP Routing (ops token)
+- **get_domain_smtp** — Get a domain's outbound route (mode + selected profile; `effective_smtp_mode` resolves `inherit` to the account default)
+- **set_domain_smtp** — Set a domain's route: `platform` (managed) / `profile` (saved profile) / `not_configured` / `inherit` (follow the account default) (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **list_domain_smtp_profiles** — List the account's reusable saved SMTP profiles plus per-profile usage counts
+- **create_domain_smtp_profile** — Create a reusable SMTP profile and apply it to a domain — stores credentials (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **update_domain_smtp_profile** — Update a saved profile (affects every domain using it) (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **delete_domain_smtp_profile** — Delete a saved profile (domains using it are reassigned) (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **test_domain_smtp** — Test a route, connects out (returns `job_id`) (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **get_domain_smtp_test_status** — Poll a route test by `job_id`
+- **get_account_smtp_default** — Get the account-wide default route new domains start on (`default_smtp_mode` + `effective_default_smtp_mode` plan-baseline fallback)
+- **set_account_smtp_default** — Set the account-wide default (`platform` / `profile` / `not_configured`); optional `apply_to_all` switches every existing domain now (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 
 ### Tickets (ops token)
 - **list_tickets** — List support tickets with optional status/category filters
