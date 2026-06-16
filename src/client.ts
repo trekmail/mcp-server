@@ -964,9 +964,9 @@ export class TrekMailClient {
     });
   }
 
-  async createFolder(name: string): Promise<unknown> {
+  async createFolder(name: string, parent?: string): Promise<unknown> {
     return this.request("POST", "messages/folders", {
-      body: { name },
+      body: parent ? { name, parent } : { name },
     });
   }
 

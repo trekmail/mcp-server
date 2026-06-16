@@ -295,7 +295,7 @@ export function registerMessageToolHandlers(
     {
       title: "List Folders",
       description:
-        "List all IMAP folders for the mailbox. Returns folder names, paths, and delimiters.",
+        "List all IMAP folders for the mailbox. Returns each folder's name, raw path, and delimiter; nesting is conveyed by splitting the path on the delimiter. Use a folder's raw path with create_folder's `parent` to nest new folders.",
       inputSchema: {},
     },
     async () => {

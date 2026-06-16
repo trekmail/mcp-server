@@ -14,21 +14,27 @@ export function registerMessageFolderTools(
     {
       title: "Create Folder",
       description:
-        "Create a new IMAP folder in the mailbox. Folder names cannot use reserved names (INBOX, Sent, Drafts, Junk, Trash, Archive, Scheduled).",
+        "Create a new IMAP folder in the mailbox. Folder names cannot use reserved names (INBOX, Sent, Drafts, Junk, Trash, Archive, Scheduled). To create a nested subfolder, pass `parent` with the raw path of an existing folder (e.g. parent=\"Projects\" + name=\"2026\" creates \"Projects/2026\"). To move/reparent an existing folder, use rename_folder with a full target path.",
       inputSchema: {
         name: z
           .string()
           .min(1)
           .max(255)
-          .describe("Name for the new folder"),
+          .describe("Name for the new folder (leaf name only; may not contain the server's hierarchy delimiter)"),
+        parent: z
+          .string()
+          .min(1)
+          .max(255)
+          .optional()
+          .describe("Optional raw path of an existing parent folder to nest the new folder under"),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ name }) => {
+    async ({ name, parent }) => {
       if (!config.allowDestructive) {
         return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to create folders.");
       }
-      return callApi(() => client.createFolder(name));
+      return callApi(() => client.createFolder(name, parent));
     },
   );
 
