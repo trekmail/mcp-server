@@ -13,7 +13,7 @@ export function registerVerifierTools(
     {
       title: "Verify Email Address",
       description:
-        "Verify a single email address against 18 checks (syntax, MX, disposable, blocklist, SPF, DMARC, gibberish detection, typo suggestion, plus-addressing, DNSBL, domain age, Gravatar, unroutable MX, etc). Returns trust score 0-100 and status (safe/valid/risky/invalid). Quick mode: 1 credit. Deep mode: 2 credits (includes SMTP mailbox verification when available).",
+        "Verify a single email address against up to 25 checks (syntax, MX, disposable, blocklist, SPF, DMARC, gibberish detection, typo suggestion, plus-addressing, DNSBL, domain age, Gravatar, unroutable MX, etc). Returns trust score 0-100 and status (safe/valid/risky/invalid). Quick mode: 1 credit (22 checks). Deep mode: 2 credits (25 checks — adds SMTP mailbox verification when available).",
       inputSchema: {
         email: z
           .string()

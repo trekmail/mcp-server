@@ -1,6 +1,6 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 209 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 216 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
 ## Quickstart
 
@@ -62,12 +62,12 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.3.0` | User-Agent header |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.4.0` | User-Agent header |
 | `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable destructive tools (delete intents, domain delete, password change, pause, SMTP config, revoke token, delete Cloudflare token, Drive trash/purge/empty-trash, Drive sync-device revoke/rotate, message deletes) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable `send_message` tool |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
 
-## Tools (209)
+## Tools (216)
 
 ### Domains (ops token)
 - **list_domains** — List domains with optional status/search filters
@@ -80,6 +80,15 @@ npm start
 - **get_domain_signature** — Read per-domain email signature settings (mode, position, HTML)
 - **update_domain_signature** — Set per-domain signature (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **bulk_add_domains** — Add up to 20 domains in one call
+
+### Branding / White Label (ops token)
+- **get_domain_branding** — Read per-domain White Label branding: mode, brand identity, dashboard/webmail hosts with status, required CNAME records, and add-on state
+- **set_domain_branding** — Configure branding (partial): name, colors, branded dashboard/webmail hosts, sender/support emails, apply scope (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **set_domain_brand_logo** — Upload a brand asset (light/dark logo or favicon) as base64 PNG/JPG/ICO (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **remove_domain_brand_logo** — Remove a brand asset (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **verify_domain_branding_dns** — Queue DNS check + SSL provisioning for branded hosts; requires the White Label add-on (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **create_branding_preview** — Mint a one-time trial-preview link to demo the brand before buying the add-on (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **remove_domain_branding** — Turn off branding for this domain or for every domain in the account (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 
 ### DNS (ops token)
 - **get_dns_requirements** — Get required DNS records for a domain

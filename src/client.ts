@@ -269,6 +269,53 @@ export class TrekMailClient {
     return this.request("PATCH", `domains/${domainId}/signature`, { body });
   }
 
+  // --- Per-domain Branding / White Label Lite ---
+
+  async getDomainBranding(domainId: number): Promise<unknown> {
+    return this.request("GET", `domains/${domainId}/branding`);
+  }
+
+  async setDomainBranding(
+    domainId: number,
+    body: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.request("PATCH", `domains/${domainId}/branding`, { body });
+  }
+
+  async verifyDomainBrandingDns(domainId: number): Promise<unknown> {
+    return this.request("POST", `domains/${domainId}/branding/verify-dns`, {});
+  }
+
+  async createBrandingPreview(domainId: number): Promise<unknown> {
+    return this.request("POST", `domains/${domainId}/branding/preview`, {});
+  }
+
+  async removeDomainBranding(
+    domainId: number,
+    scope?: "domain" | "all",
+  ): Promise<unknown> {
+    return this.request("DELETE", `domains/${domainId}/branding`, {
+      query: scope ? { scope } : undefined,
+    });
+  }
+
+  async setDomainBrandLogo(
+    domainId: number,
+    slot: "light" | "dark" | "favicon",
+    contentBase64: string,
+  ): Promise<unknown> {
+    return this.request("PUT", `domains/${domainId}/branding/logo/${slot}`, {
+      body: { content_base64: contentBase64 },
+    });
+  }
+
+  async removeDomainBrandLogo(
+    domainId: number,
+    slot: "light" | "dark" | "favicon",
+  ): Promise<unknown> {
+    return this.request("DELETE", `domains/${domainId}/branding/logo/${slot}`, {});
+  }
+
   // --- DNS ---
 
   async getDnsRequirements(domainId: number): Promise<unknown> {
