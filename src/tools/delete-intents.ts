@@ -56,7 +56,7 @@ export function registerDeleteIntentTools(
     {
       title: "Confirm Delete Intent",
       description:
-        "Confirm a delete intent to permanently delete a mailbox. This is step 2 of the two-step deletion process. IRREVERSIBLE — the mailbox and all its data will be permanently destroyed. Both TREKMAIL_ALLOW_DESTRUCTIVE=true and confirm=true are required.",
+        "Confirm a delete intent to delete a mailbox. This is step 2 of the two-step deletion process. The mailbox is moved to the recycle bin and can be restored within the retention window (default 7 days) with restore_mailbox; after that window it is permanently purged. Both TREKMAIL_ALLOW_DESTRUCTIVE=true and confirm=true are required.",
       inputSchema: {
         intent_id: z
           .number()
@@ -88,7 +88,7 @@ export function registerDeleteIntentTools(
 
       if (!confirm) {
         return errorResult(
-          "Deletion not confirmed. Set confirm=true to permanently delete the mailbox. This action is IRREVERSIBLE.",
+          "Deletion not confirmed. Set confirm=true to move the mailbox to the recycle bin (restorable for the retention window with restore_mailbox).",
         );
       }
 
@@ -99,6 +99,71 @@ export function registerDeleteIntentTools(
       );
       return callApi(() =>
         client.confirmDeleteIntent(intent_id, idemKey),
+      );
+    },
+  );
+
+  server.registerTool(
+    "restore_mailbox",
+    {
+      title: "Restore Mailbox",
+      description:
+        "Restore a mailbox from the recycle bin back to active. Use list_trashed_mailboxes to find trashed mailbox IDs. Fails (422) if the domain is now at its mailbox limit.",
+      inputSchema: {
+        mailbox_id: z
+          .number()
+          .int()
+          .positive()
+          .describe("The trashed mailbox ID to restore"),
+        idempotency_key: z
+          .string()
+          .optional()
+          .describe(
+            "Optional idempotency key. If omitted, a deterministic key is generated from the params.",
+          ),
+      },
+      annotations: {
+        idempotentHint: true,
+      },
+    },
+    async ({ mailbox_id, idempotency_key }) => {
+      const idemKey = idempotencyKey(
+        "restore_mailbox",
+        { mailbox_id },
+        idempotency_key,
+      );
+      return callApi(() => client.restoreMailbox(mailbox_id, idemKey));
+    },
+  );
+
+  server.registerTool(
+    "list_trashed_mailboxes",
+    {
+      title: "List Trashed Mailboxes",
+      description:
+        "List mailboxes currently in the recycle bin (soft-deleted, restorable). Each is permanently purged after its retention window elapses. Use restore_mailbox to recover one.",
+      inputSchema: {
+        domain_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Optional: only list trashed mailboxes on this domain"),
+        per_page: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe("Results per page (1-100, default 50)"),
+      },
+      annotations: {
+        readOnlyHint: true,
+      },
+    },
+    async ({ domain_id, per_page }) => {
+      return callApi(() =>
+        client.listMailboxes({ status: "trashed", domain_id, per_page }),
       );
     },
   );

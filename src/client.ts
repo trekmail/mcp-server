@@ -22,6 +22,7 @@ export interface ListDomainsParams extends ListParams {
 
 export interface ListMailboxesParams extends ListParams {
   domain_id?: number;
+  status?: string;
 }
 
 export interface CreateMailboxParams {
@@ -689,6 +690,15 @@ export class TrekMailClient {
     return this.request("POST", `delete-intents/${intentId}:confirm`, {
       idempotencyKey,
       headers: { "X-Confirm-Delete": "true" },
+    });
+  }
+
+  async restoreMailbox(
+    mailboxId: number,
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", `mailboxes/${mailboxId}:restore`, {
+      idempotencyKey,
     });
   }
 
