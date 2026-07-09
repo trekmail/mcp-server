@@ -597,7 +597,7 @@ export class TrekMailClient {
   async updateSharedMailboxMember(
     mailboxId: number,
     memberId: number,
-    params: { can_send: boolean },
+    params: { can_send: boolean; custom_label?: string },
   ): Promise<unknown> {
     return this.request("PATCH", `mailboxes/${mailboxId}/members/${memberId}`, {
       body: { ...params },

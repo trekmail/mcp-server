@@ -89,7 +89,7 @@ export function registerSharedMailboxMemberTools(
     {
       title: "Update Shared Mailbox Member",
       description:
-        "Update a shared mailbox member's send permission. Pass `can_send: true` to allow the member to send or reply as the shared address, or `false` to restrict them to read-only access. Pass the membership row id (the `id` from list_shared_mailbox_members), not the member's mailbox id.",
+        "Update a shared mailbox member's send permission. Pass `can_send: true` to allow the member to send or reply as the shared address, or `false` to restrict them to read-only access. Optionally set `custom_label` — the member's personal name for the shared mailbox in their own webmail (pass an empty string to clear it). Pass the membership row id (the `id` from list_shared_mailbox_members), not the member's mailbox id.",
       inputSchema: {
         mailbox_id: z
           .number()
@@ -108,17 +108,27 @@ export function registerSharedMailboxMemberTools(
           .describe(
             "Whether the member may send or reply as the shared mailbox address",
           ),
+        custom_label: z
+          .string()
+          .max(120)
+          .optional()
+          .describe(
+            "Optional per-member personal label: the name this member sees for the shared mailbox in their own webmail switcher (max 120 chars). Pass an empty string to clear it back to the default (the mailbox display name / address). Omit to leave the existing label unchanged.",
+          ),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ mailbox_id, member_id, can_send }) => {
+    async ({ mailbox_id, member_id, can_send, custom_label }) => {
       if (!config.allowDestructive) {
         return errorResult(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update shared mailbox members.",
         );
       }
       return callApi(() =>
-        client.updateSharedMailboxMember(mailbox_id, member_id, { can_send }),
+        client.updateSharedMailboxMember(mailbox_id, member_id, {
+          can_send,
+          ...(custom_label !== undefined ? { custom_label } : {}),
+        }),
       );
     },
   );

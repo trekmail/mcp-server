@@ -15,7 +15,7 @@ export function registerDeleteIntentTools(
     {
       title: "Create Delete Intent",
       description:
-        "Create a delete intent for a mailbox. This is step 1 of the two-step deletion process. Returns an intent with a confirmation token that expires in 5 minutes. The intent must be confirmed with confirm_delete_intent to proceed.",
+        "Create a delete intent for a mailbox. This is step 1 of the two-step deletion process. Returns an intent that expires in 10 minutes. The intent must be confirmed with confirm_delete_intent to proceed.",
       inputSchema: {
         mailbox_id: z
           .number()

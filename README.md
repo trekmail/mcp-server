@@ -1,6 +1,6 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 216 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 218 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
 ## Quickstart
 
@@ -62,12 +62,12 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.4.0` | User-Agent header |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.5.1` | User-Agent header |
 | `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable destructive tools (delete intents, domain delete, password change, pause, SMTP config, revoke token, delete Cloudflare token, Drive trash/purge/empty-trash, Drive sync-device revoke/rotate, message deletes) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable `send_message` tool |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
 
-## Tools (216)
+## Tools (218)
 
 ### Domains (ops token)
 - **list_domains** — List domains with optional status/search filters
@@ -119,7 +119,7 @@ npm start
 ### Shared Mailbox Members (ops token)
 - **list_shared_mailbox_members** — List the members of a shared (team) mailbox, with each member's role and read/send/manage permissions
 - **add_shared_mailbox_member** — Add an existing user mailbox to a shared mailbox, optionally as `manager` (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
-- **update_shared_mailbox_member** — Change a member's role or toggle their send-as permission (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **update_shared_mailbox_member** — Change a member's send-as permission, or set their `custom_label` (the personal name a member sees for the shared mailbox in their own webmail switcher; empty string clears it) (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **remove_shared_mailbox_member** — Remove a member from a shared mailbox; the last member cannot be removed (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 
 ### Forwarding (ops token)
@@ -142,9 +142,11 @@ npm start
 - **get_sieve_script** — Get the raw Sieve script for a mailbox
 - **upload_sieve_script** — Upload a raw Sieve script for a mailbox
 
-### Delete Intents (ops token, two-step)
+### Delete Intents & Recycle Bin (ops token, two-step)
 - **create_delete_intent** — Step 1: create a time-limited delete intent
-- **confirm_delete_intent** — Step 2: confirm and execute deletion (irreversible)
+- **confirm_delete_intent** — Step 2: confirm the deletion. The mailbox moves to the **recycle bin** and stays restorable for the retention window (default 7 days) before it is permanently purged
+- **list_trashed_mailboxes** — List mailboxes currently in the recycle bin (soft-deleted, restorable)
+- **restore_mailbox** — Restore a mailbox from the recycle bin back to active (fails with 422 if the domain is now at its mailbox limit)
 
 ### Messages (message token)
 - **list_messages** — List messages in a mailbox folder with cursor pagination
