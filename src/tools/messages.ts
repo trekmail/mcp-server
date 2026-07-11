@@ -48,11 +48,17 @@ export function registerMessageToolHandlers(
           .max(200)
           .optional()
           .describe("Filter by subject keyword (max 200 chars)"),
+        external_account_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Read from a connected external account instead of the mailbox"),
       },
     },
-    async ({ folder, limit, before_uid, since, unread_only, search }) => {
+    async ({ folder, limit, before_uid, since, unread_only, search, external_account_id }) => {
       return callApi(() =>
-        client.listMessages({ folder, limit, before_uid, since, unread_only, search }),
+        client.listMessages({ folder, limit, before_uid, since, unread_only, search, external_account_id }),
       );
     },
   );
@@ -74,10 +80,16 @@ export function registerMessageToolHandlers(
           .max(255)
           .optional()
           .describe("IMAP folder path (default: INBOX)"),
+        external_account_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Read from a connected external account instead of the mailbox"),
       },
     },
-    async ({ uid, folder }) => {
-      return callApi(() => client.getMessage(uid, { folder }));
+    async ({ uid, folder, external_account_id }) => {
+      return callApi(() => client.getMessage(uid, { folder, external_account_id }));
     },
   );
 
@@ -151,6 +163,14 @@ export function registerMessageToolHandlers(
           .describe(
             "Optional idempotency key. If omitted, a deterministic key is generated from the params.",
           ),
+        external_account_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe(
+            "Send FROM a connected external account (Gmail/Outlook/IMAP) instead of the mailbox. The message goes out through that account's own SMTP and is saved to its Sent folder.",
+          ),
       },
       annotations: {
         destructiveHint: true,
@@ -168,6 +188,7 @@ export function registerMessageToolHandlers(
       headers,
       confirm_send,
       idempotency_key,
+      external_account_id,
     }) => {
       if (!config.allowSending) {
         return errorResult(
@@ -212,11 +233,14 @@ export function registerMessageToolHandlers(
       if (attachments && attachments.length > 0) body.attachments = attachments;
       if (reply_to_message_id) body.reply_to_message_id = reply_to_message_id;
       if (headers && Object.keys(headers).length > 0) body.headers = headers;
+      if (external_account_id) body.external_account_id = external_account_id;
 
-      // Generate idempotency key (exclude confirm_send from hash)
+      // Generate idempotency key (exclude confirm_send from hash). The external
+      // account is part of the identity — the same message from two accounts is
+      // two distinct sends and must not dedupe to one.
       const idemKey = idempotencyKey(
         "send_message",
-        { to, cc, bcc, subject, body_text, body_html, attachments, reply_to_message_id, headers },
+        { to, cc, bcc, subject, body_text, body_html, attachments, reply_to_message_id, headers, external_account_id },
         idempotency_key,
       );
 
@@ -241,16 +265,22 @@ export function registerMessageToolHandlers(
           .max(255)
           .optional()
           .describe("IMAP folder path (default: INBOX)"),
+        external_account_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Act on a connected external account instead of the mailbox"),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ uid, folder }) => {
+    async ({ uid, folder, external_account_id }) => {
       if (!config.allowDestructive) {
         return errorResult(
           "Message deletion is disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true in environment to enable.",
         );
       }
-      return callApi(() => client.deleteMessage(uid, { folder }));
+      return callApi(() => client.deleteMessage(uid, { folder, external_account_id }));
     },
   );
 
@@ -275,17 +305,23 @@ export function registerMessageToolHandlers(
           .string()
           .max(255)
           .describe("Destination IMAP folder path"),
+        external_account_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Act on a connected external account instead of the mailbox"),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ uid, folder, destination }) => {
+    async ({ uid, folder, destination, external_account_id }) => {
       if (!config.allowDestructive) {
         return errorResult(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to move messages.",
         );
       }
       return callApi(() =>
-        client.moveMessage(uid, { folder, destination }),
+        client.moveMessage(uid, { folder, destination, external_account_id }),
       );
     },
   );
@@ -295,11 +331,18 @@ export function registerMessageToolHandlers(
     {
       title: "List Folders",
       description:
-        "List all IMAP folders for the mailbox. Returns each folder's name, raw path, delimiter, and hierarchy metadata (parent path, depth, has_children) so the folder tree can be reconstructed. Use the raw path with create_folder's `parent` to nest new folders.",
-      inputSchema: {},
+        "List all IMAP folders for the mailbox (or a connected external account). Returns each folder's name, raw path, delimiter, and hierarchy metadata (parent path, depth, has_children) so the folder tree can be reconstructed. Use the raw path with create_folder's `parent` to nest new folders.",
+      inputSchema: {
+        external_account_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("List a connected external account's folders instead of the mailbox"),
+      },
     },
-    async () => {
-      return callApi(() => client.listFolders());
+    async ({ external_account_id }) => {
+      return callApi(() => client.listFolders({ external_account_id }));
     },
   );
 
@@ -328,10 +371,16 @@ export function registerMessageToolHandlers(
           .boolean()
           .optional()
           .describe("Mark as starred (true) or unstarred (false)"),
+        external_account_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Act on a connected external account instead of the mailbox"),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ uid, folder, seen, flagged }) => {
+    async ({ uid, folder, seen, flagged, external_account_id }) => {
       if (!config.allowDestructive) {
         return errorResult(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update message flags.",
@@ -348,7 +397,7 @@ export function registerMessageToolHandlers(
       if (flagged !== undefined) flags.flagged = flagged;
 
       return callApi(() =>
-        client.updateMessageFlags(uid, flags, { folder }),
+        client.updateMessageFlags(uid, flags, { folder, external_account_id }),
       );
     },
   );
@@ -377,11 +426,17 @@ export function registerMessageToolHandlers(
           .max(255)
           .optional()
           .describe("IMAP folder path (default: INBOX)"),
+        external_account_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Download from a connected external account (Gmail/Outlook/IMAP) instead of the mailbox"),
       },
     },
-    async ({ uid, index, folder }) => {
+    async ({ uid, index, folder, external_account_id }) => {
       return callApi(() =>
-        client.downloadAttachment(uid, index, { folder }),
+        client.downloadAttachment(uid, index, { folder, external_account_id }),
       );
     },
   );
@@ -403,11 +458,17 @@ export function registerMessageToolHandlers(
           .max(255)
           .optional()
           .describe("IMAP folder path (default: INBOX)"),
+        external_account_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Download from a connected external account (Gmail/Outlook/IMAP) instead of the mailbox"),
       },
     },
-    async ({ uid, folder }) => {
+    async ({ uid, folder, external_account_id }) => {
       return callApi(() =>
-        client.downloadAllAttachments(uid, { folder }),
+        client.downloadAllAttachments(uid, { folder, external_account_id }),
       );
     },
   );
@@ -419,7 +480,7 @@ export function registerMessageToolHandlers(
     {
       title: "Get Raw Message",
       description:
-        "Get the full RFC822 raw source of a message, including all headers. Useful for debugging delivery issues, analyzing headers, or forwarding as .eml.",
+        "Get the full RFC822 raw source of a message, including all headers. Useful for debugging delivery issues, analyzing headers, or forwarding as .eml. The API transports the source base64-encoded (raw_base64); this tool decodes it into a `raw` text field (non-UTF-8 bytes become replacement characters).",
       inputSchema: {
         uid: z
           .number()
@@ -431,10 +492,30 @@ export function registerMessageToolHandlers(
           .max(255)
           .optional()
           .describe("IMAP folder path (default: INBOX)"),
+        external_account_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Read from a connected external account (Gmail/Outlook/IMAP) instead of the mailbox"),
       },
     },
-    async ({ uid, folder }) => {
-      return callApi(() => client.getRawMessage(uid, { folder }));
+    async ({ uid, folder, external_account_id }) => {
+      return callApi(async () => {
+        const result = await client.getRawMessage(uid, { folder, external_account_id });
+        if (
+          result &&
+          typeof result === "object" &&
+          typeof (result as Record<string, unknown>).raw_base64 === "string"
+        ) {
+          const { raw_base64, ...rest } = result as Record<string, unknown>;
+          return {
+            ...rest,
+            raw: Buffer.from(raw_base64 as string, "base64").toString("utf8"),
+          };
+        }
+        return result;
+      });
     },
   );
 
@@ -488,10 +569,16 @@ export function registerMessageToolHandlers(
           .max(20)
           .optional()
           .describe("File attachments (base64-encoded, max 25 MB total)"),
+        external_account_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Save into a connected external account's Drafts (Gmail/Outlook/IMAP) instead of the mailbox"),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ to, cc, bcc, subject, body_text, body_html, attachments }) => {
+    async ({ to, cc, bcc, subject, body_text, body_html, attachments, external_account_id }) => {
       if (!config.allowDestructive) {
         return errorResult(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to save drafts (writes to the Drafts folder).",
@@ -506,6 +593,7 @@ export function registerMessageToolHandlers(
         body.body = { text: body_text ?? null, html: body_html ?? null };
       }
       if (attachments) body.attachments = attachments;
+      if (external_account_id) body.external_account_id = external_account_id;
       return callApi(() => client.saveDraft(body));
     },
   );
@@ -538,10 +626,16 @@ export function registerMessageToolHandlers(
           )
           .max(20)
           .optional(),
+        external_account_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Update a draft in a connected external account's Drafts (Gmail/Outlook/IMAP) instead of the mailbox"),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ uid, to, cc, bcc, subject, body_text, body_html, attachments }) => {
+    async ({ uid, to, cc, bcc, subject, body_text, body_html, attachments, external_account_id }) => {
       if (!config.allowDestructive) {
         return errorResult(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update drafts (replaces the existing draft).",
@@ -556,6 +650,7 @@ export function registerMessageToolHandlers(
         body.body = { text: body_text ?? null, html: body_html ?? null };
       }
       if (attachments) body.attachments = attachments;
+      if (external_account_id) body.external_account_id = external_account_id;
       return callApi(() => client.updateDraft(uid, body));
     },
   );
@@ -648,17 +743,23 @@ export function registerMessageToolHandlers(
           .max(255)
           .optional()
           .describe("Destination folder (required for 'move' action)"),
+        external_account_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Act on a connected external account (Gmail/Outlook/IMAP) instead of the mailbox. Native actions only — spam/notspam train THIS server's filter and are rejected for external accounts (move to the provider's Junk folder instead)."),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ folder, uids, action, destination }) => {
+    async ({ folder, uids, action, destination, external_account_id }) => {
       if (action === "delete" && !config.allowDestructive) {
         return errorResult(
           "Bulk delete is disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to enable.",
         );
       }
       return callApi(() =>
-        client.bulkAction({ folder, uids, action, destination }),
+        client.bulkAction({ folder, uids, action, destination, external_account_id }),
       );
     },
   );

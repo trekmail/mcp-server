@@ -26,6 +26,7 @@ import { registerMessageContactTools } from "./message-contacts.js";
 import { registerMessageContactGroupTools } from "./message-contact-groups.js";
 import { registerMessageCalendarTools } from "./message-calendar.js";
 import { registerMessageComposeTools } from "./message-compose.js";
+import { registerMessageExternalAccountTools } from "./message-external-accounts.js";
 import { registerMessageIdentityTools } from "./message-identities.js";
 import { registerMessageTemplateTools } from "./message-templates.js";
 import { registerMessageBlockedTools } from "./message-blocked.js";
@@ -93,6 +94,7 @@ export function registerMessageTools(
   registerMessageCalendarTools(server, client, config);
   registerMessageComposeTools(server, client);
   registerMessageIdentityTools(server, client, config);
+  registerMessageExternalAccountTools(server, client, config);
   registerMessageTemplateTools(server, client, config);
   registerMessageBlockedTools(server, client, config);
 }

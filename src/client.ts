@@ -68,6 +68,7 @@ export interface ListMessagesParams {
   since?: string;
   unread_only?: boolean;
   search?: string;
+  external_account_id?: number;
 }
 
 export interface StartMigrationParams {
@@ -133,6 +134,7 @@ export interface ListBulkMigrationsParams extends ListParams {
 
 export interface GetMessageParams {
   folder?: string;
+  external_account_id?: number;
 }
 
 export interface ListTicketsParams extends ListParams {
@@ -966,14 +968,14 @@ export class TrekMailClient {
   async updateMessageFlags(
     uid: number,
     flags: { seen?: boolean; flagged?: boolean },
-    params?: { folder?: string },
+    params?: { folder?: string; external_account_id?: number },
   ): Promise<unknown> {
     return this.request("PATCH", `messages/${uid}`, {
-      body: { flags, folder: params?.folder },
+      body: { flags, folder: params?.folder, external_account_id: params?.external_account_id },
     });
   }
 
-  async deleteMessage(uid: number, params?: { folder?: string }): Promise<unknown> {
+  async deleteMessage(uid: number, params?: { folder?: string; external_account_id?: number }): Promise<unknown> {
     return this.request("DELETE", `messages/${uid}`, {
       query: params ? { ...params } : undefined,
       idempotencyKey: randomUUID(),
@@ -982,21 +984,27 @@ export class TrekMailClient {
 
   async moveMessage(
     uid: number,
-    params: { folder?: string; destination: string },
+    params: { folder?: string; destination: string; external_account_id?: number },
   ): Promise<unknown> {
     return this.request("POST", `messages/${uid}:move`, {
-      body: { folder: params.folder, destination: params.destination },
+      body: {
+        folder: params.folder,
+        destination: params.destination,
+        external_account_id: params.external_account_id,
+      },
     });
   }
 
-  async listFolders(): Promise<unknown> {
-    return this.request("GET", "messages/folders");
+  async listFolders(params?: { external_account_id?: number }): Promise<unknown> {
+    return this.request("GET", "messages/folders", {
+      query: params ? { ...params } : undefined,
+    });
   }
 
   async downloadAttachment(
     uid: number,
     index: number,
-    params?: { folder?: string },
+    params?: { folder?: string; external_account_id?: number },
   ): Promise<unknown> {
     return this.request("GET", `messages/${uid}/attachments/${index}`, {
       query: params ? { ...params } : undefined,
@@ -1005,7 +1013,7 @@ export class TrekMailClient {
 
   async downloadAllAttachments(
     uid: number,
-    params?: { folder?: string },
+    params?: { folder?: string; external_account_id?: number },
   ): Promise<unknown> {
     return this.request("GET", `messages/${uid}/attachments`, {
       query: params ? { ...params } : undefined,
@@ -1014,7 +1022,7 @@ export class TrekMailClient {
 
   async getRawMessage(
     uid: number,
-    params?: { folder?: string },
+    params?: { folder?: string; external_account_id?: number },
   ): Promise<unknown> {
     return this.request("GET", `messages/${uid}/raw`, {
       query: params ? { ...params } : undefined,
@@ -1073,6 +1081,7 @@ export class TrekMailClient {
     uids: number[];
     action: string;
     destination?: string;
+    external_account_id?: number;
   }): Promise<unknown> {
     return this.request("POST", "messages/bulk", { body: params });
   }
@@ -1107,6 +1116,15 @@ export class TrekMailClient {
 
   async listContactGroups(): Promise<unknown> {
     return this.request("GET", "messages/contact-groups");
+  }
+
+  async listContactGroupMembers(
+    id: number,
+    params?: { per_page?: number; page?: number },
+  ): Promise<unknown> {
+    return this.request("GET", `messages/contact-groups/${id}/members`, {
+      query: params ? { ...params } : undefined,
+    });
   }
 
   async createContactGroup(body: Record<string, unknown>): Promise<unknown> {
@@ -1150,6 +1168,44 @@ export class TrekMailClient {
 
   async deleteIdentity(id: number): Promise<unknown> {
     return this.request("DELETE", `messages/identities/${id}`, {
+      idempotencyKey: randomUUID(),
+    });
+  }
+
+  // --- Connected external accounts (Gmail/Yahoo/iCloud/custom IMAP) ---
+
+  async listExternalAccounts(): Promise<unknown> {
+    return this.request("GET", "messages/external-accounts");
+  }
+
+  async detectExternalAccount(email: string): Promise<unknown> {
+    return this.request("POST", "messages/external-accounts/detect", { body: { email } });
+  }
+
+  async testExternalAccount(body: Record<string, unknown>): Promise<unknown> {
+    return this.request("POST", "messages/external-accounts/test", { body });
+  }
+
+  async createExternalAccount(body: Record<string, unknown>): Promise<unknown> {
+    return this.request("POST", "messages/external-accounts", {
+      body,
+      idempotencyKey: randomUUID(),
+    });
+  }
+
+  async updateExternalAccount(id: number, body: Record<string, unknown>): Promise<unknown> {
+    return this.request("PATCH", `messages/external-accounts/${id}`, {
+      body,
+      idempotencyKey: randomUUID(),
+    });
+  }
+
+  async testSavedExternalAccount(id: number): Promise<unknown> {
+    return this.request("POST", `messages/external-accounts/${id}/test`, { body: {} });
+  }
+
+  async deleteExternalAccount(id: number): Promise<unknown> {
+    return this.request("DELETE", `messages/external-accounts/${id}`, {
       idempotencyKey: randomUUID(),
     });
   }

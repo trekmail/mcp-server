@@ -1,6 +1,6 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 218 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 226 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
 ## Quickstart
 
@@ -37,7 +37,7 @@ The MCP server supports two independent token types. At least one is required:
 | Token | Env Var | Prefix | Unlocks |
 |-------|---------|--------|---------|
 | **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 137 infrastructure tools (domains, DNS, mailboxes, invites, aliases, shared mailbox members, forwarding, mail filters, auto-reply, sieve, delete intents, migrations, SMTP, tickets, account, billing, spam stats, verifier, message token management, Cloudflare DNS, Drive, and Drive sync-device passwords) |
-| **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 52 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, identities, templates, blocked senders) |
+| **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 53 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, identities, templates, blocked senders) |
 
 Tools are registered conditionally — only token types you provide get their tools. You can supply one or both:
 
@@ -62,12 +62,18 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.5.1` | User-Agent header |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.6.0` | User-Agent header |
 | `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable destructive tools (delete intents, domain delete, password change, pause, SMTP config, revoke token, delete Cloudflare token, Drive trash/purge/empty-trash, Drive sync-device revoke/rotate, message deletes) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable `send_message` tool |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
 
-## Tools (218)
+## Tools (226)
+
+> The full catalog is **226** tools over stdio. On the hosted **HTTP** transport
+> `drive_file_upload` is intentionally not registered (its `local_path` would read
+> files on our server — see the note in `src/tools/drive.ts`), so the HTTP MCP
+> exposes 225. Tools also split by token type: **61** need a message token
+> (`tm_msg_`), the rest an ops token (`tm_live_`).
 
 ### Domains (ops token)
 - **list_domains** — List domains with optional status/search filters
@@ -80,15 +86,6 @@ npm start
 - **get_domain_signature** — Read per-domain email signature settings (mode, position, HTML)
 - **update_domain_signature** — Set per-domain signature (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **bulk_add_domains** — Add up to 20 domains in one call
-
-### Branding / White Label (ops token)
-- **get_domain_branding** — Read per-domain White Label branding: mode, brand identity, dashboard/webmail hosts with status, required CNAME records, and add-on state
-- **set_domain_branding** — Configure branding (partial): name, colors, branded dashboard/webmail hosts, sender/support emails, apply scope (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
-- **set_domain_brand_logo** — Upload a brand asset (light/dark logo or favicon) as base64 PNG/JPG/ICO (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
-- **remove_domain_brand_logo** — Remove a brand asset (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
-- **verify_domain_branding_dns** — Queue DNS check + SSL provisioning for branded hosts; requires the White Label add-on (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
-- **create_branding_preview** — Mint a one-time trial-preview link to demo the brand before buying the add-on (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
-- **remove_domain_branding** — Turn off branding for this domain or for every domain in the account (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 
 ### DNS (ops token)
 - **get_dns_requirements** — Get required DNS records for a domain
@@ -119,7 +116,7 @@ npm start
 ### Shared Mailbox Members (ops token)
 - **list_shared_mailbox_members** — List the members of a shared (team) mailbox, with each member's role and read/send/manage permissions
 - **add_shared_mailbox_member** — Add an existing user mailbox to a shared mailbox, optionally as `manager` (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
-- **update_shared_mailbox_member** — Change a member's send-as permission, or set their `custom_label` (the personal name a member sees for the shared mailbox in their own webmail switcher; empty string clears it) (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **update_shared_mailbox_member** — Change a member's role or toggle their send-as permission (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **remove_shared_mailbox_member** — Remove a member from a shared mailbox; the last member cannot be removed (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 
 ### Forwarding (ops token)
@@ -142,16 +139,27 @@ npm start
 - **get_sieve_script** — Get the raw Sieve script for a mailbox
 - **upload_sieve_script** — Upload a raw Sieve script for a mailbox
 
-### Delete Intents & Recycle Bin (ops token, two-step)
+### Delete Intents (ops token, two-step)
 - **create_delete_intent** — Step 1: create a time-limited delete intent
-- **confirm_delete_intent** — Step 2: confirm the deletion. The mailbox moves to the **recycle bin** and stays restorable for the retention window (default 7 days) before it is permanently purged
-- **list_trashed_mailboxes** — List mailboxes currently in the recycle bin (soft-deleted, restorable)
-- **restore_mailbox** — Restore a mailbox from the recycle bin back to active (fails with 422 if the domain is now at its mailbox limit)
+- **confirm_delete_intent** — Step 2: confirm and execute deletion (irreversible)
 
 ### Messages (message token)
-- **list_messages** — List messages in a mailbox folder with cursor pagination
-- **read_message** — Get a single message by IMAP UID with full body
-- **send_message** — Send an email from the mailbox (dual safety gates, validates total recipients ≤ 10, requires body)
+
+> Many message tools accept an optional **`external_account_id`** to operate on a
+> connected external mailbox (Gmail/Outlook/IMAP) instead of the primary mailbox.
+> The id is always scoped to the token's mailbox (cross-mailbox access is
+> impossible); discover valid ids with `list_external_accounts`. Supported on:
+> `list_messages`, `read_message`, `send_message`, `move_message`,
+> `update_message_flags`, `delete_message`, `list_folders`, `download_attachment`,
+> `download_all_attachments`, `get_raw_message`, `save_draft`, `update_draft`, and
+> `bulk_action` (native actions only: read/unread/star/unstar/delete/move).
+> `report_spam`/`report_ham` (and `bulk_action` spam/notspam) train THIS server's
+> spam filter, which doesn't apply to a remote provider, so they reject
+> `external_account_id` — move to the provider's Junk folder instead.
+
+- **list_messages** — List messages in a mailbox folder with cursor pagination (optional `external_account_id`)
+- **read_message** — Get a single message by IMAP UID with full body (optional `external_account_id`)
+- **send_message** — Send an email from the mailbox — or, with `external_account_id`, from a connected account via its own SMTP (dual safety gates, validates total recipients ≤ 10, requires body)
 - **delete_message** — Permanently delete a message by IMAP UID (requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)
 - **move_message** — Move a message to a different IMAP folder
 - **list_folders** — List all IMAP folders for the mailbox
@@ -164,6 +172,16 @@ npm start
 - **report_spam** — Report a message as spam (trains Rspamd Bayesian filter)
 - **report_ham** — Mark a message as not spam (trains Rspamd Bayesian filter)
 - **bulk_action** — Perform a bulk action on up to 50 messages (read, unread, star, unstar, delete, move, spam, notspam)
+
+### Connected accounts (message token)
+Connect and manage external mailboxes (Gmail/Outlook/IMAP) the mailbox reads and sends through. Credentials are never returned by any tool.
+- **list_external_accounts** — List connected external accounts (id, email, provider, status) — the source of valid `external_account_id` values
+- **detect_external_account** — Detect provider preset (host/port/encryption, app-password vs OAuth) from an email address
+- **test_external_account** — Test unsaved IMAP/SMTP credentials without persisting (requires `TREKMAIL_ALLOW_MIGRATION=true`)
+- **create_external_account** — Connect an external account (test-gated; requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)
+- **update_external_account** — Update a connected account's settings/credentials (requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)
+- **test_saved_external_account** — Re-test a saved account and lift its circuit breaker (requires `TREKMAIL_ALLOW_MIGRATION=true`)
+- **delete_external_account** — Remove a connected account and its stored credentials (requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)
 
 ### Folders (message token)
 - **create_folder** — Create a new IMAP folder
@@ -187,6 +205,7 @@ npm start
 
 ### Contact Groups (message token)
 - **list_contact_groups** — List contact groups
+- **list_contact_group_members** — List the contacts in a group (paginated)
 - **create_contact_group** — Create a new contact group
 - **update_contact_group** — Rename or update a contact group
 - **delete_contact_group** — Delete a contact group (requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)

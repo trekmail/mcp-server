@@ -58,10 +58,10 @@ describe("delete intent tools", () => {
 
   it("confirm_delete_intent blocked when confirm=false", () => {
     const result = errorResult(
-      "Deletion not confirmed. Set confirm=true to move the mailbox to the recycle bin (restorable for the retention window with restore_mailbox).",
+      "Deletion not confirmed. Set confirm=true to permanently delete the mailbox. This action is IRREVERSIBLE.",
     );
     expect(result.isError).toBe(true);
-    expect("text" in result.content[0] && result.content[0].text).toContain("recycle bin");
+    expect("text" in result.content[0] && result.content[0].text).toContain("IRREVERSIBLE");
   });
 
   it("createDeleteIntent is called when gates pass", async () => {
@@ -80,27 +80,5 @@ describe("delete intent tools", () => {
 
     await client.confirmDeleteIntent(1, "idem-key");
     expect(client.confirmDeleteIntent).toHaveBeenCalledWith(1, "idem-key");
-  });
-
-  it("restoreMailbox is called with mailbox id and idem key", async () => {
-    const client = {
-      restoreMailbox: vi.fn().mockResolvedValue({ id: 5, status: "active" }),
-    } as unknown as TrekMailClient;
-
-    await client.restoreMailbox(5, "idem-key");
-    expect(client.restoreMailbox).toHaveBeenCalledWith(5, "idem-key");
-  });
-
-  it("list_trashed_mailboxes lists mailboxes with status=trashed", async () => {
-    const client = {
-      listMailboxes: vi.fn().mockResolvedValue({ data: [] }),
-    } as unknown as TrekMailClient;
-
-    await client.listMailboxes({ status: "trashed", domain_id: 3, per_page: 50 });
-    expect(client.listMailboxes).toHaveBeenCalledWith({
-      status: "trashed",
-      domain_id: 3,
-      per_page: 50,
-    });
   });
 });

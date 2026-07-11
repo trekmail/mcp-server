@@ -20,6 +20,21 @@ export function registerMessageContactGroupTools(
   );
 
   server.registerTool(
+    "list_contact_group_members",
+    {
+      title: "List Contact Group Members",
+      description: "List the contacts that belong to a contact group, with pagination.",
+      inputSchema: {
+        id: z.number().int().positive().describe("Group ID"),
+        per_page: z.number().int().min(1).max(100).optional().describe("Members per page (default 50)"),
+        page: z.number().int().min(1).optional().describe("Page number (default 1)"),
+      },
+    },
+    async ({ id, per_page, page }) =>
+      callApi(() => client.listContactGroupMembers(id, { per_page, page })),
+  );
+
+  server.registerTool(
     "create_contact_group",
     {
       title: "Create Contact Group",
