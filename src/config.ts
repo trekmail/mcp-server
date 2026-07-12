@@ -9,7 +9,7 @@ const configSchema = z
     apiToken: z.string().startsWith("tm_live_").optional(),
     messageToken: z.string().startsWith("tm_msg_").optional(),
     timeoutMs: z.coerce.number().int().positive().default(30_000),
-    userAgent: z.string().default("trekmail-mcp/1.6.0"),
+    userAgent: z.string().default("trekmail-mcp/1.6.1"),
     allowDestructive: z
       .enum(["true", "false"])
       .default("false")
