@@ -5,6 +5,7 @@ import { registerAccountTools } from "./account.js";
 import { registerDomainTools } from "./domains.js";
 import { registerDnsTools } from "./dns.js";
 import { registerMailboxTools } from "./mailboxes.js";
+import { registerMailClientSetupTools } from "./mail-client-setup.js";
 import { registerInviteTools } from "./invites.js";
 import { registerAliasTools } from "./aliases.js";
 import { registerSharedMailboxMemberTools } from "./shared-mailbox-members.js";
@@ -51,6 +52,7 @@ export function registerInfraTools(
   registerDomainTools(server, client, config);
   registerDnsTools(server, client);
   registerMailboxTools(server, client, { allowDestructive: config.allowDestructive });
+  registerMailClientSetupTools(server, client);
   registerInviteTools(server, client, { allowSending: config.allowSending });
   registerAliasTools(server, client, config);
   registerSharedMailboxMemberTools(server, client, config);

@@ -42,6 +42,14 @@ export interface CreateInviteParams {
   storage_allocation_mb?: number;
 }
 
+export interface AppleMailProfileFile {
+  file_name: string;
+  media_type: string;
+  encoding: "base64";
+  content_base64: string;
+  password_included: false;
+}
+
 export interface CreateInvitesBulkParams {
   domain_id: number;
   items: Array<{
@@ -346,6 +354,22 @@ export class TrekMailClient {
 
   async getMailbox(id: number): Promise<unknown> {
     return this.request("GET", `mailboxes/${id}`);
+  }
+
+  async getMailClientSetup(id: number, locale?: string): Promise<unknown> {
+    return this.request("GET", `mailboxes/${id}/client-setup`, {
+      query: locale ? { lang: locale } : undefined,
+    });
+  }
+
+  async getAppleMailProfile(
+    id: number,
+    locale?: string,
+  ): Promise<AppleMailProfileFile> {
+    return this.requestBinary(
+      `mailboxes/${id}/apple-mail-profile`,
+      locale ? { lang: locale } : undefined,
+    );
   }
 
   async changeMailboxPassword(
@@ -1962,5 +1986,89 @@ export class TrekMailClient {
         clearTimeout(timeout);
       }
     }, { idempotent: isIdempotent });
+  }
+
+  /**
+   * Download a small API file and make it MCP-safe. Both stdio and hosted
+   * Streamable HTTP tools return structured JSON/text, so a raw HTTP download
+   * is represented as Base64 with its original filename and media type.
+   */
+  private async requestBinary(
+    path: string,
+    query?: Record<string, unknown>,
+  ): Promise<AppleMailProfileFile> {
+    const url = new URL(`/api/v1/${path}`, this.baseUrl);
+    for (const [key, value] of Object.entries(query ?? {})) {
+      if (value !== undefined && value !== null) {
+        url.searchParams.set(key, String(value));
+      }
+    }
+
+    return withRetry(async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+
+      try {
+        const response = await fetch(url.toString(), {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${this.token}`,
+            Accept: "application/x-apple-aspen-config, application/json",
+            "User-Agent": this.userAgent,
+            "X-Request-Id": randomUUID(),
+          },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          let body: Record<string, unknown>;
+          try {
+            body = JSON.parse(text) as Record<string, unknown>;
+          } catch {
+            body = {
+              error: {
+                code: "non_json_response",
+                message: `API returned a non-JSON response with HTTP ${response.status}.`,
+                hint: text
+                  ? `First 200 chars: ${text.slice(0, 200)}`
+                  : "Response body was empty.",
+              },
+            };
+          }
+          throw TrekMailApiError.fromResponse(response.status, body);
+        }
+
+        const disposition = response.headers.get("content-disposition") ?? "";
+        const filenameMatch = disposition.match(/filename="([^"]+)"/i);
+        const mediaType = (response.headers.get("content-type") ?? "application/octet-stream")
+          .split(";", 1)[0]!
+          .trim();
+        const bytes = Buffer.from(await response.arrayBuffer());
+
+        return {
+          file_name: filenameMatch?.[1] ?? `apple-mail-${path.split("/")[1] ?? "profile"}.mobileconfig`,
+          media_type: mediaType,
+          encoding: "base64",
+          content_base64: bytes.toString("base64"),
+          password_included: false,
+        };
+      } catch (error) {
+        if (error instanceof TrekMailApiError) throw error;
+
+        if (error instanceof DOMException && error.name === "AbortError") {
+          throw new TrekMailClientError(
+            `Request timed out after ${this.timeoutMs}ms: GET ${path}`,
+            error,
+          );
+        }
+
+        if (error instanceof TypeError) throw error;
+
+        throw new TrekMailClientError(`Request failed: GET ${path}`, error);
+      } finally {
+        clearTimeout(timeout);
+      }
+    }, { idempotent: true });
   }
 }

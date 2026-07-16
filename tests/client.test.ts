@@ -93,6 +93,57 @@ describe("TrekMailClient", () => {
     expect(new URL(url).pathname).toBe("/api/v1/domains/42");
   });
 
+  it("builds the mail-client setup URL", async () => {
+    await client.getMailClientSetup(42, "ru");
+    const { url } = getLastFetchCall(mockFetch);
+    expect(new URL(url).pathname).toBe("/api/v1/mailboxes/42/client-setup");
+    expect(new URL(url).searchParams.get("lang")).toBe("ru");
+  });
+
+  it("downloads an Apple profile as an MCP-safe Base64 file", async () => {
+    const xml = '<?xml version="1.0"?><plist><string>alice@example.test</string></plist>';
+    mockFetch.mockResolvedValueOnce(new Response(xml, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/x-apple-aspen-config; charset=UTF-8",
+        "Content-Disposition": 'attachment; filename="trekmail-apple-mail-42.mobileconfig"',
+      },
+    }));
+
+    const result = await client.getAppleMailProfile(42, "ru");
+    const { url, init } = getLastFetchCall(mockFetch);
+
+    expect(new URL(url).pathname).toBe("/api/v1/mailboxes/42/apple-mail-profile");
+    expect(new URL(url).searchParams.get("lang")).toBe("ru");
+    expect((init.headers as Record<string, string>).Accept).toContain("application/x-apple-aspen-config");
+    expect(result).toEqual({
+      file_name: "trekmail-apple-mail-42.mobileconfig",
+      media_type: "application/x-apple-aspen-config",
+      encoding: "base64",
+      content_base64: Buffer.from(xml).toString("base64"),
+      password_included: false,
+    });
+  });
+
+  it("preserves structured API errors from Apple profile downloads", async () => {
+    mockFetch.mockResolvedValue(new Response(JSON.stringify({
+      error: {
+        code: "mail_client_setup_not_ready",
+        message: "Outgoing mail is not ready.",
+        reason: "smtp_not_configured",
+      },
+    }), {
+      status: 409,
+      headers: { "Content-Type": "application/json" },
+    }));
+
+    await expect(client.getAppleMailProfile(42)).rejects.toMatchObject({
+      code: "mail_client_setup_not_ready",
+      statusCode: 409,
+      extra: { reason: "smtp_not_configured" },
+    });
+  });
+
   it("builds correct URL for delete-intent confirm", async () => {
     await client.confirmDeleteIntent(7, "idem-key");
     const { url } = getLastFetchCall(mockFetch);

@@ -1,7 +1,7 @@
 {
   "name": "@trekmail/mcp-server",
-  "version": "1.6.1",
-  "description": "Model Context Protocol (MCP) server for TrekMail. Exposes 226 agent tools covering domains, DNS, mailboxes, aliases, shared mailbox members and lifecycle (create/convert), forwarding, mail filters, auto-reply, sieve, migrations, SMTP, per-domain SMTP routing (managed + reusable profiles) and the account-wide default route, tickets, account, billing, spam stats, email verifier, Cloudflare DNS, Drive (files + sync-device passwords), per-domain email signatures, and the full webmail surface (messages, attachments, drafts, scheduled send, contacts, calendar, identities, templates, blocked senders), and connected external accounts (Gmail/Outlook/IMAP: list, detect, test, connect, update, delete + send/read via external_account_id).",
+  "version": "1.7.0",
+  "description": "Model Context Protocol (MCP) server for TrekMail. Exposes 228 agent tools covering domains, DNS, mailboxes, mail-client setup and password-free Apple Mail profiles, aliases, shared mailbox members and lifecycle (create/convert), forwarding, mail filters, auto-reply, sieve, migrations, SMTP, per-domain SMTP routing (managed + reusable profiles) and the account-wide default route, tickets, account, billing, spam stats, email verifier, Cloudflare DNS, Drive (files + sync-device passwords), per-domain email signatures, and the full webmail surface (messages, attachments, drafts, scheduled send, contacts, calendar, identities, templates, blocked senders), and connected external accounts (Gmail/Outlook/IMAP: list, detect, test, connect, update, delete + send/read via external_account_id).",
   "type": "module",
   "private": true,
   "license": "MIT",
@@ -31,6 +31,7 @@
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e:mail-client-setup": "node tests/e2e/mail-client-setup-client.mjs",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
