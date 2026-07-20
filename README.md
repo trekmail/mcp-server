@@ -2,6 +2,13 @@
 
 A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 228 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
+## What's new in 1.8.0
+
+- Agents can read and update a regular mailbox's Webmail `conversation_view` preference through `list_mailboxes`, `get_mailbox`, and `update_mailbox`.
+- Mail-client setup now describes delegated shared-mailbox readiness, effective Send As access, exact special-folder paths, supported operations, and Sent-copy ownership.
+- Shared-mailbox lifecycle schemas now match the API contract: a display name is required, direct-login semantics are explicit, and retryable native-access sync failures are documented.
+- Folder deletion is documented as leaf-only so an agent cannot assume that deleting a parent recursively removes its subtree.
+
 ## Quickstart
 
 ### npm
@@ -62,7 +69,7 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.7.0` | User-Agent header |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.8.0` | User-Agent header |
 | `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable destructive tools (delete intents, domain delete, password change, pause, SMTP config, revoke token, delete Cloudflare token, Drive trash/purge/empty-trash, Drive sync-device revoke/rotate, message deletes) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable `send_message` tool |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
@@ -95,10 +102,11 @@ npm start
 ### Mailboxes (ops token)
 - **list_mailboxes** — List mailboxes with optional domain/search filters
 - **get_mailbox** — Get details for a specific mailbox
-- **get_mail_client_setup** — Get password-free IMAP/SMTP settings, actual sending readiness, and localized guides for five app families
+- **get_mail_client_setup** — Get password-free IMAP/SMTP settings, actual sending readiness, localized guides for five app families, and delegated shared-mailbox folders for a regular member mailbox
 - **get_apple_mail_profile** — Generate a password-free Apple Mail `.mobileconfig` file as Base64 (13 locales)
 - **create_mailbox_generated_password** — Create mailbox with auto-generated one-time password (optional `storage_allocation_mb` carves out dedicated storage from the account pool; omit for shared)
 - **change_mailbox_password** — Change the password for a mailbox (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **update_mailbox** — Update a mailbox display name or a regular mailbox's webmail `conversation_view` preference (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **update_mailbox_note** — Update the admin note on a mailbox
 - **pause_mailbox** — Disable a mailbox (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **resume_mailbox** — Re-enable a paused mailbox
@@ -116,10 +124,17 @@ npm start
 - **delete_alias** — Permanently remove an alias (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 
 ### Shared Mailbox Members (ops token)
-- **list_shared_mailbox_members** — List the members of a shared (team) mailbox, with each member's role and read/send/manage permissions
-- **add_shared_mailbox_member** — Add an existing user mailbox to a shared mailbox, optionally as `manager` (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
-- **update_shared_mailbox_member** — Change a member's role or toggle their send-as permission (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
-- **remove_shared_mailbox_member** — Remove a member from a shared mailbox; the last member cannot be removed (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **list_shared_mailbox_members** — List members and their flat `can_read` / `can_send` permissions; membership grants Webmail and, when enabled, delegated native IMAP access
+- **add_shared_mailbox_member** — Add an existing regular mailbox; `can_send` defaults to true (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **update_shared_mailbox_member** — Toggle send-as permission or set the member's personal Webmail label; retryable native-sync failures preserve the old permission (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **remove_shared_mailbox_member** — Revoke Webmail/native access without deleting the member mailbox; the last member cannot be removed (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+
+Shared mailboxes never authenticate directly. Call **get_mail_client_setup** with a regular member mailbox id, wait for `native_access_ready=true` and (for sending) `send_as_ready=true`, then inspect `shared_mailboxes.items[]` for exact Inbox/Sent/Archive/Junk paths and allowed operations. SMTP does not save a Sent copy; configure the client to append it to the returned shared Sent folder.
+
+### Shared Mailbox Lifecycle (ops token)
+- **create_shared_mailbox** — Create a shared mailbox with a required display name and one or more regular member mailbox ids (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **convert_mailbox_to_shared** — Rotate a regular mailbox's credential, disable direct login, and assign members (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **convert_shared_mailbox_to_regular** — Revoke every member's Webmail/native access and set a fresh direct-login password; a retryable native-sync failure leaves it shared (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 
 ### Forwarding (ops token)
 - **get_forwarding** — Read the current forwarding config for a mailbox. Returns the `targets` array (one or more destinations), `keep_copy`, and `destination_limit` (the plan-tier cap so the agent can preflight an `set_forwarding` call without trial-and-error).
@@ -188,7 +203,7 @@ Connect and manage external mailboxes (Gmail/Outlook/IMAP) the mailbox reads and
 ### Folders (message token)
 - **create_folder** — Create a new IMAP folder
 - **rename_folder** — Rename an existing IMAP folder
-- **delete_folder** — Delete an IMAP folder and its contents (requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)
+- **delete_folder** — Delete a leaf IMAP folder and its messages; child folders must be deleted explicitly first (requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)
 - **empty_folder** — Empty all messages from a folder without deleting the folder
 
 ### Scheduled Messages (message token)

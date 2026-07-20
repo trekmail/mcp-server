@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { TrekMailClient } from "../../src/client.js";
 import { idempotencyKey } from "../../src/idempotency.js";
+import { registerMailboxTools } from "../../src/tools/mailboxes.js";
 
 describe("mailbox tools", () => {
   let client: TrekMailClient;
@@ -40,5 +42,83 @@ describe("mailbox tools", () => {
       "my-explicit-key",
     );
     expect(key).toBe("my-explicit-key");
+  });
+
+  it("update_mailbox preserves conversation_view=false", async () => {
+    const server = new McpServer({ name: "test", version: "0.0.0" });
+    const updateMailbox = vi.fn().mockResolvedValue({
+      data: { id: 9, conversation_view: false },
+    });
+    const updateClient = { updateMailbox } as unknown as TrekMailClient;
+    const handlers = new Map<
+      string,
+      (input: Record<string, unknown>) => Promise<unknown>
+    >();
+    const register = server.registerTool.bind(server);
+    server.registerTool = ((name: string, definition: unknown, handler: never) => {
+      handlers.set(name, handler);
+      return register(
+        name,
+        definition as Parameters<typeof register>[1],
+        handler,
+      );
+    }) as typeof server.registerTool;
+
+    registerMailboxTools(server, updateClient, { allowDestructive: true });
+    await handlers.get("update_mailbox")!({
+      mailbox_id: 9,
+      conversation_view: false,
+    });
+
+    expect(updateMailbox).toHaveBeenCalledWith(
+      9,
+      { conversation_view: false },
+      expect.stringMatching(/^mcp_update_mailbox_/),
+    );
+  });
+
+  it("update_mailbox idempotency differs when conversation_view changes", () => {
+    const disabled = idempotencyKey("update_mailbox", {
+      mailbox_id: 9,
+      conversation_view: false,
+    });
+    const enabled = idempotencyKey("update_mailbox", {
+      mailbox_id: 9,
+      conversation_view: true,
+    });
+
+    expect(disabled).not.toBe(enabled);
+  });
+
+  it("update_mailbox remains blocked by the destructive gate", async () => {
+    const server = new McpServer({ name: "test", version: "0.0.0" });
+    const updateMailbox = vi.fn();
+    const updateClient = { updateMailbox } as unknown as TrekMailClient;
+    const handlers = new Map<
+      string,
+      (input: Record<string, unknown>) => Promise<{
+        isError?: boolean;
+        content: Array<{ type: string; text?: string }>;
+      }>
+    >();
+    const register = server.registerTool.bind(server);
+    server.registerTool = ((name: string, definition: unknown, handler: never) => {
+      handlers.set(name, handler);
+      return register(
+        name,
+        definition as Parameters<typeof register>[1],
+        handler,
+      );
+    }) as typeof server.registerTool;
+
+    registerMailboxTools(server, updateClient, { allowDestructive: false });
+    const result = await handlers.get("update_mailbox")!({
+      mailbox_id: 9,
+      conversation_view: false,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/destructive/i);
+    expect(updateMailbox).not.toHaveBeenCalled();
   });
 });

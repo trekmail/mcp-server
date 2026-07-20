@@ -172,7 +172,7 @@ export function registerMailboxTools(
     {
       title: "Update Mailbox",
       description:
-        "Update write-safe fields on a mailbox. Currently supports display_name (used in the From header of outbound mail). Does NOT touch identity (address/local_part), password, storage, or domain — use the dedicated endpoints for those.",
+        "Update write-safe mailbox fields. display_name applies to regular and shared mailboxes. conversation_view controls webmail thread grouping for a regular mailbox and takes effect after page reload; shared mailboxes use the regular member mailbox's preference. Does NOT touch identity (address/local_part), password, storage, or domain — use the dedicated endpoints for those.",
       inputSchema: {
         mailbox_id: z
           .number()
@@ -187,6 +187,12 @@ export function registerMailboxTools(
           .describe(
             "The mailbox display name shown in the From header (e.g. 'Alex Murray'). Pass null to clear. Leave undefined to leave unchanged.",
           ),
+        conversation_view: z
+          .boolean()
+          .optional()
+          .describe(
+            "Whether webmail should group related messages into conversations for this regular mailbox. Set false to show every message separately. Takes effect after webmail reload. Leave undefined to keep the current preference.",
+          ),
         idempotency_key: z
           .string()
           .optional()
@@ -194,15 +200,23 @@ export function registerMailboxTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ mailbox_id, display_name, idempotency_key }) => {
+    async ({ mailbox_id, display_name, conversation_view, idempotency_key }) => {
       if (!config?.allowDestructive) {
         return errorResult(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update mailbox fields.",
         );
       }
-      const fields: { display_name?: string | null } = {};
+      const fields: {
+        display_name?: string | null;
+        conversation_view?: boolean;
+      } = {};
       if (display_name !== undefined) {
         fields.display_name = display_name;
+      }
+      // Preserve false: it is the intended value when disabling conversation
+      // grouping and must not be dropped as an omitted optional parameter.
+      if (conversation_view !== undefined) {
+        fields.conversation_view = conversation_view;
       }
       const idemKey = idempotencyKey(
         "update_mailbox",

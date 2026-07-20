@@ -15,7 +15,7 @@ export function registerSharedMailboxLifecycleTools(
     {
       title: "Create Shared Mailbox",
       description:
-        "Create a new shared (team) mailbox. The mailbox is created with type `shared` and the specified members are added immediately — all members can read; they can also send as the shared address by default. Optionally configure storage: leave `storage_shared` unset (or true) to draw from the account's shared storage pool, or set it to false and supply `storage_mb` for a dedicated allocation.",
+        "Create a new shared (team) mailbox. The mailbox has no direct login; members use their own regular mailbox credentials in Webmail and, when enabled, delegated native IMAP/SMTP access. All members can read and can send as the shared address by default. Optionally use shared account storage or supply storage_mb for a dedicated allocation.",
       inputSchema: {
         domain_id: z
           .number()
@@ -29,8 +29,7 @@ export function registerSharedMailboxLifecycleTools(
           ),
         display_name: z
           .string()
-          .optional()
-          .describe("Optional display name for the mailbox (e.g. 'Support Team')"),
+          .describe("Display name for the mailbox (e.g. 'Support Team')"),
         member_mailbox_ids: z
           .array(z.number().int().positive())
           .describe(
@@ -92,7 +91,7 @@ export function registerSharedMailboxLifecycleTools(
     {
       title: "Convert Mailbox to Shared",
       description:
-        "Convert an existing regular mailbox into a shared (team) mailbox. The specified members are added immediately. IMPORTANT: this operation rotates the mailbox password and ends direct login for the original owner — the mailbox is henceforth accessed only through the members' accounts. Use list_mailboxes to find the mailbox ID.",
+        "Convert an existing regular mailbox into a shared (team) mailbox. The specified members are added immediately. IMPORTANT: this rotates the mailbox password and ends direct login for the original owner. The mailbox is then accessed through members' own accounts in Webmail and, when enabled, delegated native IMAP/SMTP folders. Use get_mail_client_setup with a member mailbox ID to discover the folder path.",
       inputSchema: {
         mailbox_id: z
           .number()
@@ -135,7 +134,7 @@ export function registerSharedMailboxLifecycleTools(
     {
       title: "Convert Shared Mailbox to Regular",
       description:
-        "Convert a shared (team) mailbox back to a regular user mailbox. ALL existing members are removed and direct login is re-enabled using the supplied password. The password must be at least 12 characters and contain uppercase, lowercase, and at least one digit. Use list_mailboxes to find the mailbox ID.",
+        "Convert a shared (team) mailbox back to a regular user mailbox. ALL existing memberships, Webmail access, and delegated native IMAP access are revoked, then direct login is re-enabled with the supplied password. A retryable `native_access_sync_failed` leaves the mailbox shared. The password must be at least 12 characters and contain uppercase, lowercase, and at least one digit.",
       inputSchema: {
         mailbox_id: z
           .number()

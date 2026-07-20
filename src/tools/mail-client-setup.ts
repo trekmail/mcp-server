@@ -6,7 +6,7 @@ import { callApi } from "./util.js";
 const supportedLocale = z
   .enum(["en", "es", "fr", "de", "pt", "it", "nl", "ru", "zh", "ja", "ko", "ar", "he"])
   .optional()
-  .describe("Language for the Apple profile text (defaults to English)");
+  .describe("Language for setup guidance or Apple profile text (defaults to English)");
 
 export function registerMailClientSetupTools(
   server: McpServer,
@@ -17,7 +17,7 @@ export function registerMailClientSetupTools(
     {
       title: "Get Mail Client Setup",
       description:
-        "Get password-free IMAP and SMTP settings plus localized three-step guides for Gmail, Outlook, Apple Mail, Thunderbird, and other IMAP apps. Reports the actual outgoing-mail readiness, effective SMTP mode, and a machine-readable reason when only receiving is ready. The user must enter the mailbox password themselves; no password or custom SMTP provider credential is returned.",
+        "Get password-free IMAP and SMTP settings plus localized three-step guides for Gmail, Outlook, Apple Mail, Thunderbird, and other IMAP apps. For each delegated shared mailbox, reports durable native-access readiness, effective send_as_ready/send_as_reason, exact Inbox/Sent/Archive/Junk paths, read/flag/folder/move/delete/send-as capabilities, and whether SMTP saves a Sent copy. Wait for native_access_ready=true and, for sending, send_as_ready=true. The user always authenticates with the regular member mailbox address and password; no mailbox password or custom SMTP provider credential is returned.",
       inputSchema: {
         mailbox_id: z.number().int().positive().describe("The regular mailbox ID"),
         locale: supportedLocale,

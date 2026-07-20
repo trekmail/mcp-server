@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { TrekMailClient } from "../../src/client.js";
 import { idempotencyKey } from "../../src/idempotency.js";
+import { registerSharedMailboxLifecycleTools } from "../../src/tools/shared-mailbox-lifecycle.js";
 import { errorResult } from "../../src/tools/util.js";
 import type { Config } from "../../src/config.js";
 
@@ -206,6 +208,25 @@ describe("shared mailbox lifecycle tools", () => {
     } as unknown as TrekMailClient;
   });
 
+  it("requires the REST-required display_name in the registered MCP input schema", () => {
+    const server = new McpServer({ name: "test", version: "0.0.0" });
+    registerSharedMailboxLifecycleTools(server, client, allowedConfig);
+    const tools = (server as unknown as {
+      _registeredTools: Record<string, {
+        inputSchema: { safeParse(input: unknown): { success: boolean } };
+      }>;
+    })._registeredTools;
+    const schema = tools.create_shared_mailbox.inputSchema;
+    const base = {
+      domain_id: 5,
+      local_part: "support",
+      member_mailbox_ids: [10],
+    };
+
+    expect(schema.safeParse(base).success).toBe(false);
+    expect(schema.safeParse({ ...base, display_name: "Support Team" }).success).toBe(true);
+  });
+
   // --- create_shared_mailbox: client method ---
 
   it("createSharedMailbox forwards required fields", async () => {
@@ -234,6 +255,7 @@ describe("shared mailbox lifecycle tools", () => {
       {
         domain_id: 5,
         local_part: "team",
+        display_name: "Team Inbox",
         member_mailbox_ids: [10],
         storage_shared: false,
         storage_mb: 2048,
@@ -242,6 +264,7 @@ describe("shared mailbox lifecycle tools", () => {
     );
     expect(client.createSharedMailbox).toHaveBeenCalledWith(
       expect.objectContaining({
+        display_name: "Team Inbox",
         storage_shared: false,
         storage_mb: 2048,
       }),

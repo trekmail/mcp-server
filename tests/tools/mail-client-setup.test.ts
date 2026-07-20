@@ -39,6 +39,19 @@ describe("mail client setup tools", () => {
     expect(tools.get_apple_mail_profile.annotations?.readOnlyHint).toBe(true);
   });
 
+  it("documents shared readiness, folder operations, and Sent-copy ownership", () => {
+    const { server } = harness();
+    const tools = (server as unknown as {
+      _registeredTools: Record<string, { description?: string }>;
+    })._registeredTools;
+    const description = tools.get_mail_client_setup.description ?? "";
+
+    expect(description).toContain("native_access_ready=true");
+    expect(description).toContain("send_as_ready=true");
+    expect(description).toContain("Inbox/Sent/Archive/Junk");
+    expect(description).toContain("whether SMTP saves a Sent copy");
+  });
+
   it("forwards mailbox id to the setup API", async () => {
     const { client, handlers } = harness();
 

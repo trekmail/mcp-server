@@ -71,7 +71,7 @@ export function registerMessageFolderTools(
     {
       title: "Delete Folder",
       description:
-        "Delete an IMAP folder and all its contents. Special folders cannot be deleted. Requires TREKMAIL_ALLOW_DESTRUCTIVE=true.",
+        "Delete a leaf IMAP folder and all messages it contains. A folder with child folders is rejected; delete its children explicitly first. Special folders cannot be deleted. Requires TREKMAIL_ALLOW_DESTRUCTIVE=true.",
       inputSchema: {
         path: z
           .string()

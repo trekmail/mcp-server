@@ -210,4 +210,16 @@ describe("TrekMailClient", () => {
     expect(body.domain_id).toBe(1);
     expect(body.local_part).toBe("alice");
   });
+
+  it("preserves conversation_view=false in updateMailbox body", async () => {
+    await client.updateMailbox(42, { conversation_view: false }, "mailbox-pref-key");
+
+    const { url, init } = getLastFetchCall(mockFetch);
+    const body = JSON.parse(init.body as string);
+    expect(new URL(url).pathname).toBe("/api/v1/mailboxes/42");
+    expect(body).toEqual({ conversation_view: false });
+    expect(getLastFetchHeaders(mockFetch)["Idempotency-Key"]).toBe(
+      "mailbox-pref-key",
+    );
+  });
 });

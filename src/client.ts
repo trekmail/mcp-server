@@ -394,7 +394,10 @@ export class TrekMailClient {
 
   async updateMailbox(
     mailboxId: number,
-    fields: { display_name?: string | null },
+    fields: {
+      display_name?: string | null;
+      conversation_view?: boolean;
+    },
     idempotencyKey: string,
   ): Promise<unknown> {
     return this.request("PATCH", `mailboxes/${mailboxId}`, {
@@ -646,7 +649,7 @@ export class TrekMailClient {
     params: {
       domain_id: number;
       local_part: string;
-      display_name?: string;
+      display_name: string;
       member_mailbox_ids: number[];
       storage_shared?: boolean;
       storage_mb?: number;

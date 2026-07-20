@@ -15,7 +15,7 @@ export function registerSharedMailboxMemberTools(
     {
       title: "List Shared Mailbox Members",
       description:
-        "List all members of a shared (team) mailbox. Shows each member's membership id, the underlying user mailbox, email, and permissions: `can_read` (always true — all members can read) and `can_send` (whether the member may reply or send as the shared address). A shared mailbox is a normal mailbox whose type is `shared`; members are other user mailboxes in the same account. Use list_mailboxes to find mailbox IDs.",
+        "List all members of a shared (team) mailbox. Shows each member's membership id, the underlying user mailbox, email, and permissions: `can_read` (always true — access in Webmail and, when enabled, a delegated native IMAP folder) and `can_send` (whether the member may reply or send as the shared address). Members authenticate with their own regular mailbox credentials; no shared password exists. Use list_mailboxes to find mailbox IDs.",
       inputSchema: {
         mailbox_id: z
           .number()
@@ -34,7 +34,7 @@ export function registerSharedMailboxMemberTools(
     {
       title: "Add Shared Mailbox Member",
       description:
-        "Add a member to a shared (team) mailbox. All members can read incoming mail. Optionally grant `can_send` (default true) so the member may also reply or send as the shared address. The member must be an existing user mailbox in the same account, identified by its mailbox ID. Use list_mailboxes to find the member's mailbox ID.",
+        "Add a member to a shared (team) mailbox. All members can read incoming mail in Webmail and, when enabled, through a delegated native IMAP folder under their own login. Optionally grant `can_send` (default true) so the member may also manage messages and request Send As permission. Use get_mail_client_setup with the member mailbox ID to wait for native_access_ready and verify effective send_as_ready plus exact folder paths.",
       inputSchema: {
         mailbox_id: z
           .number()
@@ -89,7 +89,7 @@ export function registerSharedMailboxMemberTools(
     {
       title: "Update Shared Mailbox Member",
       description:
-        "Update a shared mailbox member's send permission. Pass `can_send: true` to allow the member to send or reply as the shared address, or `false` to restrict them to read-only access. Optionally set `custom_label` — the member's personal name for the shared mailbox in their own webmail (pass an empty string to clear it). Pass the membership row id (the `id` from list_shared_mailbox_members), not the member's mailbox id.",
+        "Update a shared mailbox member's send permission in Webmail and native SMTP. Pass `can_send: true` to allow the member to send or reply as the shared address, or `false` to keep read-only access. Optionally set `custom_label` — the member's personal name for the shared mailbox in their own Webmail (pass an empty string to clear it). A retryable `native_access_sync_failed` means no permission change was saved. Pass the membership row id from list_shared_mailbox_members, not the member mailbox id.",
       inputSchema: {
         mailbox_id: z
           .number()
@@ -138,7 +138,7 @@ export function registerSharedMailboxMemberTools(
     {
       title: "Remove Shared Mailbox Member",
       description:
-        "Remove a member from a shared (team) mailbox. Pass the membership row id (the `id` from list_shared_mailbox_members). The last remaining member cannot be removed (422 last_member). This does not delete the member's own user mailbox.",
+        "Remove a member from a shared (team) mailbox, revoking both Webmail and delegated native IMAP access without deleting the member's own mailbox. The last remaining member cannot be removed (422 last_member). A retryable `native_access_sync_failed` keeps the membership. Pass the membership row id from list_shared_mailbox_members.",
       inputSchema: {
         mailbox_id: z
           .number()
