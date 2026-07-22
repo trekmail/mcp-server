@@ -1,4 +1,26 @@
 import { z } from "zod";
+import { TOOLSETS, type Toolset } from "./tool-catalog.js";
+
+const toolsetSchema = z
+  .string()
+  .transform((value, ctx): Toolset[] => {
+    const allowed = new Set<string>(TOOLSETS);
+    const selected = [...new Set(
+      value
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean),
+    )];
+    const invalid = selected.filter((name) => !allowed.has(name));
+    if (invalid.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Unknown toolset(s): ${invalid.join(", ")}. Allowed: ${TOOLSETS.join(", ")}`,
+      });
+      return z.NEVER;
+    }
+    return selected as Toolset[];
+  });
 
 const configSchema = z
   .object({
@@ -22,6 +44,15 @@ const configSchema = z
       .enum(["true", "false"])
       .default("false")
       .transform((v) => v === "true"),
+    scopeAwareRegistration: z
+      .enum(["true", "false"])
+      .default("true")
+      .transform((v) => v === "true"),
+    readOnly: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    toolsets: toolsetSchema.optional(),
     // Internal flag — set by mcp-http when wrapping the stdio tools
     // behind the HTTP transport. Tools that operate on the MCP host
     // filesystem (drive_file_upload) skip registration when true,
@@ -46,6 +77,9 @@ export function loadConfig(): Config {
     allowDestructive: process.env.TREKMAIL_ALLOW_DESTRUCTIVE,
     allowSending: process.env.TREKMAIL_ALLOW_SENDING,
     allowMigration: process.env.TREKMAIL_ALLOW_MIGRATION,
+    scopeAwareRegistration: process.env.TREKMAIL_SCOPE_AWARE_REGISTRATION,
+    readOnly: process.env.TREKMAIL_READ_ONLY,
+    toolsets: process.env.TREKMAIL_TOOLSETS || undefined,
   };
 
   const result = configSchema.safeParse(raw);

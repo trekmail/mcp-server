@@ -31,6 +31,7 @@
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "measure:tools": "tsx scripts/measure-tools-list.ts",
     "test:e2e:mail-client-setup": "node tests/e2e/mail-client-setup-client.mjs",
     "lint": "tsc --noEmit"
   },

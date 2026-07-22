@@ -188,6 +188,10 @@ export class TrekMailClient {
     return this.request("GET", "me");
   }
 
+  async getMessageMe(): Promise<unknown> {
+    return this.request("GET", "messages/me");
+  }
+
   async getAccount(): Promise<unknown> {
     return this.request("GET", "account");
   }

@@ -106,6 +106,8 @@ describe("loadConfig", () => {
     expect(config.userAgent).toMatch(/^trekmail-mcp\/\d+\.\d+\.\d+$/);
     expect(config.allowDestructive).toBe(false);
     expect(config.allowSending).toBe(false);
+    expect(config.scopeAwareRegistration).toBe(true);
+    expect(config.readOnly).toBe(false);
   });
 
   it("parses custom env var values", async () => {
@@ -115,6 +117,8 @@ describe("loadConfig", () => {
     process.env.TREKMAIL_USER_AGENT = "my-agent/2.0";
     process.env.TREKMAIL_ALLOW_DESTRUCTIVE = "true";
     process.env.TREKMAIL_ALLOW_SENDING = "true";
+    process.env.TREKMAIL_SCOPE_AWARE_REGISTRATION = "true";
+    process.env.TREKMAIL_READ_ONLY = "true";
 
     const config = await loadConfig();
 
@@ -122,6 +126,8 @@ describe("loadConfig", () => {
     expect(config.userAgent).toBe("my-agent/2.0");
     expect(config.allowDestructive).toBe(true);
     expect(config.allowSending).toBe(true);
+    expect(config.scopeAwareRegistration).toBe(true);
+    expect(config.readOnly).toBe(true);
   });
 
   it("allowSending defaults to false", async () => {
@@ -130,5 +136,25 @@ describe("loadConfig", () => {
 
     const config = await loadConfig();
     expect(config.allowSending).toBe(false);
+  });
+
+  it("parses and de-duplicates TREKMAIL_TOOLSETS", async () => {
+    process.env.TREKMAIL_BASE_URL = "https://trekmail.test";
+    process.env.TREKMAIL_MESSAGE_TOKEN = "tm_msg_test";
+    process.env.TREKMAIL_TOOLSETS = " email, contacts,email ";
+
+    const config = await loadConfig();
+    expect(config.toolsets).toEqual(["email", "contacts"]);
+  });
+
+  it("rejects unknown TREKMAIL_TOOLSETS", async () => {
+    process.env.TREKMAIL_BASE_URL = "https://trekmail.test";
+    process.env.TREKMAIL_MESSAGE_TOKEN = "tm_msg_test";
+    process.env.TREKMAIL_TOOLSETS = "email,not-real";
+
+    await expect(loadConfig()).rejects.toThrow("process.exit called");
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("Unknown toolset"),
+    );
   });
 });

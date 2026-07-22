@@ -73,6 +73,27 @@ npm start
 | `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable destructive tools (delete intents, domain delete, password change, pause, SMTP config, revoke token, delete Cloudflare token, Drive trash/purge/empty-trash, Drive sync-device revoke/rotate, message deletes) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable `send_message` tool |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
+| `TREKMAIL_TOOLSETS` | No | all | Comma-separated product sets to register, for example `email` or `email,contacts,calendar` |
+| `TREKMAIL_SCOPE_AWARE_REGISTRATION` | No | `true` | Discover the token's effective capabilities at startup and omit unusable tool schemas; set `false` only as a compatibility escape hatch |
+| `TREKMAIL_READ_ONLY` | No | `false` | Register read tools only, even when the token can write |
+
+Tool visibility is the intersection of token capability, `TREKMAIL_TOOLSETS`,
+`TREKMAIL_READ_ONLY`, safety flags, and transport support. Runtime API
+authorization remains authoritative. Account Drive and Mailbox Drive share one
+`drive` toolset; the concrete space and token constraints decide what a call can
+access. Compact email, contacts, calendar, and email-settings selections also
+include the read-only `list_mailboxes` tool so an agent can discover the required
+mailbox ID without loading the full administration toolset.
+
+For a normal mailbox project, this compact configuration exposes only the
+email tools allowed by that token:
+
+```bash
+TREKMAIL_MESSAGE_TOKEN=tm_msg_your_token \
+TREKMAIL_TOOLSETS=email \
+TREKMAIL_SCOPE_AWARE_REGISTRATION=true \
+npm start
+```
 
 ## Tools (228)
 
