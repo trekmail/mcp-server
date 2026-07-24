@@ -100,6 +100,12 @@ describe("TrekMailClient", () => {
     expect(new URL(url).searchParams.get("lang")).toBe("ru");
   });
 
+  it("uses the protected message-token identity endpoint", async () => {
+    await client.getMessageMe();
+    const { url } = getLastFetchCall(mockFetch);
+    expect(new URL(url).pathname).toBe("/api/v1/messages/_me");
+  });
+
   it("downloads an Apple profile as an MCP-safe Base64 file", async () => {
     const xml = '<?xml version="1.0"?><plist><string>alice@example.test</string></plist>';
     mockFetch.mockResolvedValueOnce(new Response(xml, {
