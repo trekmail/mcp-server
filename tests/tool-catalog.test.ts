@@ -27,17 +27,17 @@ function registeredToolNames(): Set<string> {
 
 describe("tool catalog", () => {
   it("has an explicit version and deterministic parity hash", () => {
-    expect(TOOL_CATALOG_VERSION).toBe("2026-07-22.2");
-    expect(TOOL_CATALOG_HASH).toBe("c8a16ff4");
+    expect(TOOL_CATALOG_VERSION).toBe("2026-07-27.1");
+    expect(TOOL_CATALOG_HASH).toBe("239aa50b");
   });
 
-  it("covers all 228 registered tools exactly once", () => {
+  it("covers all 233 registered tools exactly once", () => {
     const registered = registeredToolNames();
     const catalogued = new Set(TOOL_CATALOG.map((entry) => entry.name));
 
-    expect(registered.size).toBe(228);
-    expect(TOOL_CATALOG).toHaveLength(228);
-    expect(TOOL_CATALOG_BY_NAME.size).toBe(228);
+    expect(registered.size).toBe(233);
+    expect(TOOL_CATALOG).toHaveLength(233);
+    expect(TOOL_CATALOG_BY_NAME.size).toBe(233);
     expect([...registered].filter((name) => !catalogued.has(name))).toEqual([]);
     expect([...catalogued].filter((name) => !registered.has(name))).toEqual([]);
   });

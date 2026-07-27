@@ -135,6 +135,171 @@ export function registerDomainTools(
     },
   );
 
+  // ── Forwarding addresses ──────────────────────────────────────────────
+  // Mailbox-less forwards on a domain. Deliberately separate tools from
+  // update_domain_catch_all: catch-all sweeps everything unmatched to one
+  // place, these are the named addresses an agency actually maintains.
+
+  server.registerTool(
+    "list_forwarding_addresses",
+    {
+      title: "List Forwarding Addresses",
+      description:
+        "List mailbox-less forwarding addresses on a domain, with each address's recipients, whether it is paused, the per-domain limit, and whether the account's plan currently delivers them.",
+      inputSchema: {
+        domain_id: z.number().int().positive().describe("The domain ID"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ domain_id }) => callApi(() => client.listForwardingAddresses(domain_id)),
+  );
+
+  server.registerTool(
+    "get_forwarding_address_log",
+    {
+      title: "Get Forwarding Address Delivery Log",
+      description:
+        "Recent deliveries for one forwarding address: when each message came in, who sent it, where it was forwarded, and the outcome — delivered, deferred, rejected by the recipient, or blocked as spam before forwarding. The window is the plan's retention (30 days on Agency, 7 otherwise); nothing older is kept.",
+      inputSchema: {
+        domain_id: z.number().int().positive().describe("The domain ID"),
+        forwarding_address_id: z
+          .number()
+          .int()
+          .positive()
+          .describe("The forwarding address ID"),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe("How many events to return, newest first (default 100)"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ domain_id, forwarding_address_id, limit }) =>
+      callApi(() =>
+        client.getForwardingAddressLog(domain_id, forwarding_address_id, limit),
+      ),
+  );
+
+  server.registerTool(
+    "create_forwarding_address",
+    {
+      title: "Create Forwarding Address",
+      description:
+        "Create a forwarding address on a domain: mail to it is handed straight on to the recipients and nothing is stored. No mailbox is created. Delivery requires the Agency plan; on other plans the rule is saved and starts working after an upgrade.",
+      inputSchema: {
+        domain_id: z.number().int().positive().describe("The domain ID"),
+        local_part: z
+          .string()
+          .min(1)
+          .max(64)
+          .describe("Part before the @, e.g. \"sales\""),
+        recipients: z
+          .array(z.string().email())
+          .min(1)
+          .describe("Where mail to this address is delivered"),
+        is_active: z
+          .boolean()
+          .optional()
+          .describe("Create it paused by passing false (default true)"),
+        idempotency_key: z.string().optional(),
+      },
+    },
+    async ({ domain_id, local_part, recipients, is_active, idempotency_key }) => {
+      const idemKey = idempotencyKey(
+        "create_forwarding_address",
+        { domain_id, local_part },
+        idempotency_key,
+      );
+      return callApi(() =>
+        client.createForwardingAddress(
+          domain_id,
+          local_part,
+          recipients,
+          is_active ?? true,
+          idemKey,
+        ),
+      );
+    },
+  );
+
+  server.registerTool(
+    "update_forwarding_address",
+    {
+      title: "Update Forwarding Address",
+      description:
+        "Replace the recipients of a forwarding address, pause it, or resume it. Pausing keeps the configuration and bounces mail meanwhile.",
+      inputSchema: {
+        domain_id: z.number().int().positive().describe("The domain ID"),
+        forwarding_address_id: z
+          .number()
+          .int()
+          .positive()
+          .describe("The forwarding address ID"),
+        recipients: z
+          .array(z.string().email())
+          .min(1)
+          .optional()
+          .describe("Replaces the existing recipients entirely"),
+        is_active: z
+          .boolean()
+          .optional()
+          .describe("false pauses the address, true resumes it"),
+      },
+    },
+    async ({ domain_id, forwarding_address_id, recipients, is_active }) => {
+      if (recipients === undefined && is_active === undefined) {
+        return errorResult(
+          "Nothing to update: pass recipients, is_active, or both.",
+        );
+      }
+      const body: { recipients?: string[]; is_active?: boolean } = {};
+      if (recipients !== undefined) body.recipients = recipients;
+      if (is_active !== undefined) body.is_active = is_active;
+      return callApi(() =>
+        client.updateForwardingAddress(domain_id, forwarding_address_id, body),
+      );
+    },
+  );
+
+  server.registerTool(
+    "delete_forwarding_address",
+    {
+      title: "Delete Forwarding Address",
+      description:
+        "Delete a forwarding address. Mail sent to it bounces from then on — pause it instead to stop delivery temporarily.",
+      inputSchema: {
+        domain_id: z.number().int().positive().describe("The domain ID"),
+        forwarding_address_id: z
+          .number()
+          .int()
+          .positive()
+          .describe("The forwarding address ID"),
+        idempotency_key: z.string().optional(),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ domain_id, forwarding_address_id, idempotency_key }) => {
+      // Same guard as delete_alias: an agent running with default safety must
+      // not be able to remove mail routing for an address.
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Forwarding address deletion is disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true in environment to enable. Pause the address instead to stop delivery reversibly.",
+        );
+      }
+      const idemKey = idempotencyKey(
+        "delete_forwarding_address",
+        { domain_id, forwarding_address_id },
+        idempotency_key,
+      );
+      return callApi(() =>
+        client.deleteForwardingAddress(domain_id, forwarding_address_id, idemKey),
+      );
+    },
+  );
+
   server.registerTool(
     "update_domain_catch_all",
     {

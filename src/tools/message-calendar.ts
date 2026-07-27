@@ -13,14 +13,16 @@ export function registerMessageCalendarTools(
     "list_calendar_events",
     {
       title: "List Calendar Events",
-      description: "List calendar events within a date range (max 200 events).",
+      description: "List calendar events within a date range with cursor pagination.",
       inputSchema: {
         start: z.string().describe("Start date (ISO 8601)"),
         end: z.string().describe("End date (ISO 8601)"),
+        per_page: z.number().int().min(1).max(200).optional().describe("Events per page (default 200)"),
+        cursor: z.string().max(2048).optional().describe("Continuation cursor returned by the previous page"),
       },
     },
-    async ({ start, end }) => {
-      return callApi(() => client.listCalendarEvents({ start, end }));
+    async ({ start, end, per_page, cursor }) => {
+      return callApi(() => client.listCalendarEvents({ start, end, per_page, cursor }));
     },
   );
 

@@ -189,7 +189,7 @@ export class TrekMailClient {
   }
 
   async getMessageMe(): Promise<unknown> {
-    return this.request("GET", "messages/me");
+    return this.request("GET", "messages/_me");
   }
 
   async getAccount(): Promise<unknown> {
@@ -239,6 +239,59 @@ export class TrekMailClient {
     return this.request("PATCH", `domains/${domainId}/catch-all`, {
       body: { enabled, destination },
     });
+  }
+
+  async listForwardingAddresses(domainId: number): Promise<unknown> {
+    return this.request("GET", `domains/${domainId}/forwarding-addresses`);
+  }
+
+  async getForwardingAddressLog(
+    domainId: number,
+    forwardingAddressId: number,
+    limit?: number,
+  ): Promise<unknown> {
+    const query = limit === undefined ? "" : `?limit=${limit}`;
+    return this.request(
+      "GET",
+      `domains/${domainId}/forwarding-addresses/${forwardingAddressId}/log${query}`,
+    );
+  }
+
+  async createForwardingAddress(
+    domainId: number,
+    localPart: string,
+    recipients: string[],
+    isActive: boolean,
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", `domains/${domainId}/forwarding-addresses`, {
+      body: { local_part: localPart, recipients, is_active: isActive },
+      idempotencyKey,
+    });
+  }
+
+  async updateForwardingAddress(
+    domainId: number,
+    addressId: number,
+    body: { recipients?: string[]; is_active?: boolean },
+  ): Promise<unknown> {
+    return this.request(
+      "PATCH",
+      `domains/${domainId}/forwarding-addresses/${addressId}`,
+      { body },
+    );
+  }
+
+  async deleteForwardingAddress(
+    domainId: number,
+    addressId: number,
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request(
+      "DELETE",
+      `domains/${domainId}/forwarding-addresses/${addressId}`,
+      { idempotencyKey },
+    );
   }
 
   async retryDomainDkim(
@@ -1339,7 +1392,7 @@ export class TrekMailClient {
 
   // --- Calendar ---
 
-  async listCalendarEvents(params: { start: string; end: string }): Promise<unknown> {
+  async listCalendarEvents(params: { start: string; end: string; per_page?: number; cursor?: string }): Promise<unknown> {
     return this.request("GET", "messages/calendar/events", {
       query: { ...params },
     });

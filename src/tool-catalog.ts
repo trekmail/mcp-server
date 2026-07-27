@@ -172,6 +172,11 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
     "create_domain",
     "delete_domain",
     "update_domain_catch_all",
+    "list_forwarding_addresses",
+    "get_forwarding_address_log",
+    "create_forwarding_address",
+    "update_forwarding_address",
+    "delete_forwarding_address",
     "retry_domain_dkim",
     "update_domain_note",
     "get_domain_signature",
@@ -373,15 +378,21 @@ const POLICY_RULES: readonly PolicyRule[] = [
 
   rule("domains:read", "read", [
     "list_domains", "get_domain", "get_domain_signature", "get_domain_branding",
+    "list_forwarding_addresses", "get_forwarding_address_log",
   ]),
   rule("domains:create", "write", ["create_domain", "bulk_add_domains"]),
   rule("domains:write", "write", [
     "update_domain_catch_all", "retry_domain_dkim", "update_domain_note",
+    "create_forwarding_address", "update_forwarding_address",
     "update_domain_signature", "set_domain_branding", "set_domain_brand_logo",
     "verify_domain_branding_dns", "create_branding_preview",
     "remove_domain_brand_logo", "remove_domain_branding",
   ]),
   rule("domains:delete", "destructive", ["delete_domain"]),
+  // Deleting a forwarding address is irreversible and silently stops mail for
+  // that address, so it carries the same destructive gate as delete_alias even
+  // though the REST scope behind it is domains:write.
+  rule("domains:write", "destructive", ["delete_forwarding_address"]),
   rule("domains:dns:read", "read", ["get_dns_requirements", "get_dns_check"]),
   rule("domains:dns:recheck", "write", ["dns_recheck"]),
   rule("cloudflare:read", "read", [
@@ -559,7 +570,7 @@ for (const name of policyByName.keys()) {
 export const TOOL_CATALOG: readonly ToolCatalogEntry[] = Object.freeze(entries);
 
 /** Bump whenever grouping/capability/safety semantics change. */
-export const TOOL_CATALOG_VERSION = "2026-07-22.2";
+export const TOOL_CATALOG_VERSION = "2026-07-27.1";
 
 function fnv1a(value: string): string {
   let hash = 0x811c9dc5;

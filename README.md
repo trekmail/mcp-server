@@ -1,13 +1,6 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 228 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
-
-## What's new in 1.8.0
-
-- Agents can read and update a regular mailbox's Webmail `conversation_view` preference through `list_mailboxes`, `get_mailbox`, and `update_mailbox`.
-- Mail-client setup now describes delegated shared-mailbox readiness, effective Send As access, exact special-folder paths, supported operations, and Sent-copy ownership.
-- Shared-mailbox lifecycle schemas now match the API contract: a display name is required, direct-login semantics are explicit, and retryable native-access sync failures are documented.
-- Folder deletion is documented as leaf-only so an agent cannot assume that deleting a parent recursively removes its subtree.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 233 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
 ## Quickstart
 
@@ -43,7 +36,7 @@ The MCP server supports two independent token types. At least one is required:
 
 | Token | Env Var | Prefix | Unlocks |
 |-------|---------|--------|---------|
-| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 167 infrastructure tools (domains, DNS, mailboxes, mail-client setup, invites, aliases, shared mailbox members, forwarding, mail filters, auto-reply, sieve, delete intents, migrations, SMTP, tickets, account, billing, spam stats, verifier, message token management, Cloudflare DNS, Drive, and Drive sync-device passwords) |
+| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 172 infrastructure tools (domains, DNS, mailboxes, mail-client setup, invites, aliases, shared mailbox members, forwarding, forwarding addresses, mail filters, auto-reply, sieve, delete intents, migrations, SMTP, tickets, account, billing, spam stats, verifier, message token management, Cloudflare DNS, Drive, and Drive sync-device passwords) |
 | **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 61 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, connected accounts, identities, templates, blocked senders) |
 
 Tools are registered conditionally — only token types you provide get their tools. You can supply one or both:
@@ -69,8 +62,8 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.8.0` | User-Agent header |
-| `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable destructive tools (delete intents, domain delete, password change, pause, SMTP config, revoke token, delete Cloudflare token, Drive trash/purge/empty-trash, Drive sync-device revoke/rotate, message deletes) |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.0.4` | User-Agent header |
+| `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable destructive tools (delete intents, domain delete, forwarding address create/update/delete, password change, pause, SMTP config, revoke token, delete Cloudflare token, Drive trash/purge/empty-trash, Drive sync-device revoke/rotate, message deletes) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable `send_message` tool |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
 | `TREKMAIL_TOOLSETS` | No | all | Comma-separated product sets to register, for example `email` or `email,contacts,calendar` |
@@ -78,15 +71,14 @@ npm start
 | `TREKMAIL_READ_ONLY` | No | `false` | Register read tools only, even when the token can write |
 
 Tool visibility is the intersection of token capability, `TREKMAIL_TOOLSETS`,
-`TREKMAIL_READ_ONLY`, safety flags, and transport support. Runtime API
-authorization remains authoritative. Account Drive and Mailbox Drive share one
-`drive` toolset; the concrete space and token constraints decide what a call can
-access. Compact email, contacts, calendar, and email-settings selections also
-include the read-only `list_mailboxes` tool so an agent can discover the required
-mailbox ID without loading the full administration toolset.
+`TREKMAIL_READ_ONLY`, and transport support. Runtime API authorization remains
+authoritative. Account Drive and Mailbox Drive deliberately share one `drive`
+toolset; the concrete space and token constraints decide what a call can access.
+Compact email, contacts, calendar, and email-settings selections also include
+the existing read-only `list_mailboxes` tool so an agent can discover the
+required mailbox ID without loading the full administration toolset.
 
-For a normal mailbox project, this compact configuration exposes only the
-email tools allowed by that token:
+For a normal mailbox project, this is the compact configuration:
 
 ```bash
 TREKMAIL_MESSAGE_TOKEN=tm_msg_your_token \
@@ -95,13 +87,20 @@ TREKMAIL_SCOPE_AWARE_REGISTRATION=true \
 npm start
 ```
 
-## Tools (228)
+## Tools (233)
 
-> The full catalog is **228** tools over stdio. On the hosted **HTTP** transport
+> The full catalog is **233** tools over stdio. On the hosted **HTTP** transport
 > `drive_file_upload` is intentionally not registered (its `local_path` would read
 > files on our server — see the note in `src/tools/drive.ts`), so the HTTP MCP
-> exposes 227. Tools also split by token type: **61** need a message token
+> exposes 232. Tools also split by token type: **61** need a message token
 > (`tm_msg_`), the rest an ops token (`tm_live_`).
+>
+> **Safety gates apply to the whole list, not just the rows that say so.** Read
+> tools are always registered; every tool that creates, changes or deletes
+> something needs `TREKMAIL_ALLOW_DESTRUCTIVE=true`, the sending tools need
+> `TREKMAIL_ALLOW_SENDING`, and the migration test tools need
+> `TREKMAIL_ALLOW_MIGRATION`. Some entries below repeat their gate inline — the
+> absence of that note does not mean a tool is ungated.
 
 ### Domains (ops token)
 - **list_domains** — List domains with optional status/search filters
@@ -109,6 +108,11 @@ npm start
 - **create_domain** — Add a new domain to the account
 - **delete_domain** — Delete a domain (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **update_domain_catch_all** — Configure or clear the catch-all address
+- **list_forwarding_addresses** — List mailbox-less forwarding addresses on a domain, with recipients, the per-domain limit, and whether the plan currently delivers them
+- **get_forwarding_address_log** — Recent deliveries for one address: sender, destination, and outcome (delivered / deferred / rejected / blocked as spam before forwarding)
+- **create_forwarding_address** — Create a forwarding address — no mailbox, no storage (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **update_forwarding_address** — Replace recipients, or pause / resume an address (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **delete_forwarding_address** — Delete a forwarding address (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **retry_domain_dkim** — Retry DKIM key provisioning
 - **update_domain_note** — Update the admin note on a domain
 - **get_domain_signature** — Read per-domain email signature settings (mode, position, HTML)
@@ -569,7 +573,7 @@ REST reference.
 | `drive_addon_get` / `_pricing` / `_cancellation_preview` | Drive Storage Add-on (read-only; purchase / resize / cancel are dashboard-only by product decision) |
 | `drive_device_list` | List Drive sync-device passwords (label, scopes, mailbox binding, last-used, expiry, revoked-at; never plaintext) |
 | `drive_device_create` | Mint a new `dsync_…` credential for rclone / Cyberduck / X-Plore / DAVx⁵ / Documents / FolderSync. Plaintext returned ONCE in `data.password`. Rate-limited 20/h per account |
-| `drive_device_revoke` / `_rotate` | Revoke a device password (idempotent) or atomically rotate (revoke old + mint new, inherits label / scopes / mailbox). Both gated by `TREKMAIL_ALLOW_DESTRUCTIVE=true`. Rotate is rate-limited 10/h per account |
+| `drive_device_revoke` / `drive_device_rotate` | Revoke a device password (idempotent) or atomically rotate (revoke old + mint new, inherits label / scopes / mailbox). Both gated by `TREKMAIL_ALLOW_DESTRUCTIVE=true`. Rotate is rate-limited 10/h per account |
 
 `{space}` parameters accept `"account"` (account-drive singleton),
 `"mailbox:N"` (mailbox-personal), or a numeric `DriveSpace.id`.

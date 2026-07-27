@@ -893,7 +893,7 @@ async function singlePut(
   const stream = createReadStream(localPath);
   // Cast Node Readable → Web ReadableStream for the global fetch.
   // Node 18+ supports this via Readable.toWeb(); fall back to the raw
-  // stream in older runtimes (the API server requires Node 20 anyway).
+  // stream in older runtimes (the API server requires Node 22 anyway).
   const body = "toWeb" in Readable
     ? (Readable as unknown as { toWeb: (s: NodeJS.ReadableStream) => ReadableStream }).toWeb(stream)
     : (stream as unknown as ReadableStream);
