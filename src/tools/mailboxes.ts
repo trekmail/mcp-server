@@ -172,7 +172,7 @@ export function registerMailboxTools(
     {
       title: "Update Mailbox",
       description:
-        "Update write-safe mailbox fields. display_name applies to regular and shared mailboxes. conversation_view controls webmail thread grouping for a regular mailbox and takes effect after page reload; shared mailboxes use the regular member mailbox's preference. Does NOT touch identity (address/local_part), password, storage, or domain — use the dedicated endpoints for those.",
+        "Update write-safe mailbox fields. display_name applies to regular and shared mailboxes. conversation_view controls webmail thread grouping for a regular mailbox and takes effect after page reload; shared mailboxes use the regular member mailbox's preference. drive_access controls whether this mailbox's user gets file storage in webmail. Does NOT touch identity (address/local_part), password, storage, or domain — use the dedicated endpoints for those.",
       inputSchema: {
         mailbox_id: z
           .number()
@@ -193,6 +193,12 @@ export function registerMailboxTools(
           .describe(
             "Whether webmail should group related messages into conversations for this regular mailbox. Set false to show every message separately. Takes effect after webmail reload. Leave undefined to keep the current preference.",
           ),
+        drive_access: z
+          .enum(["full", "attachments_only", "disabled"])
+          .optional()
+          .describe(
+            "How much of Drive this mailbox's user reaches. 'full' is everything: browse, upload, share, and sync to a computer. 'attachments_only' removes Drive from webmail but still lets the user send files over 18MB as a link (those uploads are deleted after 30 days). 'disabled' also refuses to attach files over 18MB. Storage is pooled across the account, so this bounds how much of it one person can fill with files. Rejected for shared mailboxes — set it on the regular mailboxes whose users open them. Leave undefined to keep the current setting.",
+          ),
         idempotency_key: z
           .string()
           .optional()
@@ -200,7 +206,13 @@ export function registerMailboxTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ mailbox_id, display_name, conversation_view, idempotency_key }) => {
+    async ({
+      mailbox_id,
+      display_name,
+      conversation_view,
+      drive_access,
+      idempotency_key,
+    }) => {
       if (!config?.allowDestructive) {
         return errorResult(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update mailbox fields.",
@@ -209,6 +221,7 @@ export function registerMailboxTools(
       const fields: {
         display_name?: string | null;
         conversation_view?: boolean;
+        drive_access?: "full" | "attachments_only" | "disabled";
       } = {};
       if (display_name !== undefined) {
         fields.display_name = display_name;
@@ -218,12 +231,96 @@ export function registerMailboxTools(
       if (conversation_view !== undefined) {
         fields.conversation_view = conversation_view;
       }
+      if (drive_access !== undefined) {
+        fields.drive_access = drive_access;
+      }
       const idemKey = idempotencyKey(
         "update_mailbox",
         { mailbox_id, ...fields },
         idempotency_key,
       );
       return callApi(() => client.updateMailbox(mailbox_id, fields, idemKey));
+    },
+  );
+
+  server.registerTool(
+    "set_mailboxes_drive_access",
+    {
+      title: "Set Drive Access On Many Mailboxes",
+      description:
+        "Set the Drive access level on many mailboxes at once. Choose the mailboxes with exactly ONE of: mailbox_ids (an explicit list), domain_id (every mailbox on that domain — the usual choice for a reseller applying a rule to one client), or all (every mailbox on the account). Shared mailboxes in the selection are skipped, since they have no Drive of their own. Nothing is deleted: files already stored stay until they are removed. Returns how many mailboxes matched, how many changed, and how many were skipped; mailboxes already on the requested level count as matched but not updated, so the call is safe to repeat.",
+      inputSchema: {
+        drive_access: z
+          .enum(["full", "attachments_only", "disabled"])
+          .describe(
+            "'full' is everything: browse, upload, share, sync. 'attachments_only' removes Drive from webmail but keeps sending files over 18MB as a link (those uploads are deleted after 30 days). 'disabled' also refuses to attach files over 18MB.",
+          ),
+        mailbox_ids: z
+          .array(z.number().int().positive())
+          .min(1)
+          .max(1000)
+          .optional()
+          .describe("Explicit list of mailbox IDs to update."),
+        domain_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Update every mailbox on this domain."),
+        all: z
+          .boolean()
+          .optional()
+          .describe("Update every mailbox on the account."),
+        idempotency_key: z
+          .string()
+          .optional()
+          .describe("Optional idempotency key"),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ drive_access, mailbox_ids, domain_id, all, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to change Drive access.",
+        );
+      }
+
+      // Caught here as well as server-side so the model gets a usable message
+      // instead of a 422 it has to interpret.
+      const selectors = [
+        mailbox_ids !== undefined,
+        domain_id !== undefined,
+        all === true,
+      ].filter(Boolean).length;
+      if (selectors !== 1) {
+        return errorResult(
+          "Choose exactly one of mailbox_ids, domain_id or all.",
+        );
+      }
+
+      const body: {
+        drive_access: "full" | "attachments_only" | "disabled";
+        mailbox_ids?: number[];
+        domain_id?: number;
+        all?: boolean;
+      } = { drive_access };
+      if (mailbox_ids !== undefined) {
+        body.mailbox_ids = mailbox_ids;
+      }
+      if (domain_id !== undefined) {
+        body.domain_id = domain_id;
+      }
+      if (all === true) {
+        body.all = true;
+      }
+
+      const idemKey = idempotencyKey(
+        "set_mailboxes_drive_access",
+        body,
+        idempotency_key,
+      );
+
+      return callApi(() => client.setMailboxesDriveAccess(body, idemKey));
     },
   );
 

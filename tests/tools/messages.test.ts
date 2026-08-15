@@ -118,6 +118,8 @@ describe("message tools", () => {
       subject: "Test",
       body: { text: "Hello", html: "<p>Hello</p>" },
       reply_to_message_id: "<orig@example.com>",
+      external_account_id: 11,
+      identity_id: 22,
     };
     await client.sendMessage(body, "key");
     const { init } = getLastFetchCall(mockFetch);
@@ -127,6 +129,8 @@ describe("message tools", () => {
     expect(parsed.body.text).toBe("Hello");
     expect(parsed.body.html).toBe("<p>Hello</p>");
     expect(parsed.reply_to_message_id).toBe("<orig@example.com>");
+    expect(parsed.external_account_id).toBe(11);
+    expect(parsed.identity_id).toBe(22);
   });
 
   // --- Safety gate tests ---

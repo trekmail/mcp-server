@@ -36,7 +36,18 @@ export class TrekMailApiError extends Error {
     body: Record<string, unknown>,
   ): TrekMailApiError {
     const error = (body.error ?? body) as Record<string, unknown>;
-    const { code, message, hint, request_id, retryable, ...extra } = error;
+    const { code, message, hint, request_id, retryable, ...rest } = error;
+
+    // Anything the envelope carries ALONGSIDE `error` belongs to the agent too.
+    // A 402 puts the whole machine-payment challenge there — amount, currency,
+    // network id, expiry — as a sibling of `error`, not inside it. Reading only
+    // `body.error` dropped it, so an agent was told "present a payment token"
+    // and never told for how much: the two-call protocol these tools document
+    // cannot be completed without it.
+    const siblings = Object.fromEntries(
+      Object.entries(body).filter(([key]) => key !== "error"),
+    );
+    const extra = { ...rest, ...siblings };
 
     return new TrekMailApiError(
       statusCode,

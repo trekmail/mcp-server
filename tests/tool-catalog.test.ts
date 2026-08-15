@@ -27,17 +27,17 @@ function registeredToolNames(): Set<string> {
 
 describe("tool catalog", () => {
   it("has an explicit version and deterministic parity hash", () => {
-    expect(TOOL_CATALOG_VERSION).toBe("2026-07-27.1");
-    expect(TOOL_CATALOG_HASH).toBe("239aa50b");
+    expect(TOOL_CATALOG_VERSION).toBe("2026-08-14.2");
+    expect(TOOL_CATALOG_HASH).toBe("c5b888c6");
   });
 
-  it("covers all 233 registered tools exactly once", () => {
+  it("covers all 241 registered tools exactly once", () => {
     const registered = registeredToolNames();
     const catalogued = new Set(TOOL_CATALOG.map((entry) => entry.name));
 
-    expect(registered.size).toBe(233);
-    expect(TOOL_CATALOG).toHaveLength(233);
-    expect(TOOL_CATALOG_BY_NAME.size).toBe(233);
+    expect(registered.size).toBe(241);
+    expect(TOOL_CATALOG).toHaveLength(241);
+    expect(TOOL_CATALOG_BY_NAME.size).toBe(241);
     expect([...registered].filter((name) => !catalogued.has(name))).toEqual([]);
     expect([...catalogued].filter((name) => !registered.has(name))).toEqual([]);
   });
@@ -64,7 +64,7 @@ describe("tool catalog", () => {
 
   it("keeps the small email preset separate from optional webmail features", () => {
     expect(toolsForToolsets(["email"]).size).toBe(19);
-    expect(toolsForToolsets(["email_settings"]).size).toBe(27);
+    expect(toolsForToolsets(["email_settings"]).size).toBe(28);
     expect(toolsForToolsets(["contacts"]).size).toBe(14);
     expect(toolsForToolsets(["calendar"]).size).toBe(5);
   });

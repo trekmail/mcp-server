@@ -96,6 +96,20 @@ export function registerDomainSmtpTools(
   );
 
   server.registerTool(
+    "get_domain_smtp_profile_usage",
+    {
+      title: "Get SMTP Profile Usage",
+      description:
+        "Show every domain and Send As address currently using one saved SMTP profile. Use this before editing or deleting a shared profile. Requires scope: smtp:read.",
+      inputSchema: {
+        domain_id: domainId,
+        profile_id: z.number().int().positive().describe("Saved SMTP profile ID"),
+      },
+    },
+    async ({ domain_id, profile_id }) => callApi(() => client.getDomainSmtpProfileUsage(domain_id, profile_id)),
+  );
+
+  server.registerTool(
     "create_domain_smtp_profile",
     {
       title: "Create SMTP Profile",

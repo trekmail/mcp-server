@@ -16,10 +16,11 @@ export function registerMessageComposeTools(
       inputSchema: {
         uid: z.number().int().positive().describe("IMAP UID of the message to reply to"),
         folder: z.string().max(255).optional().describe("IMAP folder (default: INBOX)"),
+        external_account_id: z.number().int().positive().optional().describe("Connected inbox containing the message"),
       },
     },
-    async ({ uid, folder }) => {
-      return callApi(() => client.getReply(uid, { folder }));
+    async ({ uid, folder, external_account_id }) => {
+      return callApi(() => client.getReply(uid, { folder, external_account_id }));
     },
   );
 
@@ -32,10 +33,11 @@ export function registerMessageComposeTools(
       inputSchema: {
         uid: z.number().int().positive().describe("IMAP UID"),
         folder: z.string().max(255).optional(),
+        external_account_id: z.number().int().positive().optional().describe("Connected inbox containing the message"),
       },
     },
-    async ({ uid, folder }) => {
-      return callApi(() => client.getReplyAll(uid, { folder }));
+    async ({ uid, folder, external_account_id }) => {
+      return callApi(() => client.getReplyAll(uid, { folder, external_account_id }));
     },
   );
 
@@ -48,10 +50,11 @@ export function registerMessageComposeTools(
       inputSchema: {
         uid: z.number().int().positive().describe("IMAP UID"),
         folder: z.string().max(255).optional(),
+        external_account_id: z.number().int().positive().optional().describe("Connected inbox containing the message"),
       },
     },
-    async ({ uid, folder }) => {
-      return callApi(() => client.getForward(uid, { folder }));
+    async ({ uid, folder, external_account_id }) => {
+      return callApi(() => client.getForward(uid, { folder, external_account_id }));
     },
   );
 }

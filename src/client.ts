@@ -204,6 +204,65 @@ export class TrekMailClient {
     return this.request("GET", "billing/invoices");
   }
 
+  // --- Machine payments (MPP) ---
+  //
+  // Each of these answers 402 with a payment challenge on the first call and
+  // completes on a second call carrying a credential. The credential rides in
+  // the Payment-Authorization header, NOT in Authorization, which is already
+  // holding the bearer token that says which account is buying.
+  //
+  // Two credential types, not interchangeable: a shared payment token (spt_)
+  // for one-off charges, a Stripe PaymentMethod (pm_) for subscriptions. A
+  // shared payment token is consumed by its first charge and cannot back
+  // recurring billing.
+
+  async agentTopUpCredits(
+    quantity: number,
+    credential?: string,
+    currency?: string,
+  ): Promise<unknown> {
+    return this.request("POST", "agent/verifier-credits/topup", {
+      body: { quantity, ...(currency ? { currency } : {}) },
+      headers: credential ? { "Payment-Authorization": credential } : undefined,
+    });
+  }
+
+  async agentSubscribePlan(
+    plan: string,
+    period: string,
+    credential?: string,
+  ): Promise<unknown> {
+    return this.request("POST", "agent/subscription", {
+      body: { plan, period },
+      headers: credential ? { "Payment-Authorization": credential } : undefined,
+    });
+  }
+
+  async agentSubscribeDriveAddon(
+    sizeGb: number,
+    period: string,
+    credential?: string,
+  ): Promise<unknown> {
+    return this.request("POST", "agent/drive-addon", {
+      body: { size_gb: sizeGb, period },
+      headers: credential ? { "Payment-Authorization": credential } : undefined,
+    });
+  }
+
+  async agentSubscribeWhiteLabel(
+    period: string,
+    credential?: string,
+  ): Promise<unknown> {
+    return this.request("POST", "agent/white-label", {
+      body: { period },
+      headers: credential ? { "Payment-Authorization": credential } : undefined,
+    });
+  }
+
+  async agentReissueKey(): Promise<unknown> {
+    return this.request("POST", "agent/key/reissue", { body: {} });
+  }
+
   // --- Domains ---
 
   async listDomains(params?: ListDomainsParams): Promise<unknown> {
@@ -454,11 +513,27 @@ export class TrekMailClient {
     fields: {
       display_name?: string | null;
       conversation_view?: boolean;
+      drive_access?: "full" | "attachments_only" | "disabled";
     },
     idempotencyKey: string,
   ): Promise<unknown> {
     return this.request("PATCH", `mailboxes/${mailboxId}`, {
       body: fields,
+      idempotencyKey,
+    });
+  }
+
+  async setMailboxesDriveAccess(
+    body: {
+      drive_access: "full" | "attachments_only" | "disabled";
+      mailbox_ids?: number[];
+      domain_id?: number;
+      all?: boolean;
+    },
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", "mailboxes:drive-access", {
+      body,
       idempotencyKey,
     });
   }
@@ -992,6 +1067,10 @@ export class TrekMailClient {
     return this.request("GET", `domains/${domainId}/smtp/profiles`);
   }
 
+  async getDomainSmtpProfileUsage(domainId: number, profileId: number): Promise<unknown> {
+    return this.request("GET", `domains/${domainId}/smtp/profiles/${profileId}/usage`);
+  }
+
   async createDomainSmtpProfile(
     domainId: number,
     body: { name: string; host: string; port: number; encryption: string; username: string; password: string },
@@ -1178,19 +1257,19 @@ export class TrekMailClient {
 
   // --- Reply / Forward ---
 
-  async getReply(uid: number, params?: { folder?: string }): Promise<unknown> {
+  async getReply(uid: number, params?: { folder?: string; external_account_id?: number }): Promise<unknown> {
     return this.request("GET", `messages/${uid}/reply`, {
       query: params ? { ...params } : undefined,
     });
   }
 
-  async getReplyAll(uid: number, params?: { folder?: string }): Promise<unknown> {
+  async getReplyAll(uid: number, params?: { folder?: string; external_account_id?: number }): Promise<unknown> {
     return this.request("GET", `messages/${uid}/reply-all`, {
       query: params ? { ...params } : undefined,
     });
   }
 
-  async getForward(uid: number, params?: { folder?: string }): Promise<unknown> {
+  async getForward(uid: number, params?: { folder?: string; external_account_id?: number }): Promise<unknown> {
     return this.request("GET", `messages/${uid}/forward`, {
       query: params ? { ...params } : undefined,
     });
@@ -1238,21 +1317,34 @@ export class TrekMailClient {
 
   // --- Identities ---
 
-  async listIdentities(): Promise<unknown> {
-    return this.request("GET", "messages/identities");
+  async listIdentities(params?: { external_account_id?: number }): Promise<unknown> {
+    return this.request("GET", "messages/identities", {
+      query: params ? { ...params } : undefined,
+    });
   }
 
-  async createIdentity(body: Record<string, unknown>): Promise<unknown> {
-    return this.request("POST", "messages/identities", { body });
+  async createIdentity(body: Record<string, unknown>, idempotencyKey?: string): Promise<unknown> {
+    return this.request("POST", "messages/identities", { body, idempotencyKey });
   }
 
-  async updateIdentity(id: number, body: Record<string, unknown>): Promise<unknown> {
-    return this.request("PATCH", `messages/identities/${id}`, { body });
+  async updateIdentity(id: number, body: Record<string, unknown>, idempotencyKey?: string): Promise<unknown> {
+    return this.request("PATCH", `messages/identities/${id}`, { body, idempotencyKey });
   }
 
-  async deleteIdentity(id: number): Promise<unknown> {
+  async deleteIdentity(id: number, externalAccountId?: number): Promise<unknown> {
     return this.request("DELETE", `messages/identities/${id}`, {
+      body: externalAccountId ? { external_account_id: externalAccountId } : undefined,
       idempotencyKey: randomUUID(),
+    });
+  }
+
+  async setReplyFromPolicy(
+    replyFromPolicy: "recipient" | "default",
+    idempotencyKey?: string,
+  ): Promise<unknown> {
+    return this.request("PATCH", "messages/identities/reply-policy", {
+      body: { reply_from_policy: replyFromPolicy },
+      idempotencyKey,
     });
   }
 
@@ -1342,8 +1434,10 @@ export class TrekMailClient {
     });
   }
 
-  async listScheduled(): Promise<unknown> {
-    return this.request("GET", "messages/scheduled");
+  async listScheduled(params?: { cursor?: string; per_page?: number }): Promise<unknown> {
+    return this.request("GET", "messages/scheduled", {
+      query: params ? { ...params } : undefined,
+    });
   }
 
   async cancelScheduled(id: number): Promise<unknown> {
