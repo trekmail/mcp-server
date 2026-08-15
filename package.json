@@ -1,8 +1,8 @@
 {
   "name": "@trekmail/mcp-server",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "packageManager": "npm@10.9.8",
-  "description": "Model Context Protocol (MCP) server for TrekMail. Exposes 233 agent tools covering domains, DNS, mailboxes, mail-client setup and password-free Apple Mail profiles, aliases, shared mailbox members and lifecycle (create/convert), forwarding, mail filters, auto-reply, sieve, migrations, SMTP, per-domain SMTP routing (managed + reusable profiles) and the account-wide default route, tickets, account, billing, spam stats, email verifier, Cloudflare DNS, Drive (files + sync-device passwords), per-domain email signatures, and the full webmail surface (messages, attachments, drafts, scheduled send, contacts, calendar, identities, templates, blocked senders), and connected external accounts (Gmail/Outlook/IMAP: list, detect, test, connect, update, delete + send/read via external_account_id).",
+  "description": "Model Context Protocol (MCP) server for TrekMail. Exposes 241 agent tools covering infrastructure and the full webmail surface, including machine payments, source-bound Send As identities, per-mailbox Drive access, and exact SMTP-profile usage.",
   "type": "module",
   "private": true,
   "license": "MIT",

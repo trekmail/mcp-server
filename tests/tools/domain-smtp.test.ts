@@ -20,6 +20,7 @@ function harness(config: Config) {
     getDomainSmtp: vi.fn().mockResolvedValue({ data: { smtp_mode: "platform" } }),
     setDomainSmtp: vi.fn().mockResolvedValue({ data: { smtp_mode: "profile" } }),
     listDomainSmtpProfiles: vi.fn().mockResolvedValue({ data: [] }),
+    getDomainSmtpProfileUsage: vi.fn().mockResolvedValue({ data: { domains: [], sending_addresses: [] } }),
     createDomainSmtpProfile: vi.fn().mockResolvedValue({ data: {} }),
     updateDomainSmtpProfile: vi.fn().mockResolvedValue({ data: {} }),
     deleteDomainSmtpProfile: vi.fn().mockResolvedValue({ data: { deleted: true } }),
@@ -54,6 +55,7 @@ describe("domain SMTP tools", () => {
       "create_domain_smtp_profile", "update_domain_smtp_profile",
       "delete_domain_smtp_profile", "test_domain_smtp", "get_domain_smtp_test_status",
       "get_account_smtp_default", "set_account_smtp_default",
+      "get_domain_smtp_profile_usage",
     ]) {
       expect(tools[name]).toBeDefined();
     }
@@ -63,10 +65,16 @@ describe("domain SMTP tools", () => {
     const tools = (h.server as unknown as { _registeredTools: Record<string, { annotations?: { destructiveHint?: boolean } }> })._registeredTools;
     expect(tools.get_domain_smtp.annotations?.destructiveHint).toBeFalsy();
     expect(tools.list_domain_smtp_profiles.annotations?.destructiveHint).toBeFalsy();
+    expect(tools.get_domain_smtp_profile_usage.annotations?.destructiveHint).toBeFalsy();
     expect(tools.get_domain_smtp_test_status.annotations?.destructiveHint).toBeFalsy();
     for (const name of ["set_domain_smtp", "create_domain_smtp_profile", "update_domain_smtp_profile", "delete_domain_smtp_profile", "test_domain_smtp"]) {
       expect(tools[name].annotations?.destructiveHint).toBe(true);
     }
+  });
+
+  it("get_domain_smtp_profile_usage calls the client", async () => {
+    await h.handlers.get("get_domain_smtp_profile_usage")!({ domain_id: 7, profile_id: 3 });
+    expect(h.client.getDomainSmtpProfileUsage).toHaveBeenCalledWith(7, 3);
   });
 
   it("get_domain_smtp calls the client", async () => {

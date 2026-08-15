@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
 import type { Config } from "../config.js";
 import { registerAccountTools } from "./account.js";
+import { registerMachinePaymentTools } from "./machine-payments.js";
 import { registerDomainTools } from "./domains.js";
 import { registerDnsTools } from "./dns.js";
 import { registerMailboxTools } from "./mailboxes.js";
@@ -49,6 +50,7 @@ export function registerInfraTools(
   config: Config,
 ): void {
   registerAccountTools(server, client);
+  registerMachinePaymentTools(server, client);
   registerDomainTools(server, client, config);
   registerDnsTools(server, client);
   registerMailboxTools(server, client, { allowDestructive: config.allowDestructive });

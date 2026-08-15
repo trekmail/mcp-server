@@ -44,6 +44,8 @@ describe("scheduled-message client", () => {
         subject: "Hi",
         scheduled_for: "2026-12-01T10:00:00-05:00",
         timezone: "America/New_York",
+        external_account_id: 11,
+        identity_id: 22,
       },
       "idem-123",
     );
@@ -55,6 +57,8 @@ describe("scheduled-message client", () => {
     const body = JSON.parse(init.body as string);
     expect(body.scheduled_for).toBe("2026-12-01T10:00:00-05:00");
     expect(body.timezone).toBe("America/New_York");
+    expect(body.external_account_id).toBe(11);
+    expect(body.identity_id).toBe(22);
 
     const headers = init.headers as Record<string, string>;
     expect(headers["Idempotency-Key"]).toBe("idem-123");
@@ -104,10 +108,13 @@ describe("scheduled-message client", () => {
     expect(init.method).toBe("DELETE");
   });
 
-  it("listScheduled GETs /messages/scheduled (regression guard)", async () => {
-    await client.listScheduled();
+  it("listScheduled forwards cursor pagination to /messages/scheduled", async () => {
+    await client.listScheduled({ cursor: "next-page", per_page: 25 });
     const { url, init } = getLastFetchCall(mockFetch);
-    expect(new URL(url).pathname).toBe("/api/v1/messages/scheduled");
+    const parsed = new URL(url);
+    expect(parsed.pathname).toBe("/api/v1/messages/scheduled");
+    expect(parsed.searchParams.get("cursor")).toBe("next-page");
+    expect(parsed.searchParams.get("per_page")).toBe("25");
     expect(init.method).toBe("GET");
   });
 });

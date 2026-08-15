@@ -171,6 +171,14 @@ export function registerMessageToolHandlers(
           .describe(
             "Send FROM a connected external account (Gmail/Outlook/IMAP) instead of the mailbox. The message goes out through that account's own SMTP and is saved to its Sent folder.",
           ),
+        identity_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe(
+            "Use one identity returned by list_identities. For a connected-inbox Send As identity, external_account_id must identify the same source.",
+          ),
       },
       annotations: {
         destructiveHint: true,
@@ -189,6 +197,7 @@ export function registerMessageToolHandlers(
       confirm_send,
       idempotency_key,
       external_account_id,
+      identity_id,
     }) => {
       if (!config.allowSending) {
         return errorResult(
@@ -234,13 +243,14 @@ export function registerMessageToolHandlers(
       if (reply_to_message_id) body.reply_to_message_id = reply_to_message_id;
       if (headers && Object.keys(headers).length > 0) body.headers = headers;
       if (external_account_id) body.external_account_id = external_account_id;
+      if (identity_id) body.identity_id = identity_id;
 
       // Generate idempotency key (exclude confirm_send from hash). The external
       // account is part of the identity — the same message from two accounts is
       // two distinct sends and must not dedupe to one.
       const idemKey = idempotencyKey(
         "send_message",
-        { to, cc, bcc, subject, body_text, body_html, attachments, reply_to_message_id, headers, external_account_id },
+        { to, cc, bcc, subject, body_text, body_html, attachments, reply_to_message_id, headers, external_account_id, identity_id },
         idempotency_key,
       );
 
@@ -575,10 +585,11 @@ export function registerMessageToolHandlers(
           .positive()
           .optional()
           .describe("Save into a connected external account's Drafts (Gmail/Outlook/IMAP) instead of the mailbox"),
+        identity_id: z.number().int().positive().optional().describe("From identity returned by list_identities"),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ to, cc, bcc, subject, body_text, body_html, attachments, external_account_id }) => {
+    async ({ to, cc, bcc, subject, body_text, body_html, attachments, external_account_id, identity_id }) => {
       if (!config.allowDestructive) {
         return errorResult(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to save drafts (writes to the Drafts folder).",
@@ -594,6 +605,7 @@ export function registerMessageToolHandlers(
       }
       if (attachments) body.attachments = attachments;
       if (external_account_id) body.external_account_id = external_account_id;
+      if (identity_id) body.identity_id = identity_id;
       return callApi(() => client.saveDraft(body));
     },
   );
@@ -632,10 +644,11 @@ export function registerMessageToolHandlers(
           .positive()
           .optional()
           .describe("Update a draft in a connected external account's Drafts (Gmail/Outlook/IMAP) instead of the mailbox"),
+        identity_id: z.number().int().positive().optional().describe("From identity returned by list_identities"),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ uid, to, cc, bcc, subject, body_text, body_html, attachments, external_account_id }) => {
+    async ({ uid, to, cc, bcc, subject, body_text, body_html, attachments, external_account_id, identity_id }) => {
       if (!config.allowDestructive) {
         return errorResult(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update drafts (replaces the existing draft).",
@@ -651,6 +664,7 @@ export function registerMessageToolHandlers(
       }
       if (attachments) body.attachments = attachments;
       if (external_account_id) body.external_account_id = external_account_id;
+      if (identity_id) body.identity_id = identity_id;
       return callApi(() => client.updateDraft(uid, body));
     },
   );

@@ -50,6 +50,11 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
     "get_account",
     "get_billing_status",
     "list_invoices",
+    "agent_buy_verifier_credits",
+    "agent_subscribe_mail_plan",
+    "agent_subscribe_drive_addon",
+    "agent_subscribe_white_label",
+    "agent_reissue_key",
   ],
 
   email: [
@@ -86,6 +91,7 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
     "create_identity",
     "update_identity",
     "delete_identity",
+    "set_reply_from_policy",
     "list_templates",
     "create_template",
     "update_template",
@@ -207,6 +213,7 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
     "create_mailbox_generated_password",
     "change_mailbox_password",
     "update_mailbox",
+    "set_mailboxes_drive_access",
     "update_mailbox_note",
     "pause_mailbox",
     "resume_mailbox",
@@ -256,6 +263,7 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
     "get_account_smtp_default",
     "set_account_smtp_default",
     "list_domain_smtp_profiles",
+    "get_domain_smtp_profile_usage",
     "create_domain_smtp_profile",
     "update_domain_smtp_profile",
     "delete_domain_smtp_profile",
@@ -348,6 +356,20 @@ const POLICY_RULES: readonly PolicyRule[] = [
   rule("account:read", "read", ["whoami", "get_account"]),
   rule("billing:read", "read", ["get_billing_status", "list_invoices"]),
 
+  // Spending is its own capability, deliberately not billing:read. A connector
+  // allowed to SEE the bill must not be able to add to it, and an owner who
+  // granted read-only billing did not consent to purchases.
+  //
+  // "write" rather than "destructive": these commit money but take nothing
+  // away, and none of them can cancel or downgrade — no such endpoint exists.
+  rule("billing:autopay", "write", [
+    "agent_buy_verifier_credits",
+    "agent_subscribe_mail_plan",
+    "agent_subscribe_drive_addon",
+    "agent_subscribe_white_label",
+    "agent_reissue_key",
+  ]),
+
   rule("messages:read", "read", [
     "list_messages", "read_message", "list_folders", "download_attachment",
     "download_all_attachments", "get_raw_message", "prepare_reply",
@@ -363,7 +385,7 @@ const POLICY_RULES: readonly PolicyRule[] = [
   rule("messages:write", "write", [
     "move_message", "update_message_flags",
     "save_draft", "update_draft", "report_spam", "report_ham", "bulk_action",
-    "create_folder", "rename_folder", "create_identity", "update_identity", "create_template",
+    "create_folder", "rename_folder", "create_identity", "update_identity", "set_reply_from_policy", "create_template",
     "update_template", "block_sender", "unblock_sender", "test_external_account",
     "create_external_account", "update_external_account", "test_saved_external_account",
     "create_contact", "update_contact", "import_contacts", "create_contact_group",
@@ -411,7 +433,8 @@ const POLICY_RULES: readonly PolicyRule[] = [
     "create_mailbox_generated_password", "bulk_create_mailboxes", "create_shared_mailbox",
   ]),
   rule("mailboxes:write", "write", [
-    "change_mailbox_password", "update_mailbox", "update_mailbox_note", "pause_mailbox",
+    "change_mailbox_password", "update_mailbox", "set_mailboxes_drive_access",
+    "update_mailbox_note", "pause_mailbox",
     "resume_mailbox", "enable_imap", "create_alias", "update_alias",
     "add_shared_mailbox_member", "update_shared_mailbox_member", "remove_shared_mailbox_member",
     "convert_mailbox_to_shared", "convert_shared_mailbox_to_regular",
@@ -449,6 +472,7 @@ const POLICY_RULES: readonly PolicyRule[] = [
   rule("smtp:read", "read", [
     "get_smtp_config", "get_smtp_test_status", "get_domain_smtp",
     "get_account_smtp_default", "list_domain_smtp_profiles", "get_domain_smtp_test_status",
+    "get_domain_smtp_profile_usage",
   ]),
   rule("smtp:write", "write", [
     "update_smtp_config", "test_smtp", "set_domain_smtp", "set_account_smtp_default",
@@ -570,7 +594,7 @@ for (const name of policyByName.keys()) {
 export const TOOL_CATALOG: readonly ToolCatalogEntry[] = Object.freeze(entries);
 
 /** Bump whenever grouping/capability/safety semantics change. */
-export const TOOL_CATALOG_VERSION = "2026-07-27.1";
+export const TOOL_CATALOG_VERSION = "2026-08-14.2";
 
 function fnv1a(value: string): string {
   let hash = 0x811c9dc5;

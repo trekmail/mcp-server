@@ -1,6 +1,6 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 233 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 241 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
 ## Quickstart
 
@@ -36,8 +36,8 @@ The MCP server supports two independent token types. At least one is required:
 
 | Token | Env Var | Prefix | Unlocks |
 |-------|---------|--------|---------|
-| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 172 infrastructure tools (domains, DNS, mailboxes, mail-client setup, invites, aliases, shared mailbox members, forwarding, forwarding addresses, mail filters, auto-reply, sieve, delete intents, migrations, SMTP, tickets, account, billing, spam stats, verifier, message token management, Cloudflare DNS, Drive, and Drive sync-device passwords) |
-| **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 61 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, connected accounts, identities, templates, blocked senders) |
+| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 179 infrastructure tools (domains, DNS, mailboxes, mail-client setup, invites, aliases, shared mailbox members, forwarding, forwarding addresses, mail filters, auto-reply, sieve, delete intents, migrations, SMTP, tickets, account, billing, spam stats, verifier, message token management, Cloudflare DNS, Drive, and Drive sync-device passwords) |
+| **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 62 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, connected accounts, identities, templates, blocked senders) |
 
 Tools are registered conditionally — only token types you provide get their tools. You can supply one or both:
 
@@ -87,12 +87,12 @@ TREKMAIL_SCOPE_AWARE_REGISTRATION=true \
 npm start
 ```
 
-## Tools (233)
+## Tools (241)
 
-> The full catalog is **233** tools over stdio. On the hosted **HTTP** transport
+> The full catalog is **241** tools over stdio. On the hosted **HTTP** transport
 > `drive_file_upload` is intentionally not registered (its `local_path` would read
 > files on our server — see the note in `src/tools/drive.ts`), so the HTTP MCP
-> exposes 232. Tools also split by token type: **61** need a message token
+> exposes 240. Tools also split by token type: **62** need a message token
 > (`tm_msg_`), the rest an ops token (`tm_live_`).
 >
 > **Safety gates apply to the whole list, not just the rows that say so.** Read
@@ -131,7 +131,8 @@ npm start
 - **get_apple_mail_profile** — Generate a password-free Apple Mail `.mobileconfig` file as Base64 (13 locales)
 - **create_mailbox_generated_password** — Create mailbox with auto-generated one-time password (optional `storage_allocation_mb` carves out dedicated storage from the account pool; omit for shared)
 - **change_mailbox_password** — Change the password for a mailbox (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
-- **update_mailbox** — Update a mailbox display name or a regular mailbox's webmail `conversation_view` preference (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **update_mailbox** — Update a mailbox display name, a regular mailbox's webmail `conversation_view` preference, or its `drive_access` level (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **set_mailboxes_drive_access** — Set `drive_access` on many mailboxes at once, chosen by explicit `mailbox_ids`, by `domain_id`, or `all`; shared mailboxes are skipped and counted (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **update_mailbox_note** — Update the admin note on a mailbox
 - **pause_mailbox** — Disable a mailbox (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **resume_mailbox** — Re-enable a paused mailbox
@@ -266,10 +267,11 @@ Connect and manage external mailboxes (Gmail/Outlook/IMAP) the mailbox reads and
 - **prepare_forward** — Get pre-filled forward data for a message
 
 ### Identities (message token)
-- **list_identities** — List send-from identities for the mailbox
-- **create_identity** — Create a new send-from identity
-- **update_identity** — Update an identity's display name, signature, or default flag
-- **delete_identity** — Delete a send-from identity (requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)
+- **list_identities** — List source-specific From addresses, connected-inbox Send As identities, reply policy, eligible domains, and permitted profiles
+- **create_identity** — Configure a managed From address or create a Send As identity bound to one connected inbox
+- **update_identity** — Update an identity's display name, signature, reply-to, default flag, or Send As route
+- **delete_identity** — Delete a Send As identity (requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)
+- **set_reply_from_policy** — Reply from the recipient address when possible, or always start from the default (requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)
 
 ### Templates (message token)
 - **list_templates** — List message templates
@@ -295,6 +297,7 @@ Connect and manage external mailboxes (Gmail/Outlook/IMAP) the mailbox reads and
 - **get_domain_smtp** — Get a domain's outbound route (mode + selected profile; `effective_smtp_mode` resolves `inherit` to the account default)
 - **set_domain_smtp** — Set a domain's route: `platform` (managed) / `profile` (saved profile) / `not_configured` / `inherit` (follow the account default) (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **list_domain_smtp_profiles** — List the account's reusable saved SMTP profiles plus per-profile usage counts
+- **get_domain_smtp_profile_usage** — List the exact domains and Send As addresses using one profile; credentials are never returned
 - **create_domain_smtp_profile** — Create a reusable SMTP profile and apply it to a domain — stores credentials (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **update_domain_smtp_profile** — Update a saved profile (affects every domain using it) (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **delete_domain_smtp_profile** — Delete a saved profile (domains using it are reassigned) (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)

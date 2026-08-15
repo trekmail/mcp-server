@@ -34,12 +34,14 @@ export function registerMessageScheduledTools(
           .describe(
             "Optional IANA timezone name (e.g. 'America/New_York'). Only consulted when `scheduled_for` lacks an explicit offset; the server then interprets the naïve datetime in this zone before storing as UTC. Pass this whenever the user speaks in local time.",
           ),
+        external_account_id: z.number().int().positive().optional().describe("Connected inbox used for sending"),
+        identity_id: z.number().int().positive().optional().describe("From identity returned by list_identities"),
         confirm_send: z.boolean().describe("Must be true to schedule"),
         idempotency_key: z.string().optional(),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ to, cc, bcc, subject, body_text, body_html, scheduled_for, timezone, confirm_send, idempotency_key: idemKey }) => {
+    async ({ to, cc, bcc, subject, body_text, body_html, scheduled_for, timezone, external_account_id, identity_id, confirm_send, idempotency_key: idemKey }) => {
       if (!config.allowSending) {
         return errorResult("Sending is disabled. Set TREKMAIL_ALLOW_SENDING=true to enable.");
       }
@@ -52,7 +54,9 @@ export function registerMessageScheduledTools(
       if (bcc) body.bcc = bcc;
       if (subject) body.subject = subject;
       if (body_text || body_html) body.body = { text: body_text ?? null, html: body_html ?? null };
-      const key = idempotencyKey("schedule_message", { to, subject, scheduled_for, timezone }, idemKey);
+      if (external_account_id) body.external_account_id = external_account_id;
+      if (identity_id) body.identity_id = identity_id;
+      const key = idempotencyKey("schedule_message", { to, subject, scheduled_for, timezone, external_account_id, identity_id }, idemKey);
       return callApi(() => client.scheduleMessage(body, key));
     },
   );
@@ -61,11 +65,15 @@ export function registerMessageScheduledTools(
     "list_scheduled",
     {
       title: "List Scheduled Messages",
-      description: "List pending scheduled messages for the mailbox.",
-      inputSchema: {},
+      description:
+        "List pending scheduled messages for the mailbox with cursor pagination. Pass next_cursor from pagination to retrieve every result.",
+      inputSchema: {
+        cursor: z.string().max(2048).optional().describe("Opaque next_cursor from the previous page"),
+        per_page: z.number().int().min(1).max(100).optional().describe("Results per page (default 100)"),
+      },
     },
-    async () => {
-      return callApi(() => client.listScheduled());
+    async ({ cursor, per_page }) => {
+      return callApi(() => client.listScheduled({ cursor, per_page }));
     },
   );
 
