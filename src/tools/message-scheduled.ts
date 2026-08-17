@@ -38,10 +38,16 @@ export function registerMessageScheduledTools(
         identity_id: z.number().int().positive().optional().describe("From identity returned by list_identities"),
         confirm_send: z.boolean().describe("Must be true to schedule"),
         idempotency_key: z.string().optional(),
+        apply_default_recipients: z
+          .boolean()
+          .optional()
+          .describe(
+            "Set false to skip this mailbox's Default CC/BCC on this one message. They are applied by default, and stored with the scheduled message so list_scheduled shows what will actually go out.",
+          ),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ to, cc, bcc, subject, body_text, body_html, scheduled_for, timezone, external_account_id, identity_id, confirm_send, idempotency_key: idemKey }) => {
+    async ({ to, cc, bcc, subject, body_text, body_html, scheduled_for, timezone, external_account_id, identity_id, confirm_send, idempotency_key: idemKey, apply_default_recipients }) => {
       if (!config.allowSending) {
         return errorResult("Sending is disabled. Set TREKMAIL_ALLOW_SENDING=true to enable.");
       }
@@ -56,7 +62,8 @@ export function registerMessageScheduledTools(
       if (body_text || body_html) body.body = { text: body_text ?? null, html: body_html ?? null };
       if (external_account_id) body.external_account_id = external_account_id;
       if (identity_id) body.identity_id = identity_id;
-      const key = idempotencyKey("schedule_message", { to, subject, scheduled_for, timezone, external_account_id, identity_id }, idemKey);
+      if (apply_default_recipients === false) body.apply_default_recipients = false;
+      const key = idempotencyKey("schedule_message", { to, subject, scheduled_for, timezone, external_account_id, identity_id, apply_default_recipients }, idemKey);
       return callApi(() => client.scheduleMessage(body, key));
     },
   );

@@ -22,7 +22,7 @@ export function registerMessageIdentityTools(
   server.registerTool("create_identity", {
     title: "Create or Configure Sending Address",
     description:
-      "Configure an existing mailbox/alias persona, or create a Send As identity attached to one connected inbox. For kind=send_as, external_account_id is required and email must already be the mailbox address or a send-enabled alias. smtp_mode=domain follows Dashboard domain routing; smtp_mode=profile selects a saved profile and is limited to the account owner mailbox. Requires scope: messages:write.",
+      "Configure an existing mailbox/alias persona, or create a Send As identity. Pass external_account_id when you read that address's mail through a connected inbox; omit it when the mail is forwarded into this TrekMail mailbox instead. Either way, email must already be the mailbox address or a send-enabled alias. smtp_mode=domain follows Dashboard domain routing; smtp_mode=profile selects a saved profile and is limited to the account owner mailbox. Requires scope: messages:write.",
     inputSchema: {
       kind: z.enum(["managed", "send_as"]).optional().describe("Default: managed"),
       email: z.string().email().describe("Visible From address"),
@@ -30,7 +30,7 @@ export function registerMessageIdentityTools(
       reply_to: z.string().email().nullable().optional(),
       signature_html: z.string().max(10000).nullable().optional(),
       signature_enabled: z.boolean().optional(),
-      external_account_id: z.number().int().positive().optional().describe("Required for kind=send_as"),
+      external_account_id: z.number().int().positive().optional().describe("Connected inbox this address is read in; omit for a forwarded-copy workflow"),
       smtp_mode: z.enum(["domain", "profile"]).optional(),
       smtp_connection_id: z.number().int().positive().optional().describe("Required when smtp_mode=profile"),
       idempotency_key: z.string().optional(),
@@ -39,9 +39,6 @@ export function registerMessageIdentityTools(
   }, async ({ idempotency_key, ...params }) => {
     if (!config.allowDestructive) {
       return errorResult("Identity changes are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true.");
-    }
-    if (params.kind === "send_as" && !params.external_account_id) {
-      return errorResult("external_account_id is required for a Send As identity.");
     }
     if (params.smtp_mode === "profile" && !params.smtp_connection_id) {
       return errorResult("smtp_connection_id is required when smtp_mode=profile.");

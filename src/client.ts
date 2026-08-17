@@ -276,9 +276,10 @@ export class TrekMailClient {
   async createDomain(
     name: string,
     idempotencyKey: string,
+    mailHosting?: "trekmail" | "external",
   ): Promise<unknown> {
     return this.request("POST", "domains", {
-      body: { name },
+      body: mailHosting ? { name, mail_hosting: mailHosting } : { name },
       idempotencyKey,
     });
   }
@@ -351,6 +352,21 @@ export class TrekMailClient {
       `domains/${domainId}/forwarding-addresses/${addressId}`,
       { idempotencyKey },
     );
+  }
+
+  async updateDomainMailHosting(
+    domainId: number,
+    mailHosting: "trekmail" | "external",
+    confirmMailboxesStopReceiving?: boolean,
+  ): Promise<unknown> {
+    return this.request("PATCH", `domains/${domainId}/mail-hosting`, {
+      body: {
+        mail_hosting: mailHosting,
+        ...(confirmMailboxesStopReceiving
+          ? { confirm_mailboxes_stop_receiving: true }
+          : {}),
+      },
+    });
   }
 
   async retryDomainDkim(
@@ -533,6 +549,42 @@ export class TrekMailClient {
     idempotencyKey: string,
   ): Promise<unknown> {
     return this.request("POST", "mailboxes:drive-access", {
+      body,
+      idempotencyKey,
+    });
+  }
+
+  async suspendMailboxLogin(
+    mailboxId: number,
+    reason: string | undefined,
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", `mailboxes/${mailboxId}:suspend-login`, {
+      body: reason === undefined ? {} : { reason },
+      idempotencyKey,
+    });
+  }
+
+  async resumeMailboxLogin(
+    mailboxId: number,
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", `mailboxes/${mailboxId}:resume-login`, {
+      idempotencyKey,
+    });
+  }
+
+  async setMailboxesLoginAccess(
+    body: {
+      login_suspended: boolean;
+      reason?: string;
+      mailbox_ids?: number[];
+      domain_id?: number;
+      all?: boolean;
+    },
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", "mailboxes:login-access", {
       body,
       idempotencyKey,
     });
@@ -1210,15 +1262,35 @@ export class TrekMailClient {
     });
   }
 
-  async saveDraft(body: Record<string, unknown>): Promise<unknown> {
-    return this.request("POST", "messages/drafts", { body });
+  // Both draft routes sit behind the message-API idempotency middleware, which
+  // refuses any write with no Idempotency-Key — so omitting it here made both
+  // tools fail 100% of the time with missing_idempotency_key, and no caller
+  // could work around it (ticket #354).
+  //
+  // The default is random, NOT the deterministic idempotencyKey() hash used by
+  // send_message. Deterministic is right there because a repeated identical
+  // send is almost always an accident. Drafts are the opposite: the middleware
+  // replays the stored response for a repeated key, so a hash of the body would
+  // make a second identical draft silently return the first one's UID, and
+  // updating a draft BACK to earlier content would return the old response
+  // without performing the update at all. Callers that genuinely want
+  // retry-dedup pass their own key.
+  async saveDraft(
+    body: Record<string, unknown>,
+    idempotencyKey: string = randomUUID(),
+  ): Promise<unknown> {
+    return this.request("POST", "messages/drafts", { body, idempotencyKey });
   }
 
   async updateDraft(
     uid: number,
     body: Record<string, unknown>,
+    idempotencyKey: string = randomUUID(),
   ): Promise<unknown> {
-    return this.request("PUT", `messages/drafts/${uid}`, { body });
+    return this.request("PUT", `messages/drafts/${uid}`, {
+      body,
+      idempotencyKey,
+    });
   }
 
   async reportSpam(

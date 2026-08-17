@@ -2,7 +2,7 @@
   "name": "@trekmail/mcp-server",
   "version": "1.10.0",
   "packageManager": "npm@10.9.8",
-  "description": "Model Context Protocol (MCP) server for TrekMail. Exposes 241 agent tools covering infrastructure and the full webmail surface, including machine payments, source-bound Send As identities, per-mailbox Drive access, and exact SMTP-profile usage.",
+  "description": "Model Context Protocol (MCP) server for TrekMail. Exposes 245 agent tools covering infrastructure and the full webmail surface, including sending-only domains, mailbox sign-in suspension, source-bound Send As identities, and exact SMTP-profile usage.",
   "type": "module",
   "private": true,
   "license": "MIT",

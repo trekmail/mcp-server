@@ -66,13 +66,18 @@ describe("message identity tools", () => {
     );
   });
 
-  it("requires the connected source for a Send As identity", async () => {
-    const result = await h.handlers.get("create_identity")!({
+  it("accepts a Send As identity with no connected source", async () => {
+    // The forwarded-copy workflow has no connected inbox to name: the mail is
+    // forwarded into a TrekMail mailbox and the identity belongs to it
+    // (ticket #319). Requiring external_account_id refused that outright.
+    await h.handlers.get("create_identity")!({
       kind: "send_as",
-      email: "sales@example.com",
-    }) as { isError?: boolean };
-    expect(result.isError).toBe(true);
-    expect(h.client.createIdentity).not.toHaveBeenCalled();
+      email: "admin@client.example",
+    });
+    expect(h.client.createIdentity).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "send_as", email: "admin@client.example" }),
+      expect.any(String),
+    );
   });
 
   it("updates and deletes against the exact connected source", async () => {

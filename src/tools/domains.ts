@@ -63,13 +63,19 @@ export function registerDomainTools(
     {
       title: "Create Domain",
       description:
-        "Add a new domain to the account. The domain will start in pending_dns status. DNS records must be configured before it becomes active.",
+        "Add a new domain to the account. The domain will start in pending_dns status. DNS records must be configured before it becomes active. Pass mail_hosting='external' when the customer keeps incoming mail at their current provider: no MX record is asked for, the domain hosts no mailboxes, and it is used only as a verified From address.",
       inputSchema: {
         name: z
           .string()
           .max(255)
           .describe(
             "The domain name to add (e.g. 'example.com'). Must be lowercase.",
+          ),
+        mail_hosting: z
+          .enum(["trekmail", "external"])
+          .optional()
+          .describe(
+            "Where incoming mail lives. Default 'trekmail' (we host the mailboxes); 'external' keeps it with the customer's provider and uses the domain for sending only.",
           ),
         idempotency_key: z
           .string()
@@ -78,7 +84,7 @@ export function registerDomainTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ name, idempotency_key }) => {
+    async ({ name, mail_hosting, idempotency_key }) => {
       if (!config?.allowDestructive) {
         return errorResult(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to create domains.",
@@ -86,10 +92,10 @@ export function registerDomainTools(
       }
       const idemKey = idempotencyKey(
         "create_domain",
-        { name },
+        { name, mail_hosting },
         idempotency_key,
       );
-      return callApi(() => client.createDomain(name, idemKey));
+      return callApi(() => client.createDomain(name, idemKey, mail_hosting));
     },
   );
 
@@ -296,6 +302,44 @@ export function registerDomainTools(
       );
       return callApi(() =>
         client.deleteForwardingAddress(domain_id, forwarding_address_id, idemKey),
+      );
+    },
+  );
+
+  server.registerTool(
+    "set_domain_mail_hosting",
+    {
+      title: "Set Where Domain Mail Is Hosted",
+      description:
+        "Choose whether TrekMail hosts this domain's incoming mail or the customer keeps it with their current provider. 'external' asks for no MX record, allows no mailboxes, catch-all or forwarding on the domain, and uses it only as a verified From address — the forwarded-copy workflow. Switching an existing domain to 'external' stops its mailboxes receiving; nothing is deleted and switching back restores delivery.",
+      inputSchema: {
+        domain_id: z.number().int().positive().describe("The domain ID"),
+        mail_hosting: z
+          .enum(["trekmail", "external"])
+          .describe(
+            "'trekmail' = we host the mailboxes; 'external' = incoming mail stays with the customer's provider",
+          ),
+        confirm_mailboxes_stop_receiving: z
+          .boolean()
+          .optional()
+          .describe(
+            "Required only when moving to 'external' while the domain still holds mailboxes",
+          ),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ domain_id, mail_hosting, confirm_mailboxes_stop_receiving }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to change where a domain's mail is hosted (moving to 'external' stops its mailboxes receiving).",
+        );
+      }
+      return callApi(() =>
+        client.updateDomainMailHosting(
+          domain_id,
+          mail_hosting,
+          confirm_mailboxes_stop_receiving,
+        ),
       );
     },
   );

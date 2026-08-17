@@ -325,6 +325,190 @@ export function registerMailboxTools(
   );
 
   server.registerTool(
+    "suspend_mailbox_login",
+    {
+      title: "Suspend Mailbox Sign-In",
+      description:
+        "Stop someone signing in while their mail keeps arriving: webmail, IMAP, SMTP, device passwords and reset links are all refused and open sessions end, but delivery is untouched and nothing bounces. Use for a client who has not paid; pause_mailbox is harsher and stops delivery too. Shared mailboxes are refused — suspend their members instead. Lift with resume_mailbox_login.",
+      inputSchema: {
+        mailbox_id: z
+          .number()
+          .int()
+          .positive()
+          .describe("The mailbox ID to suspend sign-in for"),
+        reason: z
+          .string()
+          .max(255)
+          .optional()
+          .describe(
+            "Why it was suspended, e.g. 'unpaid invoice 42'. Shown to the account holder in the dashboard, never to the suspended user.",
+          ),
+        idempotency_key: z
+          .string()
+          .optional()
+          .describe("Optional idempotency key"),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ mailbox_id, reason, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to suspend mailbox sign-in.",
+        );
+      }
+      const timeBucket = Math.floor(Date.now() / (5 * 60 * 1000));
+      const idemKey = idempotencyKey(
+        "suspend_mailbox_login",
+        { mailbox_id, reason, _t: timeBucket },
+        idempotency_key,
+      );
+      return callApi(() =>
+        client.suspendMailboxLogin(mailbox_id, reason, idemKey),
+      );
+    },
+  );
+
+  server.registerTool(
+    "resume_mailbox_login",
+    {
+      title: "Resume Mailbox Sign-In",
+      description:
+        "Lift a sign-in suspension so the user can sign in again. Device passwords that the suspension revoked are not restored — the user creates new ones from webmail.",
+      inputSchema: {
+        mailbox_id: z
+          .number()
+          .int()
+          .positive()
+          .describe("The mailbox ID to restore sign-in for"),
+        idempotency_key: z
+          .string()
+          .optional()
+          .describe("Optional idempotency key"),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ mailbox_id, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to resume mailbox sign-in.",
+        );
+      }
+      const timeBucket = Math.floor(Date.now() / (5 * 60 * 1000));
+      const idemKey = idempotencyKey(
+        "resume_mailbox_login",
+        { mailbox_id, _t: timeBucket },
+        idempotency_key,
+      );
+      return callApi(() => client.resumeMailboxLogin(mailbox_id, idemKey));
+    },
+  );
+
+  server.registerTool(
+    "set_mailboxes_login_access",
+    {
+      title: "Suspend Or Resume Sign-In On Many Mailboxes",
+      description:
+        "Suspend or restore sign-in across many mailboxes; delivery is unaffected either way. Choose exactly ONE of: mailbox_ids, domain_id (every mailbox on that domain — the usual choice for one client), or all. Shared, paused and trashed mailboxes are skipped and counted. Mailboxes already in the requested state count as matched but not updated, so the call is safe to repeat.",
+      inputSchema: {
+        login_suspended: z
+          .boolean()
+          .describe(
+            "true suspends sign-in, false restores it. Mail is delivered either way.",
+          ),
+        reason: z
+          .string()
+          .max(255)
+          .optional()
+          .describe(
+            "Why they were suspended. Recorded on each mailbox for the account holder; ignored when restoring.",
+          ),
+        mailbox_ids: z
+          .array(z.number().int().positive())
+          .min(1)
+          .max(1000)
+          .optional()
+          .describe("Explicit list of mailbox IDs to update."),
+        domain_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Update every mailbox on this domain."),
+        all: z
+          .boolean()
+          .optional()
+          .describe("Update every mailbox on the account."),
+        idempotency_key: z
+          .string()
+          .optional()
+          .describe("Optional idempotency key"),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({
+      login_suspended,
+      reason,
+      mailbox_ids,
+      domain_id,
+      all,
+      idempotency_key,
+    }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to change mailbox sign-in access.",
+        );
+      }
+
+      // Caught here as well as server-side so the model gets a usable message
+      // instead of a 422 it has to interpret.
+      const selectors = [
+        mailbox_ids !== undefined,
+        domain_id !== undefined,
+        all === true,
+      ].filter(Boolean).length;
+      if (selectors !== 1) {
+        return errorResult(
+          "Choose exactly one of mailbox_ids, domain_id or all.",
+        );
+      }
+
+      const body: {
+        login_suspended: boolean;
+        reason?: string;
+        mailbox_ids?: number[];
+        domain_id?: number;
+        all?: boolean;
+      } = { login_suspended };
+      if (reason !== undefined) {
+        body.reason = reason;
+      }
+      if (mailbox_ids !== undefined) {
+        body.mailbox_ids = mailbox_ids;
+      }
+      if (domain_id !== undefined) {
+        body.domain_id = domain_id;
+      }
+      if (all === true) {
+        body.all = true;
+      }
+
+      // Same 5-minute bucket the single-mailbox tools use. Without it an
+      // identical body — which is the documented, expected shape for a nightly
+      // billing job — replays the first response for the whole idempotency TTL,
+      // so mailboxes added to the domain since then are never suspended while
+      // the agent is told the batch succeeded.
+      const timeBucket = Math.floor(Date.now() / (5 * 60 * 1000));
+      const idemKey = idempotencyKey(
+        "set_mailboxes_login_access",
+        { ...body, _t: timeBucket },
+        idempotency_key,
+      );
+
+      return callApi(() => client.setMailboxesLoginAccess(body, idemKey));
+    },
+  );
+
+  server.registerTool(
     "update_mailbox_note",
     {
       title: "Update Mailbox Note",

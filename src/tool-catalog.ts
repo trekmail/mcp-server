@@ -178,6 +178,7 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
     "create_domain",
     "delete_domain",
     "update_domain_catch_all",
+    "set_domain_mail_hosting",
     "list_forwarding_addresses",
     "get_forwarding_address_log",
     "create_forwarding_address",
@@ -214,6 +215,9 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
     "change_mailbox_password",
     "update_mailbox",
     "set_mailboxes_drive_access",
+    "suspend_mailbox_login",
+    "resume_mailbox_login",
+    "set_mailboxes_login_access",
     "update_mailbox_note",
     "pause_mailbox",
     "resume_mailbox",
@@ -404,7 +408,7 @@ const POLICY_RULES: readonly PolicyRule[] = [
   ]),
   rule("domains:create", "write", ["create_domain", "bulk_add_domains"]),
   rule("domains:write", "write", [
-    "update_domain_catch_all", "retry_domain_dkim", "update_domain_note",
+    "update_domain_catch_all", "set_domain_mail_hosting", "retry_domain_dkim", "update_domain_note",
     "create_forwarding_address", "update_forwarding_address",
     "update_domain_signature", "set_domain_branding", "set_domain_brand_logo",
     "verify_domain_branding_dns", "create_branding_preview",
@@ -434,6 +438,7 @@ const POLICY_RULES: readonly PolicyRule[] = [
   ]),
   rule("mailboxes:write", "write", [
     "change_mailbox_password", "update_mailbox", "set_mailboxes_drive_access",
+    "suspend_mailbox_login", "resume_mailbox_login", "set_mailboxes_login_access",
     "update_mailbox_note", "pause_mailbox",
     "resume_mailbox", "enable_imap", "create_alias", "update_alias",
     "add_shared_mailbox_member", "update_shared_mailbox_member", "remove_shared_mailbox_member",
@@ -594,7 +599,7 @@ for (const name of policyByName.keys()) {
 export const TOOL_CATALOG: readonly ToolCatalogEntry[] = Object.freeze(entries);
 
 /** Bump whenever grouping/capability/safety semantics change. */
-export const TOOL_CATALOG_VERSION = "2026-08-14.2";
+export const TOOL_CATALOG_VERSION = "2026-08-16.1";
 
 function fnv1a(value: string): string {
   let hash = 0x811c9dc5;

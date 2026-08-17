@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { TrekMailClient, type ClientConfig } from "../../src/client.js";
 import type { Config } from "../../src/config.js";
-import { createMockFetch, getLastFetchCall, getLastFetchHeaders } from "../helpers/mock-fetch.js";
+import { createMockFetch, getLastFetchCall, getLastFetchHeaders, mockFetchResponse } from "../helpers/mock-fetch.js";
 import { callApi, errorResult } from "../../src/tools/util.js";
 
 describe("message tools", () => {
@@ -109,6 +109,83 @@ describe("message tools", () => {
     );
     const headers = getLastFetchHeaders(mockFetch);
     expect(headers["Idempotency-Key"]).toBe("my-idem-key");
+  });
+
+  // --- Drafts (ticket #354) ---
+  //
+  // Both draft routes are behind the message-API idempotency middleware. With
+  // no Idempotency-Key they answered 422 missing_idempotency_key on every
+  // single call, and the tool schemas exposed no way to supply one.
+
+  it("saveDraft sets an Idempotency-Key header", async () => {
+    await client.saveDraft({ subject: "Draft" });
+    const headers = getLastFetchHeaders(mockFetch);
+    expect(headers["Idempotency-Key"]).toBeTruthy();
+  });
+
+  it("updateDraft sets an Idempotency-Key header", async () => {
+    await client.updateDraft(42, { subject: "Draft" });
+    const headers = getLastFetchHeaders(mockFetch);
+    expect(headers["Idempotency-Key"]).toBeTruthy();
+  });
+
+  it("saveDraft generates a FRESH key per call for identical params", async () => {
+    // Guard against "fix" by deterministic hashing, as send_message does. The
+    // middleware replays a stored response for a repeated key, so a hash of the
+    // body would make a second identical draft silently return the first one's
+    // UID instead of creating a second draft.
+    mockFetchResponse(mockFetch, { status: 200, body: { uid: 1 } });
+    await client.saveDraft({ subject: "Same" });
+    const first = getLastFetchHeaders(mockFetch)["Idempotency-Key"];
+
+    mockFetchResponse(mockFetch, { status: 200, body: { uid: 2 } });
+    await client.saveDraft({ subject: "Same" });
+    const second = getLastFetchHeaders(mockFetch)["Idempotency-Key"];
+
+    expect(first).toBeTruthy();
+    expect(second).toBeTruthy();
+    expect(second).not.toBe(first);
+  });
+
+  it("updateDraft generates a FRESH key per call for identical params", async () => {
+    // Same reasoning, sharper: reverting a draft to earlier content must really
+    // update it, not replay the response of the call that first wrote it.
+    mockFetchResponse(mockFetch, { status: 200, body: { uid: 7 } });
+    await client.updateDraft(7, { subject: "Same" });
+    const first = getLastFetchHeaders(mockFetch)["Idempotency-Key"];
+
+    mockFetchResponse(mockFetch, { status: 200, body: { uid: 7 } });
+    await client.updateDraft(7, { subject: "Same" });
+    const second = getLastFetchHeaders(mockFetch)["Idempotency-Key"];
+
+    expect(second).not.toBe(first);
+  });
+
+  it("saveDraft and updateDraft forward an explicit key verbatim", async () => {
+    mockFetchResponse(mockFetch, { status: 200, body: { uid: 1 } });
+    await client.saveDraft({ subject: "Draft" }, "caller-chosen-key");
+    expect(getLastFetchHeaders(mockFetch)["Idempotency-Key"]).toBe("caller-chosen-key");
+
+    mockFetchResponse(mockFetch, { status: 200, body: { uid: 1 } });
+    await client.updateDraft(9, { subject: "Draft" }, "caller-chosen-key-2");
+    expect(getLastFetchHeaders(mockFetch)["Idempotency-Key"]).toBe("caller-chosen-key-2");
+  });
+
+  it("saveDraft posts to the drafts route with the draft body", async () => {
+    await client.saveDraft({ subject: "Hello", to: ["alice@example.com"] });
+    const { url, init } = getLastFetchCall(mockFetch);
+    expect(new URL(url).pathname).toBe("/api/v1/messages/drafts");
+    expect(init.method).toBe("POST");
+    const parsed = JSON.parse(init.body as string);
+    expect(parsed.subject).toBe("Hello");
+    expect(parsed.to).toEqual(["alice@example.com"]);
+  });
+
+  it("updateDraft puts to the draft's own route", async () => {
+    await client.updateDraft(1234, { subject: "Hello" });
+    const { url, init } = getLastFetchCall(mockFetch);
+    expect(new URL(url).pathname).toBe("/api/v1/messages/drafts/1234");
+    expect(init.method).toBe("PUT");
   });
 
   it("sendMessage sends correct body shape", async () => {

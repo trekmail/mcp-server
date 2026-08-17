@@ -163,6 +163,12 @@ export function registerMessageToolHandlers(
           .describe(
             "Optional idempotency key. If omitted, a deterministic key is generated from the params.",
           ),
+        apply_default_recipients: z
+          .boolean()
+          .optional()
+          .describe(
+            "Set false to skip this mailbox's Default CC/BCC on this one message. They are applied by default, exactly as they are for mail written in the web app.",
+          ),
         external_account_id: z
           .number()
           .int()
@@ -198,6 +204,7 @@ export function registerMessageToolHandlers(
       idempotency_key,
       external_account_id,
       identity_id,
+      apply_default_recipients,
     }) => {
       if (!config.allowSending) {
         return errorResult(
@@ -244,13 +251,14 @@ export function registerMessageToolHandlers(
       if (headers && Object.keys(headers).length > 0) body.headers = headers;
       if (external_account_id) body.external_account_id = external_account_id;
       if (identity_id) body.identity_id = identity_id;
+      if (apply_default_recipients === false) body.apply_default_recipients = false;
 
       // Generate idempotency key (exclude confirm_send from hash). The external
       // account is part of the identity — the same message from two accounts is
       // two distinct sends and must not dedupe to one.
       const idemKey = idempotencyKey(
         "send_message",
-        { to, cc, bcc, subject, body_text, body_html, attachments, reply_to_message_id, headers, external_account_id, identity_id },
+        { to, cc, bcc, subject, body_text, body_html, attachments, reply_to_message_id, headers, external_account_id, identity_id, apply_default_recipients },
         idempotency_key,
       );
 
@@ -536,7 +544,7 @@ export function registerMessageToolHandlers(
     {
       title: "Save Draft",
       description:
-        "Save a new draft to the IMAP Drafts folder. Accepts structured JSON with to, cc, bcc, subject, body (text/html), and optional base64 attachments.",
+        "Save a new draft to the IMAP Drafts folder. Accepts structured JSON with to, cc, bcc, subject, body (text/html), and optional base64 attachments. Returns the new draft's uid — pass it to update_draft or delete_message to act on this draft later.",
       inputSchema: {
         to: z
           .array(z.string().email())
@@ -586,10 +594,16 @@ export function registerMessageToolHandlers(
           .optional()
           .describe("Save into a connected external account's Drafts (Gmail/Outlook/IMAP) instead of the mailbox"),
         identity_id: z.number().int().positive().optional().describe("From identity returned by list_identities"),
+        idempotency_key: z
+          .string()
+          .optional()
+          .describe(
+            "Optional idempotency key. If omitted, a fresh key is generated per call, so two identical calls save two drafts. Pass the same key to make a retry safe.",
+          ),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ to, cc, bcc, subject, body_text, body_html, attachments, external_account_id, identity_id }) => {
+    async ({ to, cc, bcc, subject, body_text, body_html, attachments, external_account_id, identity_id, idempotency_key }) => {
       if (!config.allowDestructive) {
         return errorResult(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to save drafts (writes to the Drafts folder).",
@@ -606,7 +620,7 @@ export function registerMessageToolHandlers(
       if (attachments) body.attachments = attachments;
       if (external_account_id) body.external_account_id = external_account_id;
       if (identity_id) body.identity_id = identity_id;
-      return callApi(() => client.saveDraft(body));
+      return callApi(() => client.saveDraft(body, idempotency_key));
     },
   );
 
@@ -615,7 +629,7 @@ export function registerMessageToolHandlers(
     {
       title: "Update Draft",
       description:
-        "Update an existing draft by IMAP UID. Deletes the old draft and appends a new one to the Drafts folder.",
+        "Update an existing draft by IMAP UID. Deletes the old draft and appends a new one, so the draft gets a NEW uid — the response returns it, and the old one stops working.",
       inputSchema: {
         uid: z
           .number()
@@ -645,10 +659,16 @@ export function registerMessageToolHandlers(
           .optional()
           .describe("Update a draft in a connected external account's Drafts (Gmail/Outlook/IMAP) instead of the mailbox"),
         identity_id: z.number().int().positive().optional().describe("From identity returned by list_identities"),
+        idempotency_key: z
+          .string()
+          .optional()
+          .describe(
+            "Optional idempotency key. If omitted, a fresh key is generated per call, so re-applying earlier content really updates the draft. Pass the same key to make a retry safe.",
+          ),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ uid, to, cc, bcc, subject, body_text, body_html, attachments, external_account_id, identity_id }) => {
+    async ({ uid, to, cc, bcc, subject, body_text, body_html, attachments, external_account_id, identity_id, idempotency_key }) => {
       if (!config.allowDestructive) {
         return errorResult(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update drafts (replaces the existing draft).",
@@ -665,7 +685,7 @@ export function registerMessageToolHandlers(
       if (attachments) body.attachments = attachments;
       if (external_account_id) body.external_account_id = external_account_id;
       if (identity_id) body.identity_id = identity_id;
-      return callApi(() => client.updateDraft(uid, body));
+      return callApi(() => client.updateDraft(uid, body, idempotency_key));
     },
   );
 

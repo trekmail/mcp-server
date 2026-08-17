@@ -1,6 +1,6 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 241 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 245 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
 ## Quickstart
 
@@ -36,7 +36,7 @@ The MCP server supports two independent token types. At least one is required:
 
 | Token | Env Var | Prefix | Unlocks |
 |-------|---------|--------|---------|
-| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 179 infrastructure tools (domains, DNS, mailboxes, mail-client setup, invites, aliases, shared mailbox members, forwarding, forwarding addresses, mail filters, auto-reply, sieve, delete intents, migrations, SMTP, tickets, account, billing, spam stats, verifier, message token management, Cloudflare DNS, Drive, and Drive sync-device passwords) |
+| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 183 infrastructure tools (domains, DNS, mailboxes, mail-client setup, invites, aliases, shared mailbox members, forwarding, forwarding addresses, mail filters, auto-reply, sieve, delete intents, migrations, SMTP, tickets, account, billing, spam stats, verifier, message token management, Cloudflare DNS, Drive, and Drive sync-device passwords) |
 | **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 62 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, connected accounts, identities, templates, blocked senders) |
 
 Tools are registered conditionally — only token types you provide get their tools. You can supply one or both:
@@ -87,12 +87,12 @@ TREKMAIL_SCOPE_AWARE_REGISTRATION=true \
 npm start
 ```
 
-## Tools (241)
+## Tools (245)
 
-> The full catalog is **241** tools over stdio. On the hosted **HTTP** transport
+> The full catalog is **245** tools over stdio. On the hosted **HTTP** transport
 > `drive_file_upload` is intentionally not registered (its `local_path` would read
 > files on our server — see the note in `src/tools/drive.ts`), so the HTTP MCP
-> exposes 240. Tools also split by token type: **62** need a message token
+> exposes 244. Tools also split by token type: **62** need a message token
 > (`tm_msg_`), the rest an ops token (`tm_live_`).
 >
 > **Safety gates apply to the whole list, not just the rows that say so.** Read
@@ -105,9 +105,10 @@ npm start
 ### Domains (ops token)
 - **list_domains** — List domains with optional status/search filters
 - **get_domain** — Get details for a specific domain
-- **create_domain** — Add a new domain to the account
+- **create_domain** — Add a new domain to the account. `mail_hosting: "external"` registers it as a sending-only domain: no MX record is asked for, it holds no mailboxes, and it serves purely as a verified From address
 - **delete_domain** — Delete a domain (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **update_domain_catch_all** — Configure or clear the catch-all address
+- **set_domain_mail_hosting** — Choose whether TrekMail hosts the domain's incoming mail or only sends for it. Switching to `external` stops its mailboxes receiving, so it needs `confirm_mailboxes_stop_receiving: true`
 - **list_forwarding_addresses** — List mailbox-less forwarding addresses on a domain, with recipients, the per-domain limit, and whether the plan currently delivers them
 - **get_forwarding_address_log** — Recent deliveries for one address: sender, destination, and outcome (delivered / deferred / rejected / blocked as spam before forwarding)
 - **create_forwarding_address** — Create a forwarding address — no mailbox, no storage (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
@@ -133,8 +134,11 @@ npm start
 - **change_mailbox_password** — Change the password for a mailbox (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **update_mailbox** — Update a mailbox display name, a regular mailbox's webmail `conversation_view` preference, or its `drive_access` level (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **set_mailboxes_drive_access** — Set `drive_access` on many mailboxes at once, chosen by explicit `mailbox_ids`, by `domain_id`, or `all`; shared mailboxes are skipped and counted (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **suspend_mailbox_login** — Stop someone signing in to a mailbox while its mail keeps arriving: webmail/IMAP/SMTP and device passwords refused, open sessions ended, reset links dead, delivery untouched (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **resume_mailbox_login** — Lift a sign-in suspension; device passwords revoked by it are not restored (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **set_mailboxes_login_access** — Suspend or restore sign-in on many mailboxes, chosen by explicit `mailbox_ids`, by `domain_id`, or `all`; shared, paused and trashed mailboxes are skipped and counted (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **update_mailbox_note** — Update the admin note on a mailbox
-- **pause_mailbox** — Disable a mailbox (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **pause_mailbox** — Disable a mailbox entirely, delivery included — unlike `suspend_mailbox_login` (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **resume_mailbox** — Re-enable a paused mailbox
 - **enable_imap** — Enable IMAP access for a mailbox (required for Message API)
 - **bulk_create_mailboxes** — Create 1-100 mailboxes at once with per-item `storage_allocation_mb` (sum across the batch is validated against the available pool)
@@ -202,7 +206,7 @@ Shared mailboxes never authenticate directly. Call **get_mail_client_setup** wit
 
 - **list_messages** — List messages in a mailbox folder with cursor pagination (optional `external_account_id`)
 - **read_message** — Get a single message by IMAP UID with full body (optional `external_account_id`)
-- **send_message** — Send an email from the mailbox — or, with `external_account_id`, from a connected account via its own SMTP (dual safety gates, validates total recipients ≤ 10, requires body)
+- **send_message** — Send an email from the mailbox — or, with `external_account_id`, from a connected account via its own SMTP (dual safety gates, validates total recipients ≤ 10, requires body). The mailbox's Default CC/BCC apply exactly as they do in the web app; pass `apply_default_recipients: false` to skip them for one message
 - **delete_message** — Permanently delete a message by IMAP UID (requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)
 - **move_message** — Move a message to a different IMAP folder
 - **list_folders** — List all IMAP folders for the mailbox
@@ -210,8 +214,8 @@ Shared mailboxes never authenticate directly. Call **get_mail_client_setup** wit
 - **download_attachment** — Download a single attachment by index from a message
 - **download_all_attachments** — Download all attachments as a ZIP archive
 - **get_raw_message** — Get the full RFC 822 raw source of a message
-- **save_draft** — Save a new draft via IMAP APPEND
-- **update_draft** — Update an existing draft (replaces the old draft)
+- **save_draft** — Save a new draft via IMAP APPEND; returns the new draft's `uid` for `update_draft` / `delete_message`
+- **update_draft** — Update an existing draft: the old one is deleted and a new one appended, so the draft gets a **new** `uid` (returned in the response) and the old one stops working
 - **report_spam** — Report a message as spam (trains Rspamd Bayesian filter)
 - **report_ham** — Mark a message as not spam (trains Rspamd Bayesian filter)
 - **bulk_action** — Perform a bulk action on up to 50 messages (read, unread, star, unstar, delete, move, spam, notspam)
@@ -233,7 +237,7 @@ Connect and manage external mailboxes (Gmail/Outlook/IMAP) the mailbox reads and
 - **empty_folder** — Empty all messages from a folder without deleting the folder
 
 ### Scheduled Messages (message token)
-- **schedule_message** — Schedule a message to be sent at a future time (optional IANA `timezone` resolves naïve datetimes; explicit ISO offset always wins)
+- **schedule_message** — Schedule a message to be sent at a future time (optional IANA `timezone` resolves naïve datetimes; explicit ISO offset always wins). Default CC/BCC are applied and stored with the message, so `list_scheduled` shows what will actually go out; `apply_default_recipients: false` opts out
 - **list_scheduled** — List pending scheduled messages
 - **reschedule_message** — Re-time a pending scheduled message in place (no resend, lighter throttle than schedule + cancel)
 - **cancel_scheduled** — Cancel a scheduled message before it sends
@@ -268,7 +272,7 @@ Connect and manage external mailboxes (Gmail/Outlook/IMAP) the mailbox reads and
 
 ### Identities (message token)
 - **list_identities** — List source-specific From addresses, connected-inbox Send As identities, reply policy, eligible domains, and permitted profiles
-- **create_identity** — Configure a managed From address or create a Send As identity bound to one connected inbox
+- **create_identity** — Configure a managed From address, or create a Send As identity: pass `external_account_id` when that address's mail is read through a connected inbox, omit it when the mail is forwarded into this TrekMail mailbox instead
 - **update_identity** — Update an identity's display name, signature, reply-to, default flag, or Send As route
 - **delete_identity** — Delete a Send As identity (requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)
 - **set_reply_from_policy** — Reply from the recipient address when possible, or always start from the default (requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)
@@ -375,6 +379,11 @@ All mutating tools (POST/PUT) generate **deterministic idempotency keys** from `
 - The same tool call with the same params always produces the same key
 - Agent retries hit the API's idempotency cache — no duplicate side effects
 - You can override with an explicit `idempotency_key` parameter on any mutating tool
+
+**Drafts are the deliberate exception.** `save_draft` and `update_draft` generate a *fresh random*
+key per call, so two identical calls really do save two drafts, and updating a draft back to earlier
+content really does perform the update instead of replaying an old response. Pass your own
+`idempotency_key` on those two tools when you want retry-dedup.
 
 ## Safety
 
