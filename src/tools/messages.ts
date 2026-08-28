@@ -544,7 +544,7 @@ export function registerMessageToolHandlers(
     {
       title: "Save Draft",
       description:
-        "Save a new draft to the IMAP Drafts folder. Accepts structured JSON with to, cc, bcc, subject, body (text/html), and optional base64 attachments. Returns the new draft's uid — pass it to update_draft or delete_message to act on this draft later.",
+        "Save a new draft to the IMAP Drafts folder. Accepts structured JSON with to, cc, bcc, subject, body (text/html), and optional base64 attachments. Returns the new draft's uid and uidvalidity; keep both together for update_draft.",
       inputSchema: {
         to: z
           .array(z.string().email())
@@ -629,13 +629,18 @@ export function registerMessageToolHandlers(
     {
       title: "Update Draft",
       description:
-        "Update an existing draft by IMAP UID. Deletes the old draft and appends a new one, so the draft gets a NEW uid — the response returns it, and the old one stops working.",
+        "Update an existing draft by its IMAP uid and uidvalidity. Deletes the old draft only within that exact folder epoch and appends a replacement, so the response returns a NEW uid and uidvalidity pair.",
       inputSchema: {
         uid: z
           .number()
           .int()
           .positive()
           .describe("IMAP UID of the existing draft to replace"),
+        uidvalidity: z
+          .number()
+          .int()
+          .positive()
+          .describe("UIDVALIDITY returned with this draft by save_draft or read_message"),
         to: z.array(z.string().email()).max(10).optional(),
         cc: z.array(z.string().email()).max(10).optional(),
         bcc: z.array(z.string().email()).max(10).optional(),
@@ -668,13 +673,13 @@ export function registerMessageToolHandlers(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ uid, to, cc, bcc, subject, body_text, body_html, attachments, external_account_id, identity_id, idempotency_key }) => {
+    async ({ uid, uidvalidity, to, cc, bcc, subject, body_text, body_html, attachments, external_account_id, identity_id, idempotency_key }) => {
       if (!config.allowDestructive) {
         return errorResult(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update drafts (replaces the existing draft).",
         );
       }
-      const body: Record<string, unknown> = {};
+      const body: Record<string, unknown> = { uidvalidity };
       if (to) body.to = to;
       if (cc) body.cc = cc;
       if (bcc) body.bcc = bcc;

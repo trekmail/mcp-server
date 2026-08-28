@@ -93,6 +93,30 @@ describe("TrekMailClient", () => {
     expect(new URL(url).pathname).toBe("/api/v1/domains/42");
   });
 
+  it("builds matching-address URLs and preserves write idempotency", async () => {
+    mockFetch.mockImplementation(async () => new Response(JSON.stringify({ data: "ok" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+
+    await client.getDomainAlias(42);
+    expect(new URL(getLastFetchCall(mockFetch).url).pathname)
+      .toBe("/api/v1/domains/42/matching-addresses");
+
+    await client.setDomainAlias(42, 7, "connect-key");
+    let call = getLastFetchCall(mockFetch);
+    expect(new URL(call.url).pathname).toBe("/api/v1/domains/42/matching-addresses");
+    expect(call.init.method).toBe("PUT");
+    expect(JSON.parse(call.init.body as string)).toEqual({ primary_domain_id: 7 });
+    expect(getLastFetchHeaders(mockFetch)["Idempotency-Key"]).toBe("connect-key");
+
+    await client.removeDomainAlias(42, "disconnect-key");
+    call = getLastFetchCall(mockFetch);
+    expect(new URL(call.url).pathname).toBe("/api/v1/domains/42/matching-addresses");
+    expect(call.init.method).toBe("DELETE");
+    expect(getLastFetchHeaders(mockFetch)["Idempotency-Key"]).toBe("disconnect-key");
+  });
+
   it("builds the mail-client setup URL", async () => {
     await client.getMailClientSetup(42, "ru");
     const { url } = getLastFetchCall(mockFetch);
@@ -160,6 +184,14 @@ describe("TrekMailClient", () => {
     mockFetchResponse(mockFetch, { status: 200, body: { id: 1, name: "test" } });
     const result = await client.getDomain(1);
     expect(result).toEqual({ id: 1, name: "test" });
+  });
+
+  it("treats a successful empty response as success", async () => {
+    mockFetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(client.deleteMessage(42, { folder: "INBOX" })).resolves.toEqual({
+      success: true,
+    });
   });
 
   it("throws TrekMailApiError for 4xx/5xx responses", async () => {

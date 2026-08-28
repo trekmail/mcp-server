@@ -1,6 +1,6 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 245 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 248 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
 ## Quickstart
 
@@ -36,7 +36,7 @@ The MCP server supports two independent token types. At least one is required:
 
 | Token | Env Var | Prefix | Unlocks |
 |-------|---------|--------|---------|
-| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 183 infrastructure tools (domains, DNS, mailboxes, mail-client setup, invites, aliases, shared mailbox members, forwarding, forwarding addresses, mail filters, auto-reply, sieve, delete intents, migrations, SMTP, tickets, account, billing, spam stats, verifier, message token management, Cloudflare DNS, Drive, and Drive sync-device passwords) |
+| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 186 infrastructure tools (domains, receive-only domain aliases, DNS, mailboxes, mail-client setup, invites, aliases, shared mailbox members, forwarding, forwarding addresses, mail filters, auto-reply, sieve, delete intents, migrations, SMTP, tickets, account, billing, spam stats, verifier, message token management, Cloudflare DNS, Drive, and Drive sync-device passwords) |
 | **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 62 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, connected accounts, identities, templates, blocked senders) |
 
 Tools are registered conditionally — only token types you provide get their tools. You can supply one or both:
@@ -62,8 +62,8 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.0.4` | User-Agent header |
-| `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable destructive tools (delete intents, domain delete, forwarding address create/update/delete, password change, pause, SMTP config, revoke token, delete Cloudflare token, Drive trash/purge/empty-trash, Drive sync-device revoke/rotate, message deletes) |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.10.0` | User-Agent header |
+| `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable destructive tools (delete intents, domain delete, domain-alias connect/disconnect, forwarding address create/update/delete, password change, pause, SMTP config, revoke token, delete Cloudflare token, Drive trash/purge/empty-trash, Drive sync-device revoke/rotate, message deletes) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable `send_message` tool |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
 | `TREKMAIL_TOOLSETS` | No | all | Comma-separated product sets to register, for example `email` or `email,contacts,calendar` |
@@ -87,12 +87,12 @@ TREKMAIL_SCOPE_AWARE_REGISTRATION=true \
 npm start
 ```
 
-## Tools (245)
+## Tools (248)
 
-> The full catalog is **245** tools over stdio. On the hosted **HTTP** transport
+> The full catalog is **248** tools over stdio. On the hosted **HTTP** transport
 > `drive_file_upload` is intentionally not registered (its `local_path` would read
 > files on our server — see the note in `src/tools/drive.ts`), so the HTTP MCP
-> exposes 244. Tools also split by token type: **62** need a message token
+> exposes 247. Tools also split by token type: **62** need a message token
 > (`tm_msg_`), the rest an ops token (`tm_live_`).
 >
 > **Safety gates apply to the whole list, not just the rows that say so.** Read
@@ -105,13 +105,16 @@ npm start
 ### Domains (ops token)
 - **list_domains** — List domains with optional status/search filters
 - **get_domain** — Get details for a specific domain
+- **get_domain_alias** — Check a domain's saved receive-only alias connection and whether it is delivering now
+- **set_domain_alias** — Route matching addresses on this domain to a primary domain (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **remove_domain_alias** — Disconnect the domain alias after `confirm_remove: true` (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **create_domain** — Add a new domain to the account. `mail_hosting: "external"` registers it as a sending-only domain: no MX record is asked for, it holds no mailboxes, and it serves purely as a verified From address
 - **delete_domain** — Delete a domain (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **update_domain_catch_all** — Configure or clear the catch-all address
 - **set_domain_mail_hosting** — Choose whether TrekMail hosts the domain's incoming mail or only sends for it. Switching to `external` stops its mailboxes receiving, so it needs `confirm_mailboxes_stop_receiving: true`
-- **list_forwarding_addresses** — List mailbox-less forwarding addresses on a domain, with recipients, the per-domain limit, and whether the plan currently delivers them
-- **get_forwarding_address_log** — Recent deliveries for one address: sender, destination, and outcome (delivered / deferred / rejected / blocked as spam before forwarding)
-- **create_forwarding_address** — Create a forwarding address — no mailbox, no storage (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **list_forwarding_addresses** — List mailbox-less forwarding addresses on a domain, with recipients, the per-domain limit, and whether the plan currently delivers them. Pro includes **100/domain**; Agency includes **300/domain**
+- **get_forwarding_address_log** — Recent deliveries for one address: sender, destination, and outcome (delivered / deferred / rejected / blocked as spam before forwarding). Pro retains 7 days; Agency retains 30
+- **create_forwarding_address** — Create a forwarding address — no mailbox, no storage. Delivery requires Pro or Agency; Nano and Starter keep saved rules inactive until upgrade (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **update_forwarding_address** — Replace recipients, or pause / resume an address (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **delete_forwarding_address** — Delete a forwarding address (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **retry_domain_dkim** — Retry DKIM key provisioning
@@ -214,8 +217,8 @@ Shared mailboxes never authenticate directly. Call **get_mail_client_setup** wit
 - **download_attachment** — Download a single attachment by index from a message
 - **download_all_attachments** — Download all attachments as a ZIP archive
 - **get_raw_message** — Get the full RFC 822 raw source of a message
-- **save_draft** — Save a new draft via IMAP APPEND; returns the new draft's `uid` for `update_draft` / `delete_message`
-- **update_draft** — Update an existing draft: the old one is deleted and a new one appended, so the draft gets a **new** `uid` (returned in the response) and the old one stops working
+- **save_draft** — Save a new draft via IMAP APPEND; returns its `uid` and `uidvalidity` for later updates
+- **update_draft** — Replace a draft using its required `uid` and `uidvalidity`; returns the replacement pair because the old UID stops working
 - **report_spam** — Report a message as spam (trains Rspamd Bayesian filter)
 - **report_ham** — Mark a message as not spam (trains Rspamd Bayesian filter)
 - **bulk_action** — Perform a bulk action on up to 50 messages (read, unread, star, unstar, delete, move, spam, notspam)

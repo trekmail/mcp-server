@@ -175,6 +175,9 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
   domains: [
     "list_domains",
     "get_domain",
+    "get_domain_alias",
+    "set_domain_alias",
+    "remove_domain_alias",
     "create_domain",
     "delete_domain",
     "update_domain_catch_all",
@@ -403,12 +406,13 @@ const POLICY_RULES: readonly PolicyRule[] = [
   ]),
 
   rule("domains:read", "read", [
-    "list_domains", "get_domain", "get_domain_signature", "get_domain_branding",
+    "list_domains", "get_domain", "get_domain_alias", "get_domain_signature", "get_domain_branding",
     "list_forwarding_addresses", "get_forwarding_address_log",
   ]),
   rule("domains:create", "write", ["create_domain", "bulk_add_domains"]),
   rule("domains:write", "write", [
     "update_domain_catch_all", "set_domain_mail_hosting", "retry_domain_dkim", "update_domain_note",
+    "set_domain_alias",
     "create_forwarding_address", "update_forwarding_address",
     "update_domain_signature", "set_domain_branding", "set_domain_brand_logo",
     "verify_domain_branding_dns", "create_branding_preview",
@@ -418,7 +422,7 @@ const POLICY_RULES: readonly PolicyRule[] = [
   // Deleting a forwarding address is irreversible and silently stops mail for
   // that address, so it carries the same destructive gate as delete_alias even
   // though the REST scope behind it is domains:write.
-  rule("domains:write", "destructive", ["delete_forwarding_address"]),
+  rule("domains:write", "destructive", ["delete_forwarding_address", "remove_domain_alias"]),
   rule("domains:dns:read", "read", ["get_dns_requirements", "get_dns_check"]),
   rule("domains:dns:recheck", "write", ["dns_recheck"]),
   rule("cloudflare:read", "read", [
@@ -599,7 +603,7 @@ for (const name of policyByName.keys()) {
 export const TOOL_CATALOG: readonly ToolCatalogEntry[] = Object.freeze(entries);
 
 /** Bump whenever grouping/capability/safety semantics change. */
-export const TOOL_CATALOG_VERSION = "2026-08-16.1";
+export const TOOL_CATALOG_VERSION = "2026-08-23.1";
 
 function fnv1a(value: string): string {
   let hash = 0x811c9dc5;

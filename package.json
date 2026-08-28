@@ -2,7 +2,7 @@
   "name": "@trekmail/mcp-server",
   "version": "1.10.0",
   "packageManager": "npm@10.9.8",
-  "description": "Model Context Protocol (MCP) server for TrekMail. Exposes 245 agent tools covering infrastructure and the full webmail surface, including sending-only domains, mailbox sign-in suspension, source-bound Send As identities, and exact SMTP-profile usage.",
+  "description": "Model Context Protocol (MCP) server for TrekMail. Exposes 248 agent tools covering infrastructure and the full webmail surface, including receive-only domain aliases, sending-only domains, mailbox sign-in suspension, source-bound Send As identities, and exact SMTP-profile usage.",
   "type": "module",
   "private": true,
   "license": "MIT",
@@ -33,6 +33,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "measure:tools": "tsx scripts/measure-tools-list.ts",
+    "test:e2e:mail-client-setup": "node tests/e2e/mail-client-setup-client.mjs",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
@@ -46,7 +47,7 @@
     "vitest": "^3.0.0"
   },
   "engines": {
-    "node": ">=22.13.0",
-    "npm": ">=10.9.0"
+    "node": ">=22.13.0 <23",
+    "npm": ">=10.9.0 <11"
   }
 }

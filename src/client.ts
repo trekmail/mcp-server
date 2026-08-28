@@ -273,6 +273,30 @@ export class TrekMailClient {
     return this.request("GET", `domains/${id}`);
   }
 
+  async getDomainAlias(domainId: number): Promise<unknown> {
+    return this.request("GET", `domains/${domainId}/matching-addresses`);
+  }
+
+  async setDomainAlias(
+    domainId: number,
+    primaryDomainId: number,
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("PUT", `domains/${domainId}/matching-addresses`, {
+      body: { primary_domain_id: primaryDomainId },
+      idempotencyKey,
+    });
+  }
+
+  async removeDomainAlias(
+    domainId: number,
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("DELETE", `domains/${domainId}/matching-addresses`, {
+      idempotencyKey,
+    });
+  }
+
   async createDomain(
     name: string,
     idempotencyKey: string,
@@ -2166,17 +2190,24 @@ export class TrekMailClient {
 
         const text = await response.text();
         let data: unknown;
-        try {
-          data = JSON.parse(text);
-        } catch {
-          const snippet = text.slice(0, 200);
-          data = {
-            error: {
-              code: "non_json_response",
-              message: `API returned a non-JSON response with HTTP ${response.status}.`,
-              hint: snippet ? `First 200 chars: ${snippet}` : "Response body was empty.",
-            },
-          };
+        if (response.ok && text.trim() === "") {
+          // DELETE endpoints commonly signal success with 204 No Content.
+          // Returning an explicit object keeps the MCP tool result useful and
+          // avoids misreporting a completed mutation as non_json_response.
+          data = { success: true };
+        } else {
+          try {
+            data = JSON.parse(text);
+          } catch {
+            const snippet = text.slice(0, 200);
+            data = {
+              error: {
+                code: "non_json_response",
+                message: `API returned a non-JSON response with HTTP ${response.status}.`,
+                hint: snippet ? `First 200 chars: ${snippet}` : "Response body was empty.",
+              },
+            };
+          }
         }
 
         if (!response.ok) {

@@ -13,6 +13,9 @@ describe("domain tools", () => {
     client = {
       listDomains: vi.fn().mockResolvedValue({ data: [{ id: 1 }] }),
       getDomain: vi.fn().mockResolvedValue({ id: 1, name: "example.com" }),
+      getDomainAlias: vi.fn().mockResolvedValue({ configured: false }),
+      setDomainAlias: vi.fn().mockResolvedValue({ configured: true }),
+      removeDomainAlias: vi.fn().mockResolvedValue({ configured: false }),
       getDomainSignature: vi.fn().mockResolvedValue({
         data: { mode: "off", position: "before_reply", html: null },
       }),
@@ -35,6 +38,180 @@ describe("domain tools", () => {
   it("get_domain passes domain_id to client", async () => {
     await (client.getDomain as ReturnType<typeof vi.fn>)(42);
     expect(client.getDomain).toHaveBeenCalledWith(42);
+  });
+
+  it("registers matching-address tools with the right safety hints", () => {
+    const tools = (server as unknown as {
+      _registeredTools: Record<string, { annotations?: { destructiveHint?: boolean; readOnlyHint?: boolean } }>;
+    })._registeredTools;
+
+    expect(tools.get_domain_alias.annotations?.readOnlyHint).toBe(true);
+    expect(tools.get_domain_alias.annotations?.destructiveHint).toBeFalsy();
+    expect(tools.set_domain_alias.annotations?.destructiveHint).toBe(true);
+    expect(tools.remove_domain_alias.annotations?.destructiveHint).toBe(true);
+  });
+
+  it("blocks matching-address mutations unless destructive changes are enabled", async () => {
+    const gatedServer = new McpServer({ name: "test", version: "0.0.0" });
+    const gatedClient = {
+      setDomainAlias: vi.fn(),
+      removeDomainAlias: vi.fn(),
+    } as unknown as TrekMailClient;
+    const config: Config = {
+      baseUrl: "x",
+      apiToken: "x",
+      timeoutMs: 30_000,
+      userAgent: "test",
+      allowDestructive: false,
+      allowSending: false,
+      allowMigration: false,
+    };
+    const handlers = new Map<string, (a: Record<string, unknown>) => Promise<{ isError?: boolean }>>();
+    const orig = gatedServer.registerTool.bind(gatedServer);
+    gatedServer.registerTool = ((name: string, def: unknown, handler: never) => {
+      handlers.set(name, handler);
+      return orig(name, def as Parameters<typeof orig>[1], handler);
+    }) as typeof gatedServer.registerTool;
+
+    registerDomainTools(gatedServer, gatedClient, config);
+
+    expect((await handlers.get("set_domain_alias")!({
+      domain_id: 1,
+      primary_domain_id: 2,
+    })).isError).toBe(true);
+    expect((await handlers.get("remove_domain_alias")!({
+      domain_id: 1,
+      confirm_remove: true,
+    })).isError).toBe(true);
+    expect(gatedClient.setDomainAlias).not.toHaveBeenCalled();
+    expect(gatedClient.removeDomainAlias).not.toHaveBeenCalled();
+  });
+
+  it("connects and disconnects matching addresses when explicitly allowed", async () => {
+    const okServer = new McpServer({ name: "test", version: "0.0.0" });
+    const okClient = {
+      setDomainAlias: vi.fn().mockResolvedValue({ configured: true }),
+      removeDomainAlias: vi.fn().mockResolvedValue({ configured: false }),
+    } as unknown as TrekMailClient;
+    const config: Config = {
+      baseUrl: "x",
+      apiToken: "x",
+      timeoutMs: 30_000,
+      userAgent: "test",
+      allowDestructive: true,
+      allowSending: false,
+      allowMigration: false,
+    };
+    const handlers = new Map<string, (a: Record<string, unknown>) => Promise<unknown>>();
+    const orig = okServer.registerTool.bind(okServer);
+    okServer.registerTool = ((name: string, def: unknown, handler: never) => {
+      handlers.set(name, handler);
+      return orig(name, def as Parameters<typeof orig>[1], handler);
+    }) as typeof okServer.registerTool;
+
+    registerDomainTools(okServer, okClient, config);
+    await handlers.get("set_domain_alias")!({
+      domain_id: 4,
+      primary_domain_id: 9,
+      idempotency_key: "connect-demo",
+    });
+    await handlers.get("remove_domain_alias")!({
+      domain_id: 4,
+      confirm_remove: true,
+      idempotency_key: "disconnect-demo",
+    });
+
+    expect(okClient.setDomainAlias).toHaveBeenCalledWith(4, 9, "connect-demo");
+    expect(okClient.removeDomainAlias).toHaveBeenCalledWith(4, "disconnect-demo");
+  });
+
+  it("requires explicit confirmation before disconnecting matching addresses", async () => {
+    const okServer = new McpServer({ name: "test", version: "0.0.0" });
+    const okClient = { removeDomainAlias: vi.fn() } as unknown as TrekMailClient;
+    const config: Config = {
+      baseUrl: "x",
+      apiToken: "x",
+      timeoutMs: 30_000,
+      userAgent: "test",
+      allowDestructive: true,
+      allowSending: false,
+      allowMigration: false,
+    };
+    const handlers = new Map<string, (a: Record<string, unknown>) => Promise<{ isError?: boolean }>>();
+    const orig = okServer.registerTool.bind(okServer);
+    okServer.registerTool = ((name: string, def: unknown, handler: never) => {
+      handlers.set(name, handler);
+      return orig(name, def as Parameters<typeof orig>[1], handler);
+    }) as typeof okServer.registerTool;
+
+    registerDomainTools(okServer, okClient, config);
+    const result = await handlers.get("remove_domain_alias")!({
+      domain_id: 4,
+      confirm_remove: false,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(okClient.removeDomainAlias).not.toHaveBeenCalled();
+  });
+
+  it("registers the full forwarding-address lifecycle with the Pro delivery gate", () => {
+    const tools = (server as unknown as {
+      _registeredTools: Record<string, { description?: string; annotations?: { destructiveHint?: boolean; readOnlyHint?: boolean } }>;
+    })._registeredTools;
+
+    expect(tools.list_forwarding_addresses.annotations?.readOnlyHint).toBe(true);
+    expect(tools.get_forwarding_address_log.annotations?.readOnlyHint).toBe(true);
+    expect(tools.create_forwarding_address.description).toMatch(/requires Pro or Agency/);
+    expect(tools.update_forwarding_address).toBeDefined();
+    expect(tools.delete_forwarding_address.annotations?.destructiveHint).toBe(true);
+  });
+
+  it("runs the forwarding-address lifecycle through the REST client", async () => {
+    const lifecycleServer = new McpServer({ name: "test", version: "0.0.0" });
+    const lifecycleClient = {
+      listForwardingAddresses: vi.fn().mockResolvedValue({ data: [], limits: { max: 100 } }),
+      getForwardingAddressLog: vi.fn().mockResolvedValue({ data: [], window: { retention_days: 7 } }),
+      createForwardingAddress: vi.fn().mockResolvedValue({ data: { id: 8 } }),
+      updateForwardingAddress: vi.fn().mockResolvedValue({ data: { id: 8, is_active: false } }),
+      deleteForwardingAddress: vi.fn().mockResolvedValue({ deleted: true }),
+    } as unknown as TrekMailClient;
+    const config: Config = {
+      baseUrl: "x",
+      apiToken: "x",
+      timeoutMs: 30_000,
+      userAgent: "test",
+      allowDestructive: true,
+      allowSending: false,
+      allowMigration: false,
+    };
+    const handlers = new Map<string, (a: Record<string, unknown>) => Promise<unknown>>();
+    const orig = lifecycleServer.registerTool.bind(lifecycleServer);
+    lifecycleServer.registerTool = ((name: string, def: unknown, handler: never) => {
+      handlers.set(name, handler);
+      return orig(name, def as Parameters<typeof orig>[1], handler);
+    }) as typeof lifecycleServer.registerTool;
+
+    registerDomainTools(lifecycleServer, lifecycleClient, config);
+    await handlers.get("list_forwarding_addresses")!({ domain_id: 4 });
+    await handlers.get("get_forwarding_address_log")!({ domain_id: 4, forwarding_address_id: 8, limit: 25 });
+    await handlers.get("create_forwarding_address")!({
+      domain_id: 4,
+      local_part: "sales",
+      recipients: ["team@example.net"],
+      idempotency_key: "create-fwd",
+    });
+    await handlers.get("update_forwarding_address")!({ domain_id: 4, forwarding_address_id: 8, is_active: false });
+    await handlers.get("delete_forwarding_address")!({
+      domain_id: 4,
+      forwarding_address_id: 8,
+      idempotency_key: "delete-fwd",
+    });
+
+    expect(lifecycleClient.listForwardingAddresses).toHaveBeenCalledWith(4);
+    expect(lifecycleClient.getForwardingAddressLog).toHaveBeenCalledWith(4, 8, 25);
+    expect(lifecycleClient.createForwardingAddress).toHaveBeenCalledWith(4, "sales", ["team@example.net"], true, "create-fwd");
+    expect(lifecycleClient.updateForwardingAddress).toHaveBeenCalledWith(4, 8, { is_active: false });
+    expect(lifecycleClient.deleteForwardingAddress).toHaveBeenCalledWith(4, 8, "delete-fwd");
   });
 
   // --- Signature client method tests ---

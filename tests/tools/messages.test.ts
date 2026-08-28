@@ -182,10 +182,11 @@ describe("message tools", () => {
   });
 
   it("updateDraft puts to the draft's own route", async () => {
-    await client.updateDraft(1234, { subject: "Hello" });
+    await client.updateDraft(1234, { uidvalidity: 7001, subject: "Hello" });
     const { url, init } = getLastFetchCall(mockFetch);
     expect(new URL(url).pathname).toBe("/api/v1/messages/drafts/1234");
     expect(init.method).toBe("PUT");
+    expect(JSON.parse(init.body as string).uidvalidity).toBe(7001);
   });
 
   it("sendMessage sends correct body shape", async () => {

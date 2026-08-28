@@ -59,6 +59,105 @@ export function registerDomainTools(
   );
 
   server.registerTool(
+    "get_domain_alias",
+    {
+      title: "Get Domain Alias",
+      description:
+        "Check whether a domain follows the addresses on a primary domain. The result clearly separates the saved connection from whether it is delivering right now, and never reveals a primary domain outside the token's domain access.",
+      inputSchema: {
+        domain_id: z
+          .number()
+          .int()
+          .positive()
+          .describe("The domain whose domain-alias connection you want to check"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ domain_id }) => callApi(() => client.getDomainAlias(domain_id)),
+  );
+
+  server.registerTool(
+    "set_domain_alias",
+    {
+      title: "Connect Domain Alias",
+      description:
+        "Make addresses on this domain receive mail at the same local part on a primary domain. For example, hello@brand.example follows hello@company.example. This is receive-only and does not add a sending address.",
+      inputSchema: {
+        domain_id: z
+          .number()
+          .int()
+          .positive()
+          .describe("The domain that should follow the primary domain"),
+        primary_domain_id: z
+          .number()
+          .int()
+          .positive()
+          .describe("The primary domain that already owns the receiving addresses"),
+        idempotency_key: z
+          .string()
+          .optional()
+          .describe("Optional idempotency key"),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ domain_id, primary_domain_id, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Domain-alias changes are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to connect domains.",
+        );
+      }
+      const idemKey = idempotencyKey(
+        "set_domain_alias",
+        { domain_id, primary_domain_id },
+        idempotency_key,
+      );
+      return callApi(() => client.setDomainAlias(domain_id, primary_domain_id, idemKey));
+    },
+  );
+
+  server.registerTool(
+    "remove_domain_alias",
+    {
+      title: "Disconnect Domain Alias",
+      description:
+        "Stop this domain from using the same address names as its primary domain. Existing mailboxes, aliases and forwarding rules stay in place, but other unmatched addresses on this domain may stop receiving mail.",
+      inputSchema: {
+        domain_id: z
+          .number()
+          .int()
+          .positive()
+          .describe("The domain to disconnect"),
+        confirm_remove: z
+          .boolean()
+          .describe("Must be true after reviewing which domain will stop following the primary domain"),
+        idempotency_key: z
+          .string()
+          .optional()
+          .describe("Optional idempotency key"),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ domain_id, confirm_remove, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Domain-alias changes are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to disconnect domains.",
+        );
+      }
+      if (!confirm_remove) {
+        return errorResult(
+          "Disconnection not confirmed. Set confirm_remove=true after reviewing the domain.",
+        );
+      }
+      const idemKey = idempotencyKey(
+        "remove_domain_alias",
+        { domain_id },
+        idempotency_key,
+      );
+      return callApi(() => client.removeDomainAlias(domain_id, idemKey));
+    },
+  );
+
+  server.registerTool(
     "create_domain",
     {
       title: "Create Domain",
@@ -144,7 +243,7 @@ export function registerDomainTools(
   // ── Forwarding addresses ──────────────────────────────────────────────
   // Mailbox-less forwards on a domain. Deliberately separate tools from
   // update_domain_catch_all: catch-all sweeps everything unmatched to one
-  // place, these are the named addresses an agency actually maintains.
+  // place, these are the named addresses an account actually maintains.
 
   server.registerTool(
     "list_forwarding_addresses",
@@ -194,7 +293,7 @@ export function registerDomainTools(
     {
       title: "Create Forwarding Address",
       description:
-        "Create a forwarding address on a domain: mail to it is handed straight on to the recipients and nothing is stored. No mailbox is created. Delivery requires the Agency plan; on other plans the rule is saved and starts working after an upgrade.",
+        "Create a forwarding address on a domain: mail to it is handed straight on to the recipients and nothing is stored. No mailbox is created. Delivery requires Pro or Agency; on Nano and Starter the rule is saved and starts working after an upgrade.",
       inputSchema: {
         domain_id: z.number().int().positive().describe("The domain ID"),
         local_part: z
