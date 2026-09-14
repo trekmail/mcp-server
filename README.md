@@ -209,7 +209,7 @@ Shared mailboxes never authenticate directly. Call **get_mail_client_setup** wit
 
 - **list_messages** — List messages in a mailbox folder with cursor pagination (optional `external_account_id`)
 - **read_message** — Get a single message by IMAP UID with full body (optional `external_account_id`)
-- **send_message** — Send an email from the mailbox — or, with `external_account_id`, from a connected account via its own SMTP (dual safety gates, validates total recipients ≤ 10, requires body). The mailbox's Default CC/BCC apply exactly as they do in the web app; pass `apply_default_recipients: false` to skip them for one message
+- **send_message** — Send an email from the mailbox — or, with `external_account_id`, from a connected account via its own SMTP, or, with `shared_mailbox_id`, as a shared team mailbox the acting member holds send permission on (dual safety gates, validates total recipients ≤ 10, requires body). The mailbox's Default CC/BCC apply exactly as they do in the web app; pass `apply_default_recipients: false` to skip them for one message
 - **delete_message** — Permanently delete a message by IMAP UID (requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)
 - **move_message** — Move a message to a different IMAP folder
 - **list_folders** — List all IMAP folders for the mailbox
@@ -274,7 +274,7 @@ Connect and manage external mailboxes (Gmail/Outlook/IMAP) the mailbox reads and
 - **prepare_forward** — Get pre-filled forward data for a message
 
 ### Identities (message token)
-- **list_identities** — List source-specific From addresses, connected-inbox Send As identities, reply policy, eligible domains, and permitted profiles
+- **list_identities** — List source-specific From addresses, connected-inbox Send As identities, reply policy, eligible domains, and permitted profiles; pass `shared_mailbox_id` for the addresses of a shared mailbox you may send as
 - **create_identity** — Configure a managed From address, or create a Send As identity: pass `external_account_id` when that address's mail is read through a connected inbox, omit it when the mail is forwarded into this TrekMail mailbox instead
 - **update_identity** — Update an identity's display name, signature, reply-to, default flag, or Send As route
 - **delete_identity** — Delete a Send As identity (requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)
