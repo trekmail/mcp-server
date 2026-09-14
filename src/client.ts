@@ -1530,15 +1530,16 @@ export class TrekMailClient {
     });
   }
 
-  async listScheduled(params?: { cursor?: string; per_page?: number }): Promise<unknown> {
+  async listScheduled(params?: { cursor?: string; per_page?: number; shared_mailbox_id?: number }): Promise<unknown> {
     return this.request("GET", "messages/scheduled", {
       query: params ? { ...params } : undefined,
     });
   }
 
-  async cancelScheduled(id: number): Promise<unknown> {
+  async cancelScheduled(id: number, sharedMailboxId?: number): Promise<unknown> {
     return this.request("DELETE", `messages/scheduled/${id}`, {
       idempotencyKey: randomUUID(),
+      query: sharedMailboxId ? { shared_mailbox_id: sharedMailboxId } : undefined,
     });
   }
 

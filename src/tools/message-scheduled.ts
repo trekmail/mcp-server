@@ -79,10 +79,11 @@ export function registerMessageScheduledTools(
       inputSchema: {
         cursor: z.string().max(2048).optional().describe("Opaque next_cursor from the previous page"),
         per_page: z.number().int().min(1).max(100).optional().describe("Results per page (default 100)"),
+        shared_mailbox_id: z.number().int().positive().optional().describe("Shared (team) mailbox the message was scheduled as. Required to see, re-time or cancel a row created with shared_mailbox_id."),
       },
     },
-    async ({ cursor, per_page }) => {
-      return callApi(() => client.listScheduled({ cursor, per_page }));
+    async ({ cursor, per_page, shared_mailbox_id }) => {
+      return callApi(() => client.listScheduled({ cursor, per_page, shared_mailbox_id }));
     },
   );
 
@@ -109,16 +110,18 @@ export function registerMessageScheduledTools(
           .describe(
             "Optional IANA timezone (e.g. 'America/New_York'). Only consulted when `scheduled_for` lacks an explicit offset.",
           ),
+        shared_mailbox_id: z.number().int().positive().optional().describe("Shared (team) mailbox the message was scheduled as. Required to re-time a row created with shared_mailbox_id."),
       },
       // Not marked destructiveHint — moves a pending row, never sends or
       // deletes data.
     },
-    async ({ id, scheduled_for, timezone }) => {
+    async ({ id, scheduled_for, timezone, shared_mailbox_id }) => {
       if (!config.allowSending) {
         return errorResult("Sending is disabled. Set TREKMAIL_ALLOW_SENDING=true to enable.");
       }
       const body: Record<string, unknown> = { scheduled_for };
       if (timezone) body.timezone = timezone;
+      if (shared_mailbox_id) body.shared_mailbox_id = shared_mailbox_id;
       return callApi(() => client.rescheduleMessage(id, body));
     },
   );
@@ -130,14 +133,15 @@ export function registerMessageScheduledTools(
       description: "Cancel a pending scheduled message. Requires TREKMAIL_ALLOW_DESTRUCTIVE=true.",
       inputSchema: {
         id: z.number().int().positive().describe("ID of the scheduled message to cancel"),
+        shared_mailbox_id: z.number().int().positive().optional().describe("Shared (team) mailbox the message was scheduled as. Required to see, re-time or cancel a row created with shared_mailbox_id."),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ id }) => {
+    async ({ id, shared_mailbox_id }) => {
       if (!config.allowDestructive) {
         return errorResult("Cancellation is disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true.");
       }
-      return callApi(() => client.cancelScheduled(id));
+      return callApi(() => client.cancelScheduled(id, shared_mailbox_id));
     },
   );
 }
