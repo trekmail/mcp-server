@@ -36,6 +36,7 @@ export function registerMessageScheduledTools(
           ),
         external_account_id: z.number().int().positive().optional().describe("Connected inbox used for sending"),
         identity_id: z.number().int().positive().optional().describe("From identity returned by list_identities"),
+        shared_mailbox_id: z.number().int().positive().optional().describe("Schedule as a shared (team) mailbox. The token stays the acting member; requires can_send on that membership."),
         confirm_send: z.boolean().describe("Must be true to schedule"),
         idempotency_key: z.string().optional(),
         apply_default_recipients: z
@@ -47,7 +48,7 @@ export function registerMessageScheduledTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ to, cc, bcc, subject, body_text, body_html, scheduled_for, timezone, external_account_id, identity_id, confirm_send, idempotency_key: idemKey, apply_default_recipients }) => {
+    async ({ to, cc, bcc, subject, body_text, body_html, scheduled_for, timezone, external_account_id, identity_id, shared_mailbox_id, confirm_send, idempotency_key: idemKey, apply_default_recipients }) => {
       if (!config.allowSending) {
         return errorResult("Sending is disabled. Set TREKMAIL_ALLOW_SENDING=true to enable.");
       }
@@ -62,8 +63,9 @@ export function registerMessageScheduledTools(
       if (body_text || body_html) body.body = { text: body_text ?? null, html: body_html ?? null };
       if (external_account_id) body.external_account_id = external_account_id;
       if (identity_id) body.identity_id = identity_id;
+      if (shared_mailbox_id) body.shared_mailbox_id = shared_mailbox_id;
       if (apply_default_recipients === false) body.apply_default_recipients = false;
-      const key = idempotencyKey("schedule_message", { to, subject, scheduled_for, timezone, external_account_id, identity_id, apply_default_recipients }, idemKey);
+      const key = idempotencyKey("schedule_message", { to, subject, scheduled_for, timezone, external_account_id, identity_id, shared_mailbox_id, apply_default_recipients }, idemKey);
       return callApi(() => client.scheduleMessage(body, key));
     },
   );

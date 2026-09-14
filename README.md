@@ -240,7 +240,7 @@ Connect and manage external mailboxes (Gmail/Outlook/IMAP) the mailbox reads and
 - **empty_folder** — Empty all messages from a folder without deleting the folder
 
 ### Scheduled Messages (message token)
-- **schedule_message** — Schedule a message to be sent at a future time (optional IANA `timezone` resolves naïve datetimes; explicit ISO offset always wins). Default CC/BCC are applied and stored with the message, so `list_scheduled` shows what will actually go out; `apply_default_recipients: false` opts out
+- **schedule_message** — Schedule a message to be sent at a future time (optional IANA `timezone` resolves naïve datetimes; explicit ISO offset always wins). Default CC/BCC are applied and stored with the message, so `list_scheduled` shows what will actually go out; `apply_default_recipients: false` opts out; pass `shared_mailbox_id` to schedule as a shared team mailbox you may send as
 - **list_scheduled** — List pending scheduled messages
 - **reschedule_message** — Re-time a pending scheduled message in place (no resend, lighter throttle than schedule + cancel)
 - **cancel_scheduled** — Cancel a scheduled message before it sends
