@@ -185,6 +185,14 @@ export function registerMessageToolHandlers(
           .describe(
             "Use one identity returned by list_identities. For a connected-inbox Send As identity, external_account_id must identify the same source.",
           ),
+        shared_mailbox_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe(
+            "Send AS a shared (team) mailbox. mailbox_id stays the member acting — the sender you hold a membership on — and this names the shared mailbox the message goes out as. Requires can_send on that membership. A shared mailbox cannot send on its own.",
+          ),
       },
       annotations: {
         destructiveHint: true,
@@ -204,6 +212,7 @@ export function registerMessageToolHandlers(
       idempotency_key,
       external_account_id,
       identity_id,
+      shared_mailbox_id,
       apply_default_recipients,
     }) => {
       if (!config.allowSending) {
@@ -251,6 +260,7 @@ export function registerMessageToolHandlers(
       if (headers && Object.keys(headers).length > 0) body.headers = headers;
       if (external_account_id) body.external_account_id = external_account_id;
       if (identity_id) body.identity_id = identity_id;
+      if (shared_mailbox_id) body.shared_mailbox_id = shared_mailbox_id;
       if (apply_default_recipients === false) body.apply_default_recipients = false;
 
       // Generate idempotency key (exclude confirm_send from hash). The external
@@ -258,7 +268,7 @@ export function registerMessageToolHandlers(
       // two distinct sends and must not dedupe to one.
       const idemKey = idempotencyKey(
         "send_message",
-        { to, cc, bcc, subject, body_text, body_html, attachments, reply_to_message_id, headers, external_account_id, identity_id, apply_default_recipients },
+        { to, cc, bcc, subject, body_text, body_html, attachments, reply_to_message_id, headers, external_account_id, identity_id, shared_mailbox_id, apply_default_recipients },
         idempotency_key,
       );
 

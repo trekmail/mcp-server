@@ -16,8 +16,9 @@ export function registerMessageIdentityTools(
       "List valid From addresses, connected-inbox Send As identities, reply policy, eligible domains, and permitted saved SMTP profiles. Pass external_account_id to see addresses usable from that connected inbox. Requires scope: messages:read.",
     inputSchema: {
       external_account_id: z.number().int().positive().optional().describe("Connected inbox whose From addresses should be listed"),
+      shared_mailbox_id: z.number().int().positive().optional().describe("Shared (team) mailbox to list the From addresses of. Requires a membership with can_send; use the returned address with send_message's shared_mailbox_id."),
     },
-  }, async ({ external_account_id }) => callApi(() => client.listIdentities({ external_account_id })));
+  }, async ({ external_account_id, shared_mailbox_id }) => callApi(() => client.listIdentities({ external_account_id, shared_mailbox_id })));
 
   server.registerTool("create_identity", {
     title: "Create or Configure Sending Address",

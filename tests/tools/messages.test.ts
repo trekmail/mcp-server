@@ -102,6 +102,32 @@ describe("message tools", () => {
     expect(init.method).toBe("POST");
   });
 
+  it("sendMessage forwards shared_mailbox_id so a member can send as the team address", async () => {
+    await client.sendMessage(
+      {
+        to: ["alice@example.com"],
+        subject: "Hi",
+        body: { text: "Hello" },
+        shared_mailbox_id: 5,
+      },
+      "idem-shared-1",
+    );
+    const { init } = getLastFetchCall(mockFetch);
+    expect(JSON.parse(init.body as string).shared_mailbox_id).toBe(5);
+  });
+
+  it("listIdentities forwards shared_mailbox_id as a query parameter", async () => {
+    await client.listIdentities({ shared_mailbox_id: 5 });
+    const { url } = getLastFetchCall(mockFetch);
+    expect(new URL(url).searchParams.get("shared_mailbox_id")).toBe("5");
+  });
+
+  it("listIdentities omits shared_mailbox_id when it was not asked for", async () => {
+    await client.listIdentities({});
+    const { url } = getLastFetchCall(mockFetch);
+    expect(new URL(url).searchParams.has("shared_mailbox_id")).toBe(false);
+  });
+
   it("sendMessage sets Idempotency-Key header", async () => {
     await client.sendMessage(
       { to: ["alice@example.com"], subject: "Hi", body: { text: "Hello" } },

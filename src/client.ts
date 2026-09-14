@@ -1413,7 +1413,7 @@ export class TrekMailClient {
 
   // --- Identities ---
 
-  async listIdentities(params?: { external_account_id?: number }): Promise<unknown> {
+  async listIdentities(params?: { external_account_id?: number; shared_mailbox_id?: number }): Promise<unknown> {
     return this.request("GET", "messages/identities", {
       query: params ? { ...params } : undefined,
     });
