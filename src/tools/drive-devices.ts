@@ -41,7 +41,7 @@ export function registerDriveDeviceTools(
     {
       title: "List Drive Sync Devices",
       description:
-        "List active and revoked Drive sync-device passwords for the account. Returns id, label, scopes, mailbox binding, created_via (dashboard/webmail/api), created_at, last_used_at, expires_at, revoked_at, is_active. Never returns the plaintext password or its hash. Token mailbox_ids constraint is honored — a mailbox-bound token sees only its own mailbox's devices.",
+        "List active and revoked Drive sync-device passwords for the account. Each row includes the verified server_url to paste into a sync client, plus id, label, scopes, mailbox binding, timestamps, and active state. Never returns the plaintext password or its hash. Token mailbox_ids constraints are honored.",
       inputSchema: {},
     },
     async () => callApi(() => client.listDriveDevices()),
@@ -52,7 +52,7 @@ export function registerDriveDeviceTools(
     {
       title: "Create Drive Sync Device Password",
       description:
-        "Mint a new Drive sync-device password (a `dsync_…` credential) usable by rclone, Cyberduck, X-Plore, DAVx⁵, Documents, FolderSync, etc. The plaintext password is returned in the response under data.password — show it to the user once and tell them to store it now; it can never be recovered. Use a descriptive label like 'MacBook rclone' or 'iPhone Documents'. Scopes must intersect what the account's plan allows; mailbox-scoped passwords also require mailbox_id. expires_in_days is optional — omit for a non-expiring credential. Per-account cap: 1000 active+revoked rows. Rate-limited 20/hour per account.",
+        "Mint a new Drive sync-device password for rclone, Cyberduck, DAVx⁵ and similar clients. The response includes data.server_url and returns the plaintext under data.password once; show both to the user and tell them to store the password now. Scopes must fit the account plan; mailbox scopes require mailbox_id. The account cap is 1000 stored device rows and creation is rate-limited to 20/hour.",
       inputSchema: {
         label: z
           .string()

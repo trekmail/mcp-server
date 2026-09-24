@@ -1,6 +1,6 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 248 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 264 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
 ## Quickstart
 
@@ -36,8 +36,8 @@ The MCP server supports two independent token types. At least one is required:
 
 | Token | Env Var | Prefix | Unlocks |
 |-------|---------|--------|---------|
-| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 186 infrastructure tools (domains, receive-only domain aliases, DNS, mailboxes, mail-client setup, invites, aliases, shared mailbox members, forwarding, forwarding addresses, mail filters, auto-reply, sieve, delete intents, migrations, SMTP, tickets, account, billing, spam stats, verifier, message token management, Cloudflare DNS, Drive, and Drive sync-device passwords) |
-| **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 62 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, connected accounts, identities, templates, blocked senders) |
+| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 200 infrastructure tools (White Label branding, clients, team access and activity; domains; DNS; mailboxes; Drive; migrations; SMTP; tickets; account; billing; verifier; Cloudflare; and related administration) |
+| **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 64 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, connected accounts, identities, templates, blocked senders) |
 
 Tools are registered conditionally — only token types you provide get their tools. You can supply one or both:
 
@@ -63,8 +63,8 @@ npm start
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
 | `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.10.0` | User-Agent header |
-| `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable destructive tools (delete intents, domain delete, domain-alias connect/disconnect, forwarding address create/update/delete, password change, pause, SMTP config, revoke token, delete Cloudflare token, Drive trash/purge/empty-trash, Drive sync-device revoke/rotate, message deletes) |
-| `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable `send_message` tool |
+| `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable high-impact changes (White Label access/branding, delete intents, domain deletion, forwarding, password changes, SMTP, credential revocation, Drive trash/purge, and message deletion) |
+| `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable external sends, including `send_message` and White Label invitations |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
 | `TREKMAIL_TOOLSETS` | No | all | Comma-separated product sets to register, for example `email` or `email,contacts,calendar` |
 | `TREKMAIL_SCOPE_AWARE_REGISTRATION` | No | `true` | Discover the token's effective capabilities at startup and omit unusable tool schemas; set `false` only as a compatibility escape hatch |
@@ -73,7 +73,8 @@ npm start
 Tool visibility is the intersection of token capability, `TREKMAIL_TOOLSETS`,
 `TREKMAIL_READ_ONLY`, and transport support. Runtime API authorization remains
 authoritative. Account Drive and Mailbox Drive deliberately share one `drive`
-toolset; the concrete space and token constraints decide what a call can access.
+toolset; all White Label capabilities share `white_label`. The concrete resource,
+membership, entitlement, and token constraints decide what a call can access.
 Compact email, contacts, calendar, and email-settings selections also include
 the existing read-only `list_mailboxes` tool so an agent can discover the
 required mailbox ID without loading the full administration toolset.
@@ -87,12 +88,12 @@ TREKMAIL_SCOPE_AWARE_REGISTRATION=true \
 npm start
 ```
 
-## Tools (248)
+## Tools (264)
 
-> The full catalog is **248** tools over stdio. On the hosted **HTTP** transport
+> The full catalog is **264** tools over stdio. On the hosted **HTTP** transport
 > `drive_file_upload` is intentionally not registered (its `local_path` would read
 > files on our server — see the note in `src/tools/drive.ts`), so the HTTP MCP
-> exposes 247. Tools also split by token type: **62** need a message token
+> exposes 263. Tools also split by token type: **64** need a message token
 > (`tm_msg_`), the rest an ops token (`tm_live_`).
 >
 > **Safety gates apply to the whole list, not just the rows that say so.** Read
@@ -127,6 +128,33 @@ npm start
 - **get_dns_requirements** — Get required DNS records for a domain
 - **dns_recheck** — Trigger async DNS verification (returns check ID)
 - **get_dns_check** — Poll DNS check status/results
+
+### White Label (ops token)
+
+These 20 tools are omitted unless White Label entitlement and the token's live
+scopes allow them. During cancellation grace, only the owner keeps read tools;
+writes and delegated access are removed.
+
+- **get_domain_branding** — Read a domain's brand, assets, hosts, mail zone, and required DNS records
+- **set_domain_branding** — Partially update domain or account-default branding (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **set_domain_brand_logo** — Upload a base64 PNG/JPEG/ICO brand asset (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **verify_domain_branding_dns** — Queue DNS and certificate verification (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **create_branding_preview** — Create a short-lived branded preview (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **remove_domain_brand_logo** — Remove a brand asset (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **remove_domain_branding** — Clear domain or account-wide branding (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **get_white_label** — Read entitlement, setup progress, account brand, and reachable domain status
+- **get_white_label_access_catalog** — Read roles, permissions, and domains this caller may grant
+- **list_white_label_members** — Search or filter clients, members, and invitations
+- **get_white_label_member** — Read one member, effective permissions, and allowed operations
+- **invite_white_label_member** — Create and email an invitation (gated: `TREKMAIL_ALLOW_SENDING`)
+- **update_white_label_member** — Change role, domains, permissions, or note (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **suspend_white_label_member** — Stop access and revoke the member's keys (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **resume_white_label_member** — Resume a suspended membership without restoring old keys (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **resend_white_label_invitation** — Replace and email a pending invitation (gated: `TREKMAIL_ALLOW_SENDING`)
+- **remove_white_label_member** — Remove access after explicit confirmation (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **restore_white_label_member** — Restore membership without restoring old keys (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **list_white_label_activity** — Read White Label account activity
+- **get_white_label_member_activity** — Read one member's actions and sign-in history
 
 ### Mailboxes (ops token)
 - **list_mailboxes** — List mailboxes with optional domain/search filters
@@ -209,7 +237,9 @@ Shared mailboxes never authenticate directly. Call **get_mail_client_setup** wit
 
 - **list_messages** — List messages in a mailbox folder with cursor pagination (optional `external_account_id`)
 - **read_message** — Get a single message by IMAP UID with full body (optional `external_account_id`)
-- **send_message** — Send an email from the mailbox — or, with `external_account_id`, from a connected account via its own SMTP, or, with `shared_mailbox_id`, as a shared team mailbox the acting member holds send permission on (dual safety gates, validates total recipients ≤ 10, requires body). The mailbox's Default CC/BCC apply exactly as they do in the web app; pass `apply_default_recipients: false` to skip them for one message
+- **send_message** — Send an email from the mailbox — or, with `external_account_id`, from a connected account via its own SMTP, or, with `shared_mailbox_id`, as a shared team mailbox the acting member holds send permission on (dual safety gates, validates total recipients ≤ 10, requires body). The mailbox's Default CC/BCC apply exactly as they do in the web app; pass `apply_default_recipients: false` to skip them for one message. Returns once the message is accepted, not sent — confirm with `get_message_delivery`. A used-up sending allowance fails at once with `sending_limit_exceeded`, naming the allowance and when it renews (`resets_at`); it is never worth retrying before then
+- **get_message_delivery** — What happened to a message `send_message` accepted (pending, sending, sent, failed, delivery_uncertain), looked up by the `request_id` it returned; a message refused by a sending allowance reports which one and when it renews. Works with any message token for the same mailbox, not only the one that sent the message, so a later hosted session or a renewed token can check an earlier send; an unknown `request_id` is a 404
+- **get_mailbox_sending_limits** — How many more recipients this mailbox can send to today (`remaining_today`), the most recipients one message may have, when the allowance renews, and the API's own caps for this token. While the lowest allowance is the account-wide total, `limit_today` is `null` and so is `remaining_today` until that total is spent (then `0`); an ops token reads the total with `get_sending_limits`
 - **delete_message** — Permanently delete a message by IMAP UID (requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)
 - **move_message** — Move a message to a different IMAP folder
 - **list_folders** — List all IMAP folders for the mailbox
@@ -324,6 +354,7 @@ Connect and manage external mailboxes (Gmail/Outlook/IMAP) the mailbox reads and
 ### Account (ops token)
 - **whoami** — Get current token info and permissions
 - **get_account** — Get account details, plan, limits, and usage
+- **get_sending_limits** — Today's sending allowance for the whole account: plan numbers after trial or first-payment caps, domains still in their first-week warm-up (and when they step up), what the first payment would change, and today's usage including forwarded mail
 - **get_billing_status** — Get billing and subscription info
 - **list_invoices** — List invoice history
 
@@ -377,7 +408,7 @@ Connect and manage external mailboxes (Gmail/Outlook/IMAP) the mailbox reads and
 
 ## Idempotency
 
-All mutating tools (POST/PUT) generate **deterministic idempotency keys** from `sha256(tool_name + canonical_params)`. This means:
+Mutating tools on idempotent API routes generate **deterministic idempotency keys** from `sha256(tool_name + canonical_params)`. This covers `POST`, `PUT`, `PATCH`, and `DELETE` White Label operations. It means:
 
 - The same tool call with the same params always produces the same key
 - Agent retries hit the API's idempotency cache — no duplicate side effects
@@ -387,6 +418,11 @@ All mutating tools (POST/PUT) generate **deterministic idempotency keys** from `
 key per call, so two identical calls really do save two drafts, and updating a draft back to earlier
 content really does perform the update instead of replaying an old response. Pass your own
 `idempotency_key` on those two tools when you want retry-dedup.
+
+**A failed send is not replayed.** Once a `send_message` delivery has failed (on a sending limit,
+for example), the API no longer answers the same call with the earlier accepted response, so the
+same message with the same content can be sent again later. A retry of a send that is still
+pending or was delivered still gets the original response.
 
 ## Safety
 

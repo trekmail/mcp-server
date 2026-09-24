@@ -51,7 +51,7 @@ export function isPrivateHost(host: string): boolean {
   if (lower === "::" || lower === "::1") return true;
   if (lower === "0:0:0:0:0:0:0:0" || lower === "0:0:0:0:0:0:0:1") return true;
   if (lower.startsWith("fe80:") || lower.startsWith("fe80::")) return true;
-  if (lower.startsWith("fc") || lower.startsWith("fd")) return true; // fc00::/7
+  if (lower.includes(":") && (lower.startsWith("fc") || lower.startsWith("fd"))) return true; // fc00::/7
   // IPv4-mapped IPv6: ::ffff:127.0.0.1 etc.
   const mapped = lower.match(/^::ffff:([0-9a-fx.]+)$/);
   if (mapped && isPrivateIPv4(mapped[1])) return true;

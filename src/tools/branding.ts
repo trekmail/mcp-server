@@ -2,12 +2,14 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
 import type { Config } from "../config.js";
+import { idempotencyKey } from "../idempotency.js";
 import { callApi, errorResult } from "./util.js";
 
 /**
  * Per-domain Branding / White Label Lite tools. An agent can configure a
  * domain's brand end-to-end:
- *   set_domain_branding → get_domain_branding (read required CNAMEs) →
+ *   set_domain_branding → get_domain_branding (read remaining DNS actions, and
+ *   mail_zone.records and the verified DAV URL when the mail zone is on) →
  *   apply_cloudflare_dns (existing DNS tools) → verify_domain_branding_dns →
  *   poll get_domain_branding until hosts are active → create_branding_preview.
  *
@@ -22,7 +24,10 @@ export function registerBrandingTools(
 ): void {
   const hexColor = z
     .string()
-    .regex(/^#[0-9a-fA-F]{3,8}$/, "Must be a hex color like #4f46e5");
+    .regex(
+      /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/,
+      "Must be a 3, 4, 6, or 8 digit CSS hex color like #4f46e5",
+    );
   const dnsLabel = z
     .string()
     .max(63)
@@ -38,7 +43,7 @@ export function registerBrandingTools(
     {
       title: "Get Domain Branding",
       description:
-        "Read the per-domain White Label branding state: mode (off/inherit/custom), brand identity (name, colors, logo/favicon URLs, support + sender email), the dashboard/webmail hosts with provisioning status, the White Label add-on flag, and the CNAME records that must exist for the branded hosts to go live. Use it to discover which DNS records to create (then add them via the Cloudflare DNS tools) and to poll host status until 'active'.",
+        "Read the per-domain White Label branding state: mode (off/inherit/custom), brand identity, mail-zone DNS/client-host status, verified DAV URL and certificate expiry, dashboard/webmail hosts, add-on state, and only the DNS records that still need attention. Create returned records with the Cloudflare DNS tools, then poll until client_hosts_status is 'active' and dav_ready is true.",
       inputSchema: {
         domain_id: z
           .number()
@@ -55,7 +60,7 @@ export function registerBrandingTools(
     {
       title: "Set Domain Branding",
       description:
-        "Configure White Label branding for a domain. PARTIAL update — only the fields you pass change; omit a field to leave it unchanged. mode=custom uses a domain-specific brand, mode=inherit uses the account default, mode=off disables branding (defaults to the current mode if omitted — but if branding is currently off you must pass mode to re-enable it). Set dashboard_enabled/webmail_enabled to claim branded URLs at label.domain (e.g. dashboard.acme.com, mail.acme.com). Branding always saves; branded URLs only go live (pending_dns → active) once the White Label add-on is active — without it they stay drafts. scope=domain (default) saves for this domain only; scope=account_default also makes it the account default for new domains; scope=all rolls this pattern out to every existing domain. After saving, call get_domain_branding to read the CNAMEs, create them, then verify_domain_branding_dns. Requires TREKMAIL_ALLOW_DESTRUCTIVE=true.",
+        "Configure White Label branding for a domain. PARTIAL update — only the fields you pass change; omit a field to leave it unchanged. mode=custom uses a domain-specific brand, mode=inherit uses the account default, mode=off disables branding. Set dashboard_enabled/webmail_enabled to claim branded URLs, and mail_zone_enabled to brand the DNS zone plus IMAP/SMTP client hostnames. This tool is available only while White Label is active. scope=domain (default) saves for this domain only; scope=account_default also makes it the account default for new domains; scope=all rolls this pattern out to every existing domain. After saving, call get_domain_branding to inspect DNS and provisioning state. Requires TREKMAIL_ALLOW_DESTRUCTIVE=true.",
       inputSchema: {
         domain_id: z.number().int().positive().describe("The domain ID to brand"),
         mode: z
@@ -88,6 +93,12 @@ export function registerBrandingTools(
         webmail_label: dnsLabel
           .optional()
           .describe("Subdomain label for the webmail host (default 'mail')"),
+        mail_zone_enabled: z
+          .boolean()
+          .optional()
+          .describe(
+            "Serve mail apps under the brand's own domain (imap./smtp./dav.<domain>). Belongs to the brand, so it needs mode=custom or scope=account_default. Read any remaining DNS actions, the safe DAV URL, and provisioning status from get_domain_branding under mail_zone",
+          ),
         support_email: z
           .string()
           .email()
@@ -115,6 +126,7 @@ export function registerBrandingTools(
           .enum(["domain", "account_default", "all"])
           .optional()
           .describe("Apply scope (default 'domain')"),
+        idempotency_key: z.string().max(255).optional().describe("Optional idempotency key"),
       },
       annotations: { destructiveHint: true },
     },
@@ -122,14 +134,15 @@ export function registerBrandingTools(
       if (!config.allowDestructive) {
         return destructiveDisabled("configure branding");
       }
-      const { domain_id, ...rest } = args;
+      const { domain_id, idempotency_key, ...rest } = args;
       const body: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(rest)) {
         if (value !== undefined) {
           body[key] = value;
         }
       }
-      return callApi(() => client.setDomainBranding(domain_id, body));
+      const idemKey = idempotencyKey("set_domain_branding", { domain_id, ...body }, idempotency_key);
+      return callApi(() => client.setDomainBranding(domain_id, body, idemKey));
     },
   );
 
@@ -146,15 +159,22 @@ export function registerBrandingTools(
           .describe("Which asset to set"),
         content_base64: z
           .string()
+          .max(1_402_200)
           .describe("Base64-encoded image bytes (PNG/JPG, ≤1 MB)"),
+        idempotency_key: z.string().max(255).optional().describe("Optional idempotency key"),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ domain_id, slot, content_base64 }) => {
+    async ({ domain_id, slot, content_base64, idempotency_key }) => {
       if (!config.allowDestructive) {
         return destructiveDisabled("set a brand logo");
       }
-      return callApi(() => client.setDomainBrandLogo(domain_id, slot, content_base64));
+      const idemKey = idempotencyKey(
+        "set_domain_brand_logo",
+        { domain_id, slot, content_base64 },
+        idempotency_key,
+      );
+      return callApi(() => client.setDomainBrandLogo(domain_id, slot, content_base64, idemKey));
     },
   );
 
@@ -163,17 +183,19 @@ export function registerBrandingTools(
     {
       title: "Verify Domain Branding DNS",
       description:
-        "Queue a DNS check + SSL provisioning for this domain's enabled branded hosts. Run after the CNAME records (from get_domain_branding) resolve. Requires the White Label add-on — without it returns white_label_inactive. Hosts move draft/pending_dns → active once DNS resolves and the certificate is issued; poll get_domain_branding for status. Requires TREKMAIL_ALLOW_DESTRUCTIVE=true.",
+        "Queue a DNS check + SSL provisioning for this domain's enabled branded hosts, and re-check the brand's mail zone if it has one. Run after the CNAME records (from get_domain_branding) resolve. Requires the White Label add-on — without it returns white_label_inactive. Hosts move draft/pending_dns → active once DNS resolves and the certificate is issued; poll get_domain_branding for status, including mail_zone.dns_status and mail_zone.client_hosts_status. Requires TREKMAIL_ALLOW_DESTRUCTIVE=true.",
       inputSchema: {
         domain_id: z.number().int().positive().describe("The domain ID"),
+        idempotency_key: z.string().max(255).optional().describe("Optional idempotency key"),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ domain_id }) => {
+    async ({ domain_id, idempotency_key }) => {
       if (!config.allowDestructive) {
         return destructiveDisabled("verify branding DNS");
       }
-      return callApi(() => client.verifyDomainBrandingDns(domain_id));
+      const idemKey = idempotencyKey("verify_domain_branding_dns", { domain_id }, idempotency_key);
+      return callApi(() => client.verifyDomainBrandingDns(domain_id, idemKey));
     },
   );
 
@@ -182,21 +204,23 @@ export function registerBrandingTools(
     {
       title: "Create Branding Preview",
       description:
-        "Mint a one-time trial-preview link that shows the account dashboard running under this domain's brand on a temporary <token>.preview host — no White Label add-on required. The link auto-logs the owner in once (single-use, short-lived). Useful to demo the brand before purchase. Returns { url, expires_in }. Requires TREKMAIL_ALLOW_DESTRUCTIVE=true.",
+        "Mint a one-time preview link that shows the account dashboard under this domain's active White Label brand on a temporary preview host. The link signs the owner in once and expires quickly. Returns { url, expires_in }. Requires TREKMAIL_ALLOW_DESTRUCTIVE=true.",
       inputSchema: {
         domain_id: z
           .number()
           .int()
           .positive()
           .describe("The domain ID with a saved brand"),
+        idempotency_key: z.string().max(255).optional().describe("Optional idempotency key"),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ domain_id }) => {
+    async ({ domain_id, idempotency_key }) => {
       if (!config.allowDestructive) {
         return destructiveDisabled("create a branding preview");
       }
-      return callApi(() => client.createBrandingPreview(domain_id));
+      const idemKey = idempotencyKey("create_branding_preview", { domain_id }, idempotency_key);
+      return callApi(() => client.createBrandingPreview(domain_id, idemKey));
     },
   );
 
@@ -211,14 +235,16 @@ export function registerBrandingTools(
         slot: z
           .enum(["light", "dark", "favicon"])
           .describe("Which asset to remove"),
+        idempotency_key: z.string().max(255).optional().describe("Optional idempotency key"),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ domain_id, slot }) => {
+    async ({ domain_id, slot, idempotency_key }) => {
       if (!config.allowDestructive) {
         return destructiveDisabled("remove a brand asset");
       }
-      return callApi(() => client.removeDomainBrandLogo(domain_id, slot));
+      const idemKey = idempotencyKey("remove_domain_brand_logo", { domain_id, slot }, idempotency_key);
+      return callApi(() => client.removeDomainBrandLogo(domain_id, slot, idemKey));
     },
   );
 
@@ -234,14 +260,16 @@ export function registerBrandingTools(
           .enum(["domain", "all"])
           .optional()
           .describe("Removal scope (default 'domain')"),
+        idempotency_key: z.string().max(255).optional().describe("Optional idempotency key"),
       },
       annotations: { destructiveHint: true },
     },
-    async ({ domain_id, scope }) => {
+    async ({ domain_id, scope, idempotency_key }) => {
       if (!config.allowDestructive) {
         return destructiveDisabled("remove branding");
       }
-      return callApi(() => client.removeDomainBranding(domain_id, scope));
+      const idemKey = idempotencyKey("remove_domain_branding", { domain_id, scope }, idempotency_key);
+      return callApi(() => client.removeDomainBranding(domain_id, scope, idemKey));
     },
   );
 }

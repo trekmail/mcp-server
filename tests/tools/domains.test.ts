@@ -319,5 +319,13 @@ describe("domain tools", () => {
       signature_position: "after_reply",
       signature_html: "<p>Sales</p>",
     }));
+
+    await handler({
+      domain_id: 7,
+      signature_mode: "enforced",
+    });
+    expect(okClient.updateDomainSignature).toHaveBeenLastCalledWith(7, {
+      signature_mode: "enforced",
+    });
   });
 });

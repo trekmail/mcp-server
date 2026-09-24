@@ -39,6 +39,7 @@ import { registerVerifierTools } from "./verifier.js";
 import { registerCloudflareTools } from "./cloudflare.js";
 import { registerDriveTools } from "./drive.js";
 import { registerDriveDeviceTools } from "./drive-devices.js";
+import { registerWhiteLabelTools } from "./white-label.js";
 
 /**
  * Register infrastructure tools (domains, DNS, mailboxes, invites, forwarding, delete).
@@ -69,6 +70,7 @@ export function registerInfraTools(
   registerSmtpTools(server, client, config);
   registerDomainSmtpTools(server, client, config);
   registerBrandingTools(server, client, config);
+  registerWhiteLabelTools(server, client, config);
   registerMessageTokenTools(server, client, config);
   registerSpamStatsTools(server, client);
   registerBounceTools(server, client);

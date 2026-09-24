@@ -46,13 +46,13 @@ function namesFor(
 }
 
 describe("stdio toolset filtering", () => {
-  it("preserves all 248 tools when TREKMAIL_TOOLSETS is omitted", () => {
-    expect(namesFor()).toHaveLength(248);
+  it("preserves all 264 tools when TREKMAIL_TOOLSETS is omitted", () => {
+    expect(namesFor()).toHaveLength(264);
   });
 
   it("exposes email tools plus minimal mailbox discovery", () => {
     const names = namesFor(["email"]);
-    expect(names).toHaveLength(19);
+    expect(names).toHaveLength(21);
     expect(names).toContain("list_messages");
     expect(names).toContain("send_message");
     expect(names).toContain("list_mailboxes");
@@ -62,7 +62,7 @@ describe("stdio toolset filtering", () => {
 
   it("combines toolsets without duplicates", () => {
     const names = namesFor(["email", "contacts", "calendar"]);
-    expect(names).toHaveLength(36);
+    expect(names).toHaveLength(38);
     expect(names).toContain("list_contacts");
     expect(names).toContain("list_calendar_events");
   });
@@ -73,6 +73,24 @@ describe("stdio toolset filtering", () => {
     expect(names).toContain("get_dns_requirements");
     expect(names).not.toContain("create_domain");
     expect(names).not.toContain("list_mailboxes");
+  });
+
+  it("loads White Label tools only for the matching live capabilities", () => {
+    const none = namesFor(["white_label"], ["domains:read"]);
+    expect(none).toEqual([]);
+
+    const read = namesFor(
+      ["white_label"],
+      ["branding:read", "members:read", "activity:read"],
+    );
+    expect(read).toContain("get_white_label");
+    expect(read).toContain("list_white_label_members");
+    expect(read).toContain("get_white_label_member_activity");
+    expect(read).not.toContain("invite_white_label_member");
+
+    const activityOnly = namesFor(["white_label"], ["activity:read"]);
+    expect(activityOnly).toContain("list_white_label_activity");
+    expect(activityOnly).not.toContain("get_white_label_member_activity");
   });
 
   it("keeps message writes separate from permission to send", () => {

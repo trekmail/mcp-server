@@ -25,6 +25,41 @@ export interface ListMailboxesParams extends ListParams {
   status?: string;
 }
 
+export type WhiteLabelAssignableRole =
+  | "client"
+  | "webmail_only"
+  | "domain_admin"
+  | "mailbox_operator"
+  | "read_only"
+  | "custom";
+
+export type WhiteLabelMemberRole =
+  | WhiteLabelAssignableRole
+  | "owner"
+  | "account_manager"
+  | "support_agent"
+  | "billing_manager";
+
+export interface ListWhiteLabelMembersParams extends ListParams {
+  role?: WhiteLabelMemberRole;
+  status?: "pending" | "active" | "suspended" | "revoked";
+  include_removed?: boolean;
+}
+
+export interface WhiteLabelMemberAccessParams {
+  role?: WhiteLabelAssignableRole;
+  all_domains?: boolean;
+  domain_ids?: number[];
+  permissions?: string[];
+  note?: string | null;
+}
+
+export interface InviteWhiteLabelMemberParams extends WhiteLabelMemberAccessParams {
+  email: string;
+  role: WhiteLabelAssignableRole;
+  all_domains: boolean;
+}
+
 export interface CreateMailboxParams {
   domain_id: number;
   local_part: string;
@@ -171,7 +206,7 @@ export function makeClientConfig(config: Config, token: string): ClientConfig {
 
 export class TrekMailClient {
   private readonly baseUrl: string;
-  private readonly token: string;
+  private token: string;
   private readonly timeoutMs: number;
   private readonly userAgent: string;
 
@@ -200,8 +235,87 @@ export class TrekMailClient {
     return this.request("GET", "billing/status");
   }
 
+  async getSendingLimits(): Promise<unknown> {
+    return this.request("GET", "sending-limits");
+  }
+
   async listInvoices(): Promise<unknown> {
     return this.request("GET", "billing/invoices");
+  }
+
+  // --- White Label account and team access ---
+
+  async getWhiteLabel(): Promise<unknown> {
+    return this.request("GET", "white-label");
+  }
+
+  async getWhiteLabelAccessCatalog(): Promise<unknown> {
+    return this.request("GET", "white-label/access-catalog");
+  }
+
+  async listWhiteLabelMembers(params?: ListWhiteLabelMembersParams): Promise<unknown> {
+    return this.request("GET", "white-label/members", {
+      query: params ? { ...params } : undefined,
+    });
+  }
+
+  async getWhiteLabelMember(memberId: number): Promise<unknown> {
+    return this.request("GET", `white-label/members/${memberId}`);
+  }
+
+  async inviteWhiteLabelMember(
+    body: InviteWhiteLabelMemberParams,
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", "white-label/members", { body: { ...body }, idempotencyKey });
+  }
+
+  async updateWhiteLabelMember(
+    memberId: number,
+    body: WhiteLabelMemberAccessParams,
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("PATCH", `white-label/members/${memberId}`, {
+      body: { ...body },
+      idempotencyKey,
+    });
+  }
+
+  async suspendWhiteLabelMember(memberId: number, idempotencyKey: string): Promise<unknown> {
+    return this.request("POST", `white-label/members/${memberId}:suspend`, { idempotencyKey });
+  }
+
+  async resumeWhiteLabelMember(memberId: number, idempotencyKey: string): Promise<unknown> {
+    return this.request("POST", `white-label/members/${memberId}:resume`, { idempotencyKey });
+  }
+
+  async resendWhiteLabelInvitation(memberId: number, idempotencyKey: string): Promise<unknown> {
+    return this.request("POST", `white-label/members/${memberId}:resend-invitation`, { idempotencyKey });
+  }
+
+  async removeWhiteLabelMember(memberId: number, idempotencyKey: string): Promise<unknown> {
+    return this.request("DELETE", `white-label/members/${memberId}`, { idempotencyKey });
+  }
+
+  async restoreWhiteLabelMember(memberId: number, idempotencyKey: string): Promise<unknown> {
+    return this.request("POST", `white-label/members/${memberId}:restore`, { idempotencyKey });
+  }
+
+  async listWhiteLabelActivity(params?: {
+    action?: string;
+    member_id?: number;
+    page?: number;
+    per_page?: number;
+  }): Promise<unknown> {
+    return this.request("GET", "white-label/activity", {
+      query: params ? { ...params } : undefined,
+    });
+  }
+
+  async getWhiteLabelMemberActivity(memberId: number, limit?: number): Promise<unknown> {
+    return this.request("GET", `white-label/members/${memberId}/activity`, {
+      query: limit ? { limit } : undefined,
+    });
   }
 
   // --- Machine payments (MPP) ---
@@ -260,7 +374,16 @@ export class TrekMailClient {
   }
 
   async agentReissueKey(): Promise<unknown> {
-    return this.request("POST", "agent/key/reissue", { body: {} });
+    const response = await this.request("POST", "agent/key/reissue", { body: {} });
+    if (response !== null && typeof response === "object"
+      && "status" in response && response.status === "reissued"
+      && "api_token" in response && typeof response.api_token === "string"
+      && response.api_token.length > 0) {
+      // Every infrastructure tool shares this client. Adopt the replacement
+      // before returning, because the server has already revoked the old key.
+      this.token = response.api_token;
+    }
+    return response;
   }
 
   // --- Domains ---
@@ -445,24 +568,27 @@ export class TrekMailClient {
   async setDomainBranding(
     domainId: number,
     body: Record<string, unknown>,
+    idempotencyKey: string,
   ): Promise<unknown> {
-    return this.request("PATCH", `domains/${domainId}/branding`, { body });
+    return this.request("PATCH", `domains/${domainId}/branding`, { body, idempotencyKey });
   }
 
-  async verifyDomainBrandingDns(domainId: number): Promise<unknown> {
-    return this.request("POST", `domains/${domainId}/branding/verify-dns`, {});
+  async verifyDomainBrandingDns(domainId: number, idempotencyKey: string): Promise<unknown> {
+    return this.request("POST", `domains/${domainId}/branding/verify-dns`, { idempotencyKey });
   }
 
-  async createBrandingPreview(domainId: number): Promise<unknown> {
-    return this.request("POST", `domains/${domainId}/branding/preview`, {});
+  async createBrandingPreview(domainId: number, idempotencyKey: string): Promise<unknown> {
+    return this.request("POST", `domains/${domainId}/branding/preview`, { idempotencyKey });
   }
 
   async removeDomainBranding(
     domainId: number,
     scope?: "domain" | "all",
+    idempotencyKey?: string,
   ): Promise<unknown> {
     return this.request("DELETE", `domains/${domainId}/branding`, {
       query: scope ? { scope } : undefined,
+      idempotencyKey,
     });
   }
 
@@ -470,17 +596,20 @@ export class TrekMailClient {
     domainId: number,
     slot: "light" | "dark" | "favicon",
     contentBase64: string,
+    idempotencyKey: string,
   ): Promise<unknown> {
     return this.request("PUT", `domains/${domainId}/branding/logo/${slot}`, {
       body: { content_base64: contentBase64 },
+      idempotencyKey,
     });
   }
 
   async removeDomainBrandLogo(
     domainId: number,
     slot: "light" | "dark" | "favicon",
+    idempotencyKey: string,
   ): Promise<unknown> {
-    return this.request("DELETE", `domains/${domainId}/branding/logo/${slot}`, {});
+    return this.request("DELETE", `domains/${domainId}/branding/logo/${slot}`, { idempotencyKey });
   }
 
   // --- DNS ---
@@ -1204,6 +1333,14 @@ export class TrekMailClient {
     });
   }
 
+  async getMessageDelivery(requestId: string): Promise<unknown> {
+    return this.request("GET", `messages/deliveries/${encodeURIComponent(requestId)}`);
+  }
+
+  async getMailboxSendingLimits(): Promise<unknown> {
+    return this.request("GET", "messages/sending-limits");
+  }
+
   async updateMessageFlags(
     uid: number,
     flags: { seen?: boolean; flagged?: boolean },
@@ -1530,7 +1667,7 @@ export class TrekMailClient {
     });
   }
 
-  async listScheduled(params?: { cursor?: string; per_page?: number; shared_mailbox_id?: number }): Promise<unknown> {
+  async listScheduled(params?: { cursor?: string; per_page?: number; shared_mailbox_id?: number; status?: "pending" | "limit_reached" | "all" }): Promise<unknown> {
     return this.request("GET", "messages/scheduled", {
       query: params ? { ...params } : undefined,
     });
@@ -1779,7 +1916,7 @@ export class TrekMailClient {
 
   async connectCloudflareDomains(
     apiToken: string,
-    selected: Array<{ zone_id: string; zone_name: string; trekmail_domain_id: number | null }>,
+    selected: Array<{ zone_id: string; zone_name: string; trekmail_domain_id?: number | null }>,
     idempotencyKey: string,
   ): Promise<unknown> {
     return this.request("POST", "cloudflare/connect", {

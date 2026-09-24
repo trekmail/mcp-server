@@ -79,6 +79,7 @@ describe("branding tools", () => {
       name: "Acme",
       primary_color: "#dc2626",
       dashboard_enabled: true,
+      mail_zone_enabled: true,
       scope: "domain",
     });
     expect(h.client.setDomainBranding).toHaveBeenCalledWith(7, {
@@ -86,8 +87,53 @@ describe("branding tools", () => {
       name: "Acme",
       primary_color: "#dc2626",
       dashboard_enabled: true,
+      mail_zone_enabled: true,
       scope: "domain",
+    }, expect.stringMatching(/^mcp_set_domain_branding_/));
+  });
+
+  it("set_domain_branding forwards the mail zone switch", async () => {
+    await h.handlers.get("set_domain_branding")!({
+      domain_id: 7,
+      mode: "custom",
+      mail_zone_enabled: true,
     });
+    expect(h.client.setDomainBranding).toHaveBeenCalledWith(7, {
+      mode: "custom",
+      mail_zone_enabled: true,
+    }, expect.stringMatching(/^mcp_set_domain_branding_/));
+  });
+
+  it("matches the API's exact CSS hex color lengths", () => {
+    const tool = (h.server as unknown as {
+      _registeredTools: Record<string, {
+        inputSchema: {
+          shape: Record<string, { safeParse(value: unknown): { success: boolean } }>;
+        };
+      }>;
+    })._registeredTools.set_domain_branding;
+    const primaryColor = tool.inputSchema.shape.primary_color;
+
+    for (const valid of ["#abc", "#abcd", "#abcdef", "#abcdef12"]) {
+      expect(primaryColor.safeParse(valid).success, valid).toBe(true);
+    }
+    for (const invalid of ["#12", "#12345", "#1234567", "#123456789"]) {
+      expect(primaryColor.safeParse(invalid).success, invalid).toBe(false);
+    }
+  });
+
+  it("caps encoded logo input before it reaches the API", () => {
+    const tool = (h.server as unknown as {
+      _registeredTools: Record<string, {
+        inputSchema: {
+          shape: Record<string, { safeParse(value: unknown): { success: boolean } }>;
+        };
+      }>;
+    })._registeredTools.set_domain_brand_logo;
+    const content = tool.inputSchema.shape.content_base64;
+
+    expect(content.safeParse("A".repeat(1_402_200)).success).toBe(true);
+    expect(content.safeParse("A".repeat(1_402_201)).success).toBe(false);
   });
 
   it("set_domain_branding forwards an explicit null (clear)", async () => {
@@ -95,7 +141,11 @@ describe("branding tools", () => {
       domain_id: 7,
       support_email: null,
     });
-    expect(h.client.setDomainBranding).toHaveBeenCalledWith(7, { support_email: null });
+    expect(h.client.setDomainBranding).toHaveBeenCalledWith(
+      7,
+      { support_email: null },
+      expect.stringMatching(/^mcp_set_domain_branding_/),
+    );
   });
 
   it("set_domain_brand_logo passes slot + base64", async () => {
@@ -104,17 +154,28 @@ describe("branding tools", () => {
       slot: "light",
       content_base64: "AAAA",
     });
-    expect(h.client.setDomainBrandLogo).toHaveBeenCalledWith(7, "light", "AAAA");
+    expect(h.client.setDomainBrandLogo).toHaveBeenCalledWith(
+      7,
+      "light",
+      "AAAA",
+      expect.stringMatching(/^mcp_set_domain_brand_logo_/),
+    );
   });
 
   it("verify_domain_branding_dns calls the client", async () => {
     await h.handlers.get("verify_domain_branding_dns")!({ domain_id: 7 });
-    expect(h.client.verifyDomainBrandingDns).toHaveBeenCalledWith(7);
+    expect(h.client.verifyDomainBrandingDns).toHaveBeenCalledWith(
+      7,
+      expect.stringMatching(/^mcp_verify_domain_branding_dns_/),
+    );
   });
 
   it("create_branding_preview calls the client", async () => {
     await h.handlers.get("create_branding_preview")!({ domain_id: 7 });
-    expect(h.client.createBrandingPreview).toHaveBeenCalledWith(7);
+    expect(h.client.createBrandingPreview).toHaveBeenCalledWith(
+      7,
+      expect.stringMatching(/^mcp_create_branding_preview_/),
+    );
   });
 
   it("every mutator is gated behind allowDestructive (read is not)", async () => {
@@ -141,6 +202,21 @@ describe("branding tools", () => {
 
   it("remove_domain_branding forwards scope when allowed", async () => {
     await h.handlers.get("remove_domain_branding")!({ domain_id: 7, scope: "all" });
-    expect(h.client.removeDomainBranding).toHaveBeenCalledWith(7, "all");
+    expect(h.client.removeDomainBranding).toHaveBeenCalledWith(
+      7,
+      "all",
+      expect.stringMatching(/^mcp_remove_domain_branding_/),
+    );
+  });
+
+  it("forwards an explicit idempotency key", async () => {
+    await h.handlers.get("verify_domain_branding_dns")!({
+      domain_id: 7,
+      idempotency_key: "branding-dns-check-7",
+    });
+    expect(h.client.verifyDomainBrandingDns).toHaveBeenCalledWith(
+      7,
+      "branding-dns-check-7",
+    );
   });
 });

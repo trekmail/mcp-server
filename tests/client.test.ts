@@ -31,6 +31,27 @@ describe("TrekMailClient", () => {
     expect(headers.Authorization).toBe("Bearer tm_live_testtoken");
   });
 
+  it("adopts a reissued key for subsequent calls on the shared client", async () => {
+    mockFetchResponse(mockFetch, { status: 201, body: { status: "reissued", api_token: "tm_live_replacement" } });
+    await expect(client.agentReissueKey()).resolves.toEqual({ status: "reissued", api_token: "tm_live_replacement" });
+    expect(getLastFetchHeaders(mockFetch).Authorization).toBe("Bearer tm_live_testtoken");
+    await client.listDomains();
+    expect(getLastFetchHeaders(mockFetch).Authorization).toBe("Bearer tm_live_replacement");
+  });
+
+  it("retains the current key when reissue is unchanged or refused", async () => {
+    mockFetchResponse(mockFetch, { status: 200, body: { status: "unchanged" } });
+    await client.agentReissueKey();
+    mockFetchResponse(mockFetch, { status: 200, body: { data: "ok" } });
+    await client.getMe();
+    expect(getLastFetchHeaders(mockFetch).Authorization).toBe("Bearer tm_live_testtoken");
+    mockFetchResponse(mockFetch, { status: 403, body: { error: { code: "not_an_agent_key", message: "Refused" } } });
+    await expect(client.agentReissueKey()).rejects.toThrow();
+    mockFetchResponse(mockFetch, { status: 200, body: { data: "ok" } });
+    await client.getMe();
+    expect(getLastFetchHeaders(mockFetch).Authorization).toBe("Bearer tm_live_testtoken");
+  });
+
   it("sends X-Request-Id header in UUID format", async () => {
     await client.listDomains();
     const headers = getLastFetchHeaders(mockFetch);

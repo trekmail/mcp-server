@@ -6,6 +6,7 @@ import { loadConfig } from "./config.js";
 import { TrekMailClient, makeClientConfig } from "./client.js";
 import { registerInfraTools, registerMessageTools } from "./tools/index.js";
 import { withToolFilter } from "./tool-filter.js";
+import { ensureToolListCapability } from "./tool-list-capability.js";
 
 const config = loadConfig();
 
@@ -13,6 +14,7 @@ const server = new McpServer({
   name: "TrekMail",
   version: "1.1.0",
 });
+ensureToolListCapability(server);
 // Create clients conditionally based on available tokens
 const opsClient = config.apiToken
   ? new TrekMailClient(makeClientConfig(config, config.apiToken))

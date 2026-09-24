@@ -34,6 +34,19 @@ export function registerAccountTools(
   );
 
   server.registerTool(
+    "get_sending_limits",
+    {
+      title: "Get Sending Limits",
+      description:
+        "Today's sending allowance for the whole account, as the limit check sees it: the plan's numbers after trial or first-payment caps (`causes`), each domain still in its first-week warm-up with the dates its allowance steps up, what the first payment would change (`after_payment`), and today's account-wide usage including forwarded mail. Use it before a large send, or to explain a sending_limit_exceeded error. Allowances count recipients (To + Cc + Bcc) and renew at 00:00 UTC.",
+      inputSchema: {},
+    },
+    async () => {
+      return callApi(() => client.getSendingLimits());
+    },
+  );
+
+  server.registerTool(
     "get_billing_status",
     {
       title: "Get Billing Status",

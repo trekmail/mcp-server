@@ -581,7 +581,7 @@ export function registerDomainTools(
     {
       title: "Update Domain Signature",
       description:
-        "Set the per-domain email signature. mode=off disables; mode=default seeds newly-created mailbox identities; mode=enforced overrides per-mailbox signatures on the webmail compose path. signature_html accepts safe HTML (up to 10000 chars); unsafe tags are stripped.",
+        "Set the per-domain email signature. mode=off disables; mode=default seeds newly-created mailbox identities; mode=enforced overrides per-mailbox signatures on the webmail compose path. Non-off modes require effective HTML after sanitization. Omit signature_html to preserve the current HTML, or pass an empty string with mode=off to clear it. Safe HTML up to 65535 characters is accepted; unsafe tags are stripped.",
       inputSchema: {
         domain_id: z
           .number()
@@ -599,9 +599,9 @@ export function registerDomainTools(
           ),
         signature_html: z
           .string()
-          .max(10000)
+          .max(65535)
           .optional()
-          .describe("Signature HTML (sanitised server-side)"),
+          .describe("Signature HTML (sanitised server-side; omit to preserve)"),
       },
       annotations: { destructiveHint: true },
     },
@@ -611,13 +611,17 @@ export function registerDomainTools(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update the domain signature.",
         );
       }
-      return callApi(() =>
-        client.updateDomainSignature(domain_id, {
-          signature_mode,
-          signature_position,
-          signature_html: signature_html ?? null,
-        }),
-      );
+      return callApi(() => {
+        const body: {
+          signature_mode: "off" | "default" | "enforced";
+          signature_position?: "before_reply" | "after_reply";
+          signature_html?: string;
+        } = { signature_mode };
+        if (signature_position !== undefined) body.signature_position = signature_position;
+        if (signature_html !== undefined) body.signature_html = signature_html;
+
+        return client.updateDomainSignature(domain_id, body);
+      });
     },
   );
 

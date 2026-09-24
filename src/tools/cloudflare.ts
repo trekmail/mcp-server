@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
 import type { Config } from "../config.js";
-import { idempotencyKey } from "../idempotency.js";
+import { operationIdempotencyKey } from "../idempotency.js";
 import { callApi, errorResult } from "./util.js";
 
 export function registerCloudflareTools(
@@ -70,7 +70,8 @@ export function registerCloudflareTools(
                 .number()
                 .int()
                 .nullable()
-                .describe("TrekMail domain ID if it already exists, or null to create new"),
+                .optional()
+                .describe("TrekMail domain ID if it already exists; omit or use null to create new"),
             }),
           )
           .min(1)
@@ -89,9 +90,8 @@ export function registerCloudflareTools(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to connect Cloudflare domains (creates TrekMail domains + writes DNS records).",
         );
       }
-      const idemKey = idempotencyKey(
+      const idemKey = operationIdempotencyKey(
         "cloudflare_connect",
-        { zones: selected.map((s) => s.zone_name).sort() },
         idempotency_key,
       );
       return callApi(() =>
@@ -167,9 +167,8 @@ export function registerCloudflareTools(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to apply Cloudflare DNS changes (mutates live DNS records — MX, SPF, DKIM, DMARC).",
         );
       }
-      const idemKey = idempotencyKey(
+      const idemKey = operationIdempotencyKey(
         "cloudflare_apply",
-        { domain_ids: domain_ids.sort() },
         idempotency_key,
       );
       return callApi(() =>

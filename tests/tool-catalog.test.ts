@@ -27,17 +27,17 @@ function registeredToolNames(): Set<string> {
 
 describe("tool catalog", () => {
   it("has an explicit version and deterministic parity hash", () => {
-    expect(TOOL_CATALOG_VERSION).toBe("2026-08-23.1");
-    expect(TOOL_CATALOG_HASH).toBe("9a8f589c");
+    expect(TOOL_CATALOG_VERSION).toBe("2026-09-24.1");
+    expect(TOOL_CATALOG_HASH).toBe("93a5ac26");
   });
 
-  it("covers all 248 registered tools exactly once", () => {
+  it("covers all 264 registered tools exactly once", () => {
     const registered = registeredToolNames();
     const catalogued = new Set(TOOL_CATALOG.map((entry) => entry.name));
 
-    expect(registered.size).toBe(248);
-    expect(TOOL_CATALOG).toHaveLength(248);
-    expect(TOOL_CATALOG_BY_NAME.size).toBe(248);
+    expect(registered.size).toBe(264);
+    expect(TOOL_CATALOG).toHaveLength(264);
+    expect(TOOL_CATALOG_BY_NAME.size).toBe(264);
     expect([...registered].filter((name) => !catalogued.has(name))).toEqual([]);
     expect([...catalogued].filter((name) => !registered.has(name))).toEqual([]);
   });
@@ -63,7 +63,9 @@ describe("tool catalog", () => {
   });
 
   it("keeps the small email preset separate from optional webmail features", () => {
-    expect(toolsForToolsets(["email"]).size).toBe(19);
+    // 21 since get_message_delivery and get_mailbox_sending_limits joined
+    // send_message: an agent that sends needs to know whether it went out.
+    expect(toolsForToolsets(["email"]).size).toBe(21);
     expect(toolsForToolsets(["email_settings"]).size).toBe(28);
     expect(toolsForToolsets(["contacts"]).size).toBe(14);
     expect(toolsForToolsets(["calendar"]).size).toBe(5);
@@ -88,6 +90,8 @@ describe("tool catalog", () => {
       .toEqual(["drive:account:read", "drive:mailbox:read"]);
     expect(TOOL_CATALOG_BY_NAME.get("drive_share_list")?.anyOfCapabilities)
       .toEqual(["drive:account:share", "drive:mailbox:share"]);
+    expect(TOOL_CATALOG_BY_NAME.get("get_white_label_member_activity")?.allOfCapabilities)
+      .toEqual(["members:read"]);
     expect(TOOL_CATALOG_BY_NAME.get("delete_message")?.access)
       .toBe("destructive");
     expect(TOOL_CATALOG_BY_NAME.get("send_message")?.safetyGate)

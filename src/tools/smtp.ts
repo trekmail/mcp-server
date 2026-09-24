@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
 import type { Config } from "../config.js";
-import { idempotencyKey } from "../idempotency.js";
+import { idempotencyKey, operationIdempotencyKey } from "../idempotency.js";
 import { callApi, errorResult, isPrivateHost } from "./util.js";
 
 export function registerSmtpTools(
@@ -75,9 +75,8 @@ export function registerSmtpTools(
       if (host && isPrivateHost(host)) {
         return errorResult("Cannot connect to private/internal network addresses.");
       }
-      const idemKey = idempotencyKey(
+      const idemKey = operationIdempotencyKey(
         "update_smtp_config",
-        { mode, host, port, encryption, username },
         idempotency_key,
       );
       return callApi(() =>
@@ -154,9 +153,8 @@ export function registerSmtpTools(
       if (isPrivateHost(host)) {
         return errorResult("Cannot connect to private/internal network addresses.");
       }
-      const idemKey = idempotencyKey(
+      const idemKey = operationIdempotencyKey(
         "test_smtp",
-        { host, port, encryption, username },
         idempotency_key,
       );
       return callApi(() =>

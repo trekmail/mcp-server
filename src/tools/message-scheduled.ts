@@ -75,15 +75,19 @@ export function registerMessageScheduledTools(
     {
       title: "List Scheduled Messages",
       description:
-        "List pending scheduled messages for the mailbox with cursor pagination. Pass next_cursor from pagination to retrieve every result.",
+        "List scheduled messages for the mailbox with cursor pagination. Pass next_cursor from pagination to retrieve every result. By default only pending ones; status=limit_reached lists messages a sending limit held back when they came due — kept with their attachments and a `failure` (which allowance, when it renews) — which reschedule_message can send later and cancel_scheduled can delete.",
       inputSchema: {
         cursor: z.string().max(2048).optional().describe("Opaque next_cursor from the previous page"),
         per_page: z.number().int().min(1).max(100).optional().describe("Results per page (default 100)"),
         shared_mailbox_id: z.number().int().positive().optional().describe("Shared (team) mailbox the message was scheduled as. Required to see, re-time or cancel a row created with shared_mailbox_id."),
+        status: z
+          .enum(["pending", "limit_reached", "all"])
+          .optional()
+          .describe("pending (default), limit_reached (held back by a sending limit), or all"),
       },
     },
-    async ({ cursor, per_page, shared_mailbox_id }) => {
-      return callApi(() => client.listScheduled({ cursor, per_page, shared_mailbox_id }));
+    async ({ cursor, per_page, shared_mailbox_id, status }) => {
+      return callApi(() => client.listScheduled({ cursor, per_page, shared_mailbox_id, status }));
     },
   );
 
@@ -92,7 +96,7 @@ export function registerMessageScheduledTools(
     {
       title: "Reschedule Pending Message",
       description:
-        "Change the delivery time of a pending scheduled message without re-sending. Use this instead of cancel + schedule when the user only wants to move the send time — it does not consume a messages:send rate-limit slot.",
+        "Change the delivery time of a pending scheduled message without re-sending. Use this instead of cancel + schedule when the user only wants to move the send time — it does not consume a messages:send rate-limit slot. Also sends a message a sending limit held back (list_scheduled status=limit_reached): give it a time after the allowance renews.",
       inputSchema: {
         id: z
           .number()

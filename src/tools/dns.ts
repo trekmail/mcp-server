@@ -13,7 +13,7 @@ export function registerDnsTools(
     {
       title: "Get DNS Requirements",
       description:
-        "Get the DNS records that need to be configured for a domain. Returns MX, SPF, DKIM, and DMARC requirements.",
+        "Get the DNS records that need to be configured for a domain. Returns SPF, DKIM and DMARC, plus MX when the domain's incoming mail is hosted here. A sending-only domain keeps its own provider's MX: that row appears under `checks` for reference and is never listed as required.",
       inputSchema: {
         domain_id: z
           .number()

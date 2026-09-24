@@ -19,6 +19,8 @@ describe("isPrivateHost", () => {
       "8.8.8.8",
       "1.1.1.1",
       "example.com",
+      "fc-mail.example.net",
+      "fdmail.example.net",
       "2606:4700:4700::1111", // Cloudflare DNS IPv6
     ])("permits %s", (host) => {
       expect(isPrivateHost(host)).toBe(false);

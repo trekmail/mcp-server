@@ -200,6 +200,7 @@ describe("bulk migration SSRF guard (ticket #174)", () => {
     const stubClient = {
       previewBulkMigration: vi.fn().mockResolvedValue({ data: { valid: 0, invalid: 0, warnings: 0 } }),
       startBulkMigration: vi.fn().mockResolvedValue({ data: { id: 1, status: "queued" } }),
+      startMigration: vi.fn().mockResolvedValue({ data: { id: 2, status: "pending" } }),
       // ...other client methods unused here
     } as unknown as TrekMailClient;
 
@@ -214,6 +215,38 @@ describe("bulk migration SSRF guard (ticket #174)", () => {
     registerMigrationTools(server, stubClient, cfg);
     return { handlers, stubClient };
   }
+
+  it("keys single migration starts by their complete request while preserving exact retries", async () => {
+    const { handlers, stubClient } = buildHandlers();
+    const handler = handlers.get("start_migration")!;
+    const params = {
+      mailbox_id: 1, provider: "generic_imap", source_host: "imap.example.net",
+      source_port: 993, source_security: "ssl", source_email: "user@example.net",
+      source_password: "first-password", selected_folders: ["INBOX"], confirm_start: true,
+    };
+    for (const overrides of [{}, {}, { source_password: "second-password" },
+      { selected_folders: ["Sent"] }, { import_since: "2026-01-01" }, { skip_duplicates: false }]) {
+      await handler({ ...params, ...overrides });
+    }
+    const keys = vi.mocked(stubClient.startMigration).mock.calls.map((call) => call[1]);
+    expect(keys[0]).toBe(keys[1]);
+    expect(new Set([keys[0], ...keys.slice(2)]).size).toBe(5);
+    await handler({ ...params, idempotency_key: "explicit-retry" });
+    expect(vi.mocked(stubClient.startMigration).mock.lastCall?.[1]).toBe("explicit-retry");
+  });
+
+  it("keys bulk starts by CSV content and import options instead of CSV length", async () => {
+    const { handlers, stubClient } = buildHandlers();
+    const handler = handlers.get("start_bulk_migration")!;
+    const params = { data: "a@example.net,pw,a@target.test", confirm_start: true };
+    await handler(params);
+    await handler({ ...params });
+    await handler({ ...params, data: "b@example.net,pw,b@target.test" });
+    await handler({ ...params, folder_strategy: "inbox_only" });
+    const keys = vi.mocked(stubClient.startBulkMigration).mock.calls.map((call) => call[1]);
+    expect(keys[0]).toBe(keys[1]);
+    expect(new Set([keys[0], keys[2], keys[3]]).size).toBe(3);
+  });
 
   for (const tool of ["preview_bulk_migration", "start_bulk_migration"] as const) {
     describe(tool, () => {

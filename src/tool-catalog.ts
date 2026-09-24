@@ -18,6 +18,7 @@ export const TOOLSETS = [
   "calendar",
   "drive",
   "domains",
+  "white_label",
   "mail_admin",
   "delivery",
   "migrations",
@@ -37,6 +38,8 @@ export interface ToolCatalogEntry {
   transports: readonly ToolTransport[];
   /** At least one capability is required. The upstream API remains authoritative. */
   anyOfCapabilities: readonly string[];
+  /** Every capability in this list is also required. */
+  allOfCapabilities: readonly string[];
   access: ToolAccess;
   safetyGate?: ToolSafetyGate;
 }
@@ -48,6 +51,7 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
   core: [
     "whoami",
     "get_account",
+    "get_sending_limits",
     "get_billing_status",
     "list_invoices",
     "agent_buy_verifier_credits",
@@ -61,6 +65,8 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
     "list_messages",
     "read_message",
     "send_message",
+    "get_message_delivery",
+    "get_mailbox_sending_limits",
     "delete_message",
     "move_message",
     "list_folders",
@@ -195,13 +201,6 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
     "get_dns_requirements",
     "dns_recheck",
     "get_dns_check",
-    "get_domain_branding",
-    "set_domain_branding",
-    "set_domain_brand_logo",
-    "verify_domain_branding_dns",
-    "create_branding_preview",
-    "remove_domain_brand_logo",
-    "remove_domain_branding",
     "validate_cloudflare_token",
     "list_cloudflare_zones",
     "connect_cloudflare_domains",
@@ -209,6 +208,29 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
     "apply_cloudflare_dns",
     "list_cloudflare_tokens",
     "delete_cloudflare_token",
+  ],
+
+  white_label: [
+    "get_domain_branding",
+    "set_domain_branding",
+    "set_domain_brand_logo",
+    "verify_domain_branding_dns",
+    "create_branding_preview",
+    "remove_domain_brand_logo",
+    "remove_domain_branding",
+    "get_white_label",
+    "get_white_label_access_catalog",
+    "list_white_label_members",
+    "get_white_label_member",
+    "invite_white_label_member",
+    "update_white_label_member",
+    "suspend_white_label_member",
+    "resume_white_label_member",
+    "resend_white_label_invitation",
+    "remove_white_label_member",
+    "restore_white_label_member",
+    "list_white_label_activity",
+    "get_white_label_member_activity",
   ],
 
   mail_admin: [
@@ -336,6 +358,7 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
 interface PolicyRule {
   names: readonly string[];
   anyOfCapabilities: readonly string[];
+  allOfCapabilities: readonly string[];
   access: ToolAccess;
 }
 
@@ -343,9 +366,11 @@ const rule = (
   capability: string | readonly string[],
   access: ToolAccess,
   names: readonly string[],
+  allOfCapabilities: readonly string[] = [],
 ): PolicyRule => ({
   names,
   anyOfCapabilities: typeof capability === "string" ? [capability] : capability,
+  allOfCapabilities,
   access,
 });
 
@@ -360,7 +385,7 @@ const DRIVE_PURGE = ["drive:account:purge", "drive:mailbox:purge"] as const;
  * space is authorised again by Laravel after the call is made.
  */
 const POLICY_RULES: readonly PolicyRule[] = [
-  rule("account:read", "read", ["whoami", "get_account"]),
+  rule("account:read", "read", ["whoami", "get_account", "get_sending_limits"]),
   rule("billing:read", "read", ["get_billing_status", "list_invoices"]),
 
   // Spending is its own capability, deliberately not billing:read. A connector
@@ -378,7 +403,8 @@ const POLICY_RULES: readonly PolicyRule[] = [
   ]),
 
   rule("messages:read", "read", [
-    "list_messages", "read_message", "list_folders", "download_attachment",
+    "list_messages", "read_message", "get_message_delivery", "get_mailbox_sending_limits",
+    "list_folders", "download_attachment",
     "download_all_attachments", "get_raw_message", "prepare_reply",
     "prepare_reply_all", "prepare_forward", "list_scheduled", "list_identities",
     "list_templates", "list_blocked_senders", "list_external_accounts",
@@ -406,7 +432,7 @@ const POLICY_RULES: readonly PolicyRule[] = [
   ]),
 
   rule("domains:read", "read", [
-    "list_domains", "get_domain", "get_domain_alias", "get_domain_signature", "get_domain_branding",
+    "list_domains", "get_domain", "get_domain_alias", "get_domain_signature",
     "list_forwarding_addresses", "get_forwarding_address_log",
   ]),
   rule("domains:create", "write", ["create_domain", "bulk_add_domains"]),
@@ -414,9 +440,7 @@ const POLICY_RULES: readonly PolicyRule[] = [
     "update_domain_catch_all", "set_domain_mail_hosting", "retry_domain_dkim", "update_domain_note",
     "set_domain_alias",
     "create_forwarding_address", "update_forwarding_address",
-    "update_domain_signature", "set_domain_branding", "set_domain_brand_logo",
-    "verify_domain_branding_dns", "create_branding_preview",
-    "remove_domain_brand_logo", "remove_domain_branding",
+    "update_domain_signature",
   ]),
   rule("domains:delete", "destructive", ["delete_domain"]),
   // Deleting a forwarding address is irreversible and silently stops mail for
@@ -431,6 +455,25 @@ const POLICY_RULES: readonly PolicyRule[] = [
   ]),
   rule("cloudflare:write", "write", ["connect_cloudflare_domains", "apply_cloudflare_dns"]),
   rule("cloudflare:delete", "destructive", ["delete_cloudflare_token"]),
+
+  rule("branding:read", "read", ["get_domain_branding"]),
+  rule("branding:write", "write", [
+    "set_domain_branding", "set_domain_brand_logo", "verify_domain_branding_dns",
+    "create_branding_preview", "remove_domain_brand_logo", "remove_domain_branding",
+  ]),
+  rule("branding:read", "read", ["get_white_label"]),
+  rule("members:read", "read", [
+    "get_white_label_access_catalog", "list_white_label_members", "get_white_label_member",
+  ]),
+  rule("members:write", "write", [
+    "invite_white_label_member", "update_white_label_member", "resume_white_label_member",
+    "resend_white_label_invitation", "restore_white_label_member",
+  ]),
+  rule("members:write", "destructive", [
+    "suspend_white_label_member", "remove_white_label_member",
+  ]),
+  rule("activity:read", "read", ["list_white_label_activity"]),
+  rule("activity:read", "read", ["get_white_label_member_activity"], ["members:read"]),
 
   rule("mailboxes:read", "read", [
     "list_mailboxes", "get_mailbox", "get_mail_client_setup", "get_apple_mail_profile",
@@ -531,6 +574,7 @@ for (const policy of POLICY_RULES) {
     }
     policyByName.set(name, {
       anyOfCapabilities: policy.anyOfCapabilities,
+      allOfCapabilities: policy.allOfCapabilities,
       access: policy.access,
     });
   }
@@ -542,6 +586,8 @@ const SENDING_GATED = new Set([
   "reschedule_message",
   "create_invite",
   "create_invites_bulk",
+  "invite_white_label_member",
+  "resend_white_label_invitation",
 ]);
 const MIGRATION_GATED = new Set([
   "test_migration_connection",
@@ -603,7 +649,7 @@ for (const name of policyByName.keys()) {
 export const TOOL_CATALOG: readonly ToolCatalogEntry[] = Object.freeze(entries);
 
 /** Bump whenever grouping/capability/safety semantics change. */
-export const TOOL_CATALOG_VERSION = "2026-08-23.1";
+export const TOOL_CATALOG_VERSION = "2026-09-24.1";
 
 function fnv1a(value: string): string {
   let hash = 0x811c9dc5;
@@ -620,6 +666,7 @@ export const TOOL_CATALOG_HASH = fnv1a(JSON.stringify(
     toolset: entry.toolset,
     transports: entry.transports,
     anyOfCapabilities: [...entry.anyOfCapabilities].sort(),
+    allOfCapabilities: [...entry.allOfCapabilities].sort(),
     access: entry.access,
     safetyGate: entry.safetyGate ?? null,
   })),
@@ -661,5 +708,6 @@ export function hasCapabilityForTool(
   const entry = catalogEntryForTool(name);
   if (!entry) return false;
   const granted = new Set(capabilities);
-  return entry.anyOfCapabilities.some((capability) => granted.has(capability));
+  return entry.anyOfCapabilities.some((capability) => granted.has(capability))
+    && entry.allOfCapabilities.every((capability) => granted.has(capability));
 }

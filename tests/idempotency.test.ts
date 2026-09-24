@@ -35,4 +35,26 @@ describe("idempotencyKey", () => {
     const key2 = idempotencyKey("test", { b: 2, a: 1 });
     expect(key1).toBe(key2);
   });
+
+  it("produces stable keys regardless of nested object insertion order", () => {
+    const key1 = idempotencyKey("test", {
+      rule: { field: "subject", operator: "contains", value: "invoice" },
+    });
+    const key2 = idempotencyKey("test", {
+      rule: { value: "invoice", operator: "contains", field: "subject" },
+    });
+
+    expect(key1).toBe(key2);
+  });
+
+  it("includes nested values in the key", () => {
+    const key1 = idempotencyKey("test", {
+      conditions: [{ field: "subject", operator: "contains", value: "invoice" }],
+    });
+    const key2 = idempotencyKey("test", {
+      conditions: [{ field: "subject", operator: "contains", value: "receipt" }],
+    });
+
+    expect(key1).not.toBe(key2);
+  });
 });

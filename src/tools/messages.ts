@@ -98,7 +98,7 @@ export function registerMessageToolHandlers(
     {
       title: "Send Message",
       description:
-        "Send an email from the mailbox. Requires a message token with messages:send scope. Both TREKMAIL_ALLOW_SENDING=true and confirm_send=true are required as safety gates. The message is queued for delivery and a message_id is returned immediately.",
+        "Send an email from the mailbox. Requires a message token with messages:send scope. Both TREKMAIL_ALLOW_SENDING=true and confirm_send=true are required as safety gates. The message is queued for delivery and a message_id and request_id are returned immediately — accepted, not yet sent: sending allowances are checked again when it leaves the queue, so call get_message_delivery with the request_id to confirm it went out. If an allowance is already used up the call fails with sending_limit_exceeded, naming the allowance and when it renews; do not retry before resets_at. A message whose delivery failed can be sent again later with the same content: it is not answered with the earlier result.",
       inputSchema: {
         to: z
           .array(z.string().email())
@@ -273,6 +273,38 @@ export function registerMessageToolHandlers(
       );
 
       return callApi(() => client.sendMessage(body, idemKey));
+    },
+  );
+
+  server.registerTool(
+    "get_message_delivery",
+    {
+      title: "Get Message Delivery",
+      description:
+        "What happened to a message accepted by send_message: pending, sending, sent, failed or delivery_uncertain. Pass the request_id send_message returned; any message token for the same mailbox can check it. A message refused by a sending allowance has failure.code = sending_limit_exceeded with the allowance (dimension), its numbers and when it renews (resets_at).",
+      inputSchema: {
+        request_id: z
+          .string()
+          .min(1)
+          .max(255)
+          .describe("request_id returned by send_message"),
+      },
+    },
+    async ({ request_id }) => {
+      return callApi(() => client.getMessageDelivery(request_id));
+    },
+  );
+
+  server.registerTool(
+    "get_mailbox_sending_limits",
+    {
+      title: "Get Mailbox Sending Limits",
+      description:
+        "How many more recipients this token's mailbox can send to today (remaining_today — the lowest of its own, its domain's and the account's allowance; null while that lowest is the account-wide total and some of it is left, which only an account token sees through get_sending_limits), the most recipients one message may have, when the allowance renews, and the REST API's own caps for this token. Recipients are counted across To, Cc and Bcc.",
+      inputSchema: {},
+    },
+    async () => {
+      return callApi(() => client.getMailboxSendingLimits());
     },
   );
 

@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
 import type { Config } from "../config.js";
-import { idempotencyKey } from "../idempotency.js";
+import { idempotencyKey, operationIdempotencyKey } from "../idempotency.js";
 import { callApi, errorResult, isPrivateHost } from "./util.js";
 
 /**
@@ -46,7 +46,7 @@ export function registerDomainSmtpTools(
       if (!config?.allowDestructive) {
         return errorResult("Changing a domain's SMTP route is disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to enable.");
       }
-      const idemKey = idempotencyKey("set_domain_smtp", { domain_id, smtp_mode, smtp_connection_id }, idempotency_key);
+      const idemKey = operationIdempotencyKey("set_domain_smtp", idempotency_key);
       return callApi(() => client.setDomainSmtp(domain_id, { smtp_mode, smtp_connection_id }, idemKey));
     },
   );
@@ -80,7 +80,7 @@ export function registerDomainSmtpTools(
       if (!config?.allowDestructive) {
         return errorResult("Changing the account default SMTP route is disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to enable.");
       }
-      const idemKey = idempotencyKey("set_account_smtp_default", { smtp_mode, smtp_connection_id, apply_to_all }, idempotency_key);
+      const idemKey = operationIdempotencyKey("set_account_smtp_default", idempotency_key);
       return callApi(() => client.setAccountSmtpDefault({ smtp_mode, smtp_connection_id, apply_to_all }, idemKey));
     },
   );
@@ -134,7 +134,7 @@ export function registerDomainSmtpTools(
       if (isPrivateHost(host)) {
         return errorResult("Cannot use private/internal network addresses.");
       }
-      const idemKey = idempotencyKey("create_domain_smtp_profile", { domain_id, host, username }, idempotency_key);
+      const idemKey = operationIdempotencyKey("create_domain_smtp_profile", idempotency_key);
       return callApi(() => client.createDomainSmtpProfile(domain_id, { name, host, port, encryption, username, password }, idemKey));
     },
   );
@@ -165,7 +165,7 @@ export function registerDomainSmtpTools(
       if (isPrivateHost(host)) {
         return errorResult("Cannot use private/internal network addresses.");
       }
-      const idemKey = idempotencyKey("update_domain_smtp_profile", { domain_id, profile_id, host }, idempotency_key);
+      const idemKey = operationIdempotencyKey("update_domain_smtp_profile", idempotency_key);
       return callApi(() => client.updateDomainSmtpProfile(domain_id, profile_id, { name, host, port, encryption, username, password }, idemKey));
     },
   );
@@ -225,7 +225,7 @@ export function registerDomainSmtpTools(
       if (encryption) body.encryption = encryption;
       if (username) body.username = username;
       if (password) body.password = password;
-      const idemKey = idempotencyKey("test_domain_smtp", { domain_id, mode, smtp_connection_id, host }, idempotency_key);
+      const idemKey = operationIdempotencyKey("test_domain_smtp", idempotency_key);
       return callApi(() => client.testDomainSmtp(domain_id, body, idemKey));
     },
   );

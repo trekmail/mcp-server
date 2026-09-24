@@ -119,9 +119,10 @@ export function registerMigrationTools(
       if (isPrivateHost(source_host)) {
         return errorResult("Cannot connect to private/internal network addresses.");
       }
-      const idemKey = idempotencyKey("start_migration", { mailbox_id, source_host, source_email }, idempotency_key);
+      const params = { mailbox_id, provider, source_host, source_port, source_security, source_email, source_username, source_password, selected_folders, import_since, skip_duplicates };
+      const idemKey = idempotencyKey("start_migration", params, idempotency_key);
       return callApi(() => client.startMigration(
-        { mailbox_id, provider, source_host, source_port, source_security, source_email, source_username, source_password, selected_folders, import_since, skip_duplicates },
+        params,
         idemKey,
       ));
     },
@@ -278,7 +279,7 @@ export function registerMigrationTools(
       if (params.source_host && isPrivateHost(params.source_host)) {
         return errorResult("Cannot connect to private/internal network addresses.");
       }
-      const idemKey = idempotencyKey("start_bulk_migration", { data_len: params.data.length }, idempotency_key);
+      const idemKey = idempotencyKey("start_bulk_migration", params, idempotency_key);
       return callApi(() => client.startBulkMigration(params, idemKey));
     },
   );
