@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
 import { idempotencyKey } from "../idempotency.js";
-import { callApi, errorResult } from "./util.js";
+import { callApi, errorResult, LOCAL_PART_PATTERN, LOCAL_PART_RULE } from "./util.js";
 
 export function registerMailboxTools(
   server: McpServer,
@@ -78,9 +78,9 @@ export function registerMailboxTools(
         local_part: z
           .string()
           .max(64)
-          .regex(/^[a-z0-9._-]+$/)
+          .regex(LOCAL_PART_PATTERN)
           .describe(
-            "The local part of the email address (before the @). E.g. 'alice' for alice@example.com. Lowercase letters, digits, dots, hyphens, underscores only.",
+            `The local part of the email address (before the @). E.g. 'alice' for alice@example.com. ${LOCAL_PART_RULE}`,
           ),
         display_name: z
           .string()
@@ -632,8 +632,8 @@ export function registerMailboxTools(
               local_part: z
                 .string()
                 .max(64)
-                .regex(/^[a-z0-9._-]+$/)
-                .describe("Local part of the email address (before the @)"),
+                .regex(LOCAL_PART_PATTERN)
+                .describe(`Local part of the email address (before the @). ${LOCAL_PART_RULE}`),
               // Optional now — required only when password_mode is
               // 'user_supplied' (or omitted). Server enforces via
               // 'required_unless:password_mode,generated_one_time'.

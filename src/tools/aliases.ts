@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
 import type { Config } from "../config.js";
 import { idempotencyKey } from "../idempotency.js";
-import { callApi, errorResult } from "./util.js";
+import { ALIAS_LOCAL_PART_PATTERN, ALIAS_LOCAL_PART_RULE, callApi, errorResult } from "./util.js";
 
 export function registerAliasTools(
   server: McpServer,
@@ -44,9 +44,9 @@ export function registerAliasTools(
         local_part: z
           .string()
           .max(64)
-          .regex(/^[a-z0-9._-]+$/)
+          .regex(ALIAS_LOCAL_PART_PATTERN)
           .describe(
-            "The local part of the alias (before @). Lowercase letters, digits, dots, hyphens, underscores only.",
+            `The local part of the alias (before @). ${ALIAS_LOCAL_PART_RULE}`,
           ),
         domain_id: z
           .number()

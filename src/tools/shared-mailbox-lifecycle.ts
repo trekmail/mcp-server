@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
 import type { Config } from "../config.js";
 import { idempotencyKey } from "../idempotency.js";
-import { callApi, errorResult } from "./util.js";
+import { callApi, errorResult, LOCAL_PART_PATTERN, LOCAL_PART_RULE } from "./util.js";
 
 export function registerSharedMailboxLifecycleTools(
   server: McpServer,
@@ -24,8 +24,10 @@ export function registerSharedMailboxLifecycleTools(
           .describe("The domain to create the shared mailbox under"),
         local_part: z
           .string()
+          .max(64)
+          .regex(LOCAL_PART_PATTERN)
           .describe(
-            "The local-part of the address (the part before @). e.g. `support` for support@yourdomain.com",
+            `The local-part of the address (the part before @). e.g. \`support\` for support@yourdomain.com. ${LOCAL_PART_RULE}`,
           ),
         display_name: z
           .string()

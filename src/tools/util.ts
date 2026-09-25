@@ -1,6 +1,25 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { TrekMailApiError, TrekMailClientError } from "../errors.js";
 
+/**
+ * A mailbox local part, as the TrekMail API accepts it
+ * (App\Rules\MailboxLocalPart::PATTERN): lowercase letters, digits,
+ * underscores and hyphens, single dots only between them, never a leading
+ * hyphen. Checked here so an agent learns the rule before the API refuses.
+ */
+export const LOCAL_PART_PATTERN =
+  /^(?!.*_archived_[0-9]{8}_[0-9]{6}(?:_[0-9]+_[0-9]+)?$)[a-z0-9_][a-z0-9_-]*(?:\.[a-z0-9_-]+)*$/;
+export const LOCAL_PART_RULE =
+  "Lowercase letters, digits, underscores and hyphens, with dots only between them; it cannot start with a hyphen.";
+
+/**
+ * An alias local part (App\Rules\AliasLocalPart::PATTERN). Aliases never reach
+ * doveadm or the provisioning scripts, so a leading hyphen is still allowed.
+ */
+export const ALIAS_LOCAL_PART_PATTERN = /^[a-z0-9_-]+(?:\.[a-z0-9_-]+)*$/;
+export const ALIAS_LOCAL_PART_RULE =
+  "Lowercase letters, digits, underscores and hyphens, with dots only between them.";
+
 export function errorResult(text: string): CallToolResult {
   return {
     content: [{ type: "text", text }],
