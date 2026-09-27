@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
@@ -127,7 +128,7 @@ export function registerMessageTokenTools(
           .enum(["1h", "2h", "4h", "8h", "7d", "30d", "90d"])
           .optional()
           .describe("New expiry from now; must be sooner than the current one"),
-        name: z.string().max(255).optional().describe("A new name for the token"),
+        name: z.string().min(1).max(255).optional().describe("A new name for the token"),
         idempotency_key: z
           .string()
           .optional()
@@ -140,16 +141,10 @@ export function registerMessageTokenTools(
       if (scopes === undefined && expires_in === undefined && name === undefined) {
         return errorResult("Nothing to change: pass scopes, expires_in or name.");
       }
-      const idemKey = idempotencyKey(
-        "update_message_token",
-        {
-          token_id,
-          scopes: scopes ? [...scopes].sort().join(",") : "",
-          expires_in: expires_in ?? "",
-          name: name ?? "",
-        },
-        idempotency_key,
-      );
+      // A fresh key per call unless the caller brings one. A key derived
+      // from the arguments would replay an older answer when the same change
+      // is asked for again after another one (rename A, B, then A again).
+      const idemKey = idempotency_key ?? randomUUID();
       return callApi(() =>
         client.updateMessageToken(
           token_id,

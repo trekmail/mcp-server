@@ -239,7 +239,7 @@ describe("update_message_token", () => {
     expect(stubClient.updateMessageToken).toHaveBeenCalledWith(
       7,
       { scopes: ["messages:read"] },
-      expect.stringMatching(/^mcp_update_message_token_[a-f0-9]{32}$/),
+      expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     );
   });
 
@@ -270,10 +270,14 @@ describe("update_message_token", () => {
     expect(stubClient.updateMessageToken).not.toHaveBeenCalled();
   });
 
-  it("uses the same idempotency key for the same change", () => {
-    const params = { token_id: 7, scopes: "messages:read", expires_in: "", name: "" };
-    expect(idempotencyKey("update_message_token", params)).toBe(
-      idempotencyKey("update_message_token", { ...params }),
-    );
+  it("uses the caller's idempotency key when given, a fresh one otherwise", async () => {
+    const { handlers, stubClient } = buildHarness();
+    await handlers.get("update_message_token")!({ token_id: 7, name: "a", idempotency_key: "k-1" });
+    await handlers.get("update_message_token")!({ token_id: 7, name: "a" });
+    await handlers.get("update_message_token")!({ token_id: 7, name: "a" });
+
+    const keys = (stubClient.updateMessageToken as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[2]);
+    expect(keys[0]).toBe("k-1");
+    expect(keys[1]).not.toBe(keys[2]);
   });
 });

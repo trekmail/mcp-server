@@ -361,6 +361,7 @@ Connect and manage external mailboxes (Gmail/Outlook/IMAP) the mailbox reads and
 ### Message Token Management (ops token)
 - **create_message_token** — Create a message API token for a mailbox (returns plaintext once)
 - **list_message_tokens** — List all message tokens for a mailbox
+- **update_message_token** — Narrow a message token in place: drop scopes, bring its expiry forward or rename it (never widens)
 - **revoke_message_token** — Revoke a message token (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 
 ### Migrations (ops token)
