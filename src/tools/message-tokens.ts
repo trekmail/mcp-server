@@ -107,6 +107,64 @@ export function registerMessageTokenTools(
   );
 
   server.registerTool(
+    "update_message_token",
+    {
+      title: "Narrow Message Token",
+      description:
+        "Narrow an existing message API token in place: remove scopes, bring its expiry forward, or rename it. It can never gain scopes or a later expiry — create a new token for that.",
+      inputSchema: {
+        token_id: z
+          .number()
+          .int()
+          .positive()
+          .describe("The message token ID to narrow"),
+        scopes: z
+          .array(z.enum(["messages:read", "messages:write", "messages:send"]))
+          .min(1)
+          .optional()
+          .describe("The scopes to keep — a subset of the token's current scopes"),
+        expires_in: z
+          .enum(["1h", "2h", "4h", "8h", "7d", "30d", "90d"])
+          .optional()
+          .describe("New expiry from now; must be sooner than the current one"),
+        name: z.string().max(255).optional().describe("A new name for the token"),
+        idempotency_key: z
+          .string()
+          .optional()
+          .describe("Optional idempotency key"),
+      },
+    },
+    async ({ token_id, scopes, expires_in, name, idempotency_key }) => {
+      // Only ever removes capability, so no safety flag gates it: refusing
+      // to narrow a token would leave the broader one in place.
+      if (scopes === undefined && expires_in === undefined && name === undefined) {
+        return errorResult("Nothing to change: pass scopes, expires_in or name.");
+      }
+      const idemKey = idempotencyKey(
+        "update_message_token",
+        {
+          token_id,
+          scopes: scopes ? [...scopes].sort().join(",") : "",
+          expires_in: expires_in ?? "",
+          name: name ?? "",
+        },
+        idempotency_key,
+      );
+      return callApi(() =>
+        client.updateMessageToken(
+          token_id,
+          {
+            ...(scopes !== undefined ? { scopes } : {}),
+            ...(expires_in !== undefined ? { expires_in } : {}),
+            ...(name !== undefined ? { name } : {}),
+          },
+          idemKey,
+        ),
+      );
+    },
+  );
+
+  server.registerTool(
     "revoke_message_token",
     {
       title: "Revoke Message Token",

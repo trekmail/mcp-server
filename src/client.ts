@@ -1768,6 +1768,17 @@ export class TrekMailClient {
     });
   }
 
+  async updateMessageToken(
+    tokenId: number,
+    params: { name?: string; scopes?: string[]; expires_in?: string },
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("PATCH", `message-tokens/${tokenId}`, {
+      body: params,
+      idempotencyKey,
+    });
+  }
+
   // --- Spam Metrics ---
 
   async getSpamMetrics(

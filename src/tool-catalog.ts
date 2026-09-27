@@ -347,6 +347,7 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
   credentials: [
     "create_message_token",
     "list_message_tokens",
+    "update_message_token",
     "revoke_message_token",
     "drive_device_list",
     "drive_device_create",
@@ -506,7 +507,7 @@ const POLICY_RULES: readonly PolicyRule[] = [
     "create_delete_intent", "confirm_delete_intent", "restore_mailbox",
   ]),
   rule("mailboxes:message-tokens:manage", "read", ["list_message_tokens"]),
-  rule("mailboxes:message-tokens:manage", "write", ["create_message_token"]),
+  rule("mailboxes:message-tokens:manage", "write", ["create_message_token", "update_message_token"]),
   rule("mailboxes:message-tokens:manage", "destructive", ["revoke_message_token"]),
 
   rule("migrations:read", "read", [
@@ -608,6 +609,8 @@ const UNGATED_MUTATIONS = new Set([
   "cancel_bulk_migration",
   "resume_bulk_migration",
   "create_message_token",
+  // Only removes capability; gating it would keep the broader token alive.
+  "update_message_token",
 ]);
 
 function safetyGateFor(name: string, access: ToolAccess): ToolSafetyGate | undefined {
@@ -649,7 +652,7 @@ for (const name of policyByName.keys()) {
 export const TOOL_CATALOG: readonly ToolCatalogEntry[] = Object.freeze(entries);
 
 /** Bump whenever grouping/capability/safety semantics change. */
-export const TOOL_CATALOG_VERSION = "2026-09-24.1";
+export const TOOL_CATALOG_VERSION = "2026-09-27.1";
 
 function fnv1a(value: string): string {
   let hash = 0x811c9dc5;

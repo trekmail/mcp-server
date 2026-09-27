@@ -1,6 +1,6 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 264 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 265 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
 ## Quickstart
 
@@ -36,7 +36,7 @@ The MCP server supports two independent token types. At least one is required:
 
 | Token | Env Var | Prefix | Unlocks |
 |-------|---------|--------|---------|
-| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 200 infrastructure tools (White Label branding, clients, team access and activity; domains; DNS; mailboxes; Drive; migrations; SMTP; tickets; account; billing; verifier; Cloudflare; and related administration) |
+| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 201 infrastructure tools (White Label branding, clients, team access and activity; domains; DNS; mailboxes; Drive; migrations; SMTP; tickets; account; billing; verifier; Cloudflare; and related administration) |
 | **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 64 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, connected accounts, identities, templates, blocked senders) |
 
 Tools are registered conditionally — only token types you provide get their tools. You can supply one or both:
@@ -88,12 +88,12 @@ TREKMAIL_SCOPE_AWARE_REGISTRATION=true \
 npm start
 ```
 
-## Tools (264)
+## Tools (265)
 
-> The full catalog is **264** tools over stdio. On the hosted **HTTP** transport
+> The full catalog is **265** tools over stdio. On the hosted **HTTP** transport
 > `drive_file_upload` is intentionally not registered (its `local_path` would read
 > files on our server — see the note in `src/tools/drive.ts`), so the HTTP MCP
-> exposes 263. Tools also split by token type: **64** need a message token
+> exposes 264. Tools also split by token type: **64** need a message token
 > (`tm_msg_`), the rest an ops token (`tm_live_`).
 >
 > **Safety gates apply to the whole list, not just the rows that say so.** Read

@@ -100,6 +100,10 @@ describe("create_message_token scope-aware gate", () => {
       }),
       listMessageTokens: vi.fn(),
       revokeMessageToken: vi.fn(),
+      updateMessageToken: vi.fn().mockResolvedValue({
+        id: 7,
+        scopes: ["messages:read"],
+      }),
     } as unknown as TrekMailClient;
 
     const cfg: Config = {
@@ -186,5 +190,90 @@ describe("create_message_token scope-aware gate", () => {
     })) as { isError: boolean; content: Array<{ text: string }> };
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toContain("TREKMAIL_ALLOW_SENDING=true");
+  });
+});
+
+/**
+ * Ticket #444 — narrowing a message token in place. Narrowing only removes
+ * capability, so none of the safety flags gate it.
+ */
+describe("update_message_token", () => {
+  function buildHarness() {
+    const server = new McpServer({ name: "t", version: "0.0.0" });
+    const handlers = new Map<string, (args: Record<string, unknown>) => Promise<unknown>>();
+    const original = server.registerTool.bind(server);
+    server.registerTool = ((name: string, def: unknown, handler: any) => {
+      handlers.set(name, handler);
+      return original(name, def as any, handler);
+    }) as typeof server.registerTool;
+
+    const stubClient = {
+      createMessageToken: vi.fn(),
+      listMessageTokens: vi.fn(),
+      revokeMessageToken: vi.fn(),
+      updateMessageToken: vi.fn().mockResolvedValue({ id: 7, scopes: ["messages:read"] }),
+    } as unknown as TrekMailClient;
+
+    const cfg = {
+      baseUrl: "https://trekmail.test",
+      apiToken: "tm_live_x",
+      timeoutMs: 30000,
+      userAgent: "test",
+      allowDestructive: false,
+      allowSending: false,
+      allowMigration: false,
+    } as Config;
+
+    registerMessageTokenTools(server, stubClient, cfg);
+    return { handlers, stubClient };
+  }
+
+  it("sends only the fields given, even with every safety flag off", async () => {
+    const { handlers, stubClient } = buildHarness();
+    const res = (await handlers.get("update_message_token")!({
+      token_id: 7,
+      scopes: ["messages:read"],
+    })) as { isError?: boolean };
+
+    expect(res.isError).toBeFalsy();
+    expect(stubClient.updateMessageToken).toHaveBeenCalledWith(
+      7,
+      { scopes: ["messages:read"] },
+      expect.stringMatching(/^mcp_update_message_token_[a-f0-9]{32}$/),
+    );
+  });
+
+  it("passes expiry and name through", async () => {
+    const { handlers, stubClient } = buildHarness();
+    await handlers.get("update_message_token")!({
+      token_id: 7,
+      expires_in: "7d",
+      name: "reader",
+    });
+
+    expect(stubClient.updateMessageToken).toHaveBeenCalledWith(
+      7,
+      { expires_in: "7d", name: "reader" },
+      expect.any(String),
+    );
+  });
+
+  it("refuses an empty change without calling the API", async () => {
+    const { handlers, stubClient } = buildHarness();
+    const res = (await handlers.get("update_message_token")!({ token_id: 7 })) as {
+      isError: boolean;
+      content: Array<{ text: string }>;
+    };
+
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain("Nothing to change");
+    expect(stubClient.updateMessageToken).not.toHaveBeenCalled();
+  });
+
+  it("uses the same idempotency key for the same change", () => {
+    const params = { token_id: 7, scopes: "messages:read", expires_in: "", name: "" };
+    expect(idempotencyKey("update_message_token", params)).toBe(
+      idempotencyKey("update_message_token", { ...params }),
+    );
   });
 });

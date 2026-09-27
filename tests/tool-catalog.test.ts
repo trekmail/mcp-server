@@ -27,17 +27,17 @@ function registeredToolNames(): Set<string> {
 
 describe("tool catalog", () => {
   it("has an explicit version and deterministic parity hash", () => {
-    expect(TOOL_CATALOG_VERSION).toBe("2026-09-24.1");
-    expect(TOOL_CATALOG_HASH).toBe("93a5ac26");
+    expect(TOOL_CATALOG_VERSION).toBe("2026-09-27.1");
+    expect(TOOL_CATALOG_HASH).toBe("ede9aac0");
   });
 
-  it("covers all 264 registered tools exactly once", () => {
+  it("covers all 265 registered tools exactly once", () => {
     const registered = registeredToolNames();
     const catalogued = new Set(TOOL_CATALOG.map((entry) => entry.name));
 
-    expect(registered.size).toBe(264);
-    expect(TOOL_CATALOG).toHaveLength(264);
-    expect(TOOL_CATALOG_BY_NAME.size).toBe(264);
+    expect(registered.size).toBe(265);
+    expect(TOOL_CATALOG).toHaveLength(265);
+    expect(TOOL_CATALOG_BY_NAME.size).toBe(265);
     expect([...registered].filter((name) => !catalogued.has(name))).toEqual([]);
     expect([...catalogued].filter((name) => !registered.has(name))).toEqual([]);
   });
@@ -52,7 +52,7 @@ describe("tool catalog", () => {
 
   it("keeps credential minting out of normal Drive and email sets", () => {
     const credentials = toolsForToolsets(["credentials"]);
-    expect(credentials.size).toBe(7);
+    expect(credentials.size).toBe(8);
     expect(credentials.has("create_message_token")).toBe(true);
     expect(credentials.has("drive_device_create")).toBe(true);
 
