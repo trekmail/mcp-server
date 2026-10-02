@@ -27,17 +27,17 @@ function registeredToolNames(): Set<string> {
 
 describe("tool catalog", () => {
   it("has an explicit version and deterministic parity hash", () => {
-    expect(TOOL_CATALOG_VERSION).toBe("2026-09-27.1");
-    expect(TOOL_CATALOG_HASH).toBe("ede9aac0");
+    expect(TOOL_CATALOG_VERSION).toBe("2026-10-02.1");
+    expect(TOOL_CATALOG_HASH).toBe("8b2090b2");
   });
 
-  it("covers all 265 registered tools exactly once", () => {
+  it("covers all 266 registered tools exactly once", () => {
     const registered = registeredToolNames();
     const catalogued = new Set(TOOL_CATALOG.map((entry) => entry.name));
 
-    expect(registered.size).toBe(265);
-    expect(TOOL_CATALOG).toHaveLength(265);
-    expect(TOOL_CATALOG_BY_NAME.size).toBe(265);
+    expect(registered.size).toBe(266);
+    expect(TOOL_CATALOG).toHaveLength(266);
+    expect(TOOL_CATALOG_BY_NAME.size).toBe(266);
     expect([...registered].filter((name) => !catalogued.has(name))).toEqual([]);
     expect([...catalogued].filter((name) => !registered.has(name))).toEqual([]);
   });
@@ -86,6 +86,10 @@ describe("tool catalog", () => {
 
     expect(TOOL_CATALOG_BY_NAME.get("list_domains")?.anyOfCapabilities)
       .toEqual(["domains:read"]);
+    expect(TOOL_CATALOG_BY_NAME.get("get_domain_connect_setup")?.anyOfCapabilities)
+      .toEqual(["domains:dns:read"]);
+    expect(TOOL_CATALOG_BY_NAME.get("get_domain_connect_setup")?.access)
+      .toBe("read");
     expect(TOOL_CATALOG_BY_NAME.get("drive_browse_folder")?.anyOfCapabilities)
       .toEqual(["drive:account:read", "drive:mailbox:read"]);
     expect(TOOL_CATALOG_BY_NAME.get("drive_share_list")?.anyOfCapabilities)

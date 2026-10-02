@@ -90,21 +90,21 @@ describe("shared mailbox member tools (flat model)", () => {
     );
   });
 
-  it("addSharedMailboxMember generates deterministic idempotency key (no role)", () => {
+  it("addSharedMailboxMember uses fresh keys when adding again", () => {
     const key = idempotencyKey("add_shared_mailbox_member", {
       mailbox_id: 10,
       member_mailbox_id: 42,
       can_send: true,
     });
     expect(key).toMatch(/^mcp_add_shared_mailbox_member_/);
-    // Same params → same key
+    // A removed member may be added again in a new operation.
     expect(
       idempotencyKey("add_shared_mailbox_member", {
         mailbox_id: 10,
         member_mailbox_id: 42,
         can_send: true,
       }),
-    ).toBe(key);
+    ).not.toBe(key);
   });
 
   it("addSharedMailboxMember idempotency key differs when can_send changes", () => {
@@ -319,7 +319,7 @@ describe("shared mailbox lifecycle tools", () => {
     );
   });
 
-  it("convertMailboxToShared generates deterministic idempotency key", () => {
+  it("convertMailboxToShared permits a new conversion after reverting", () => {
     const key = idempotencyKey("convert_mailbox_to_shared", {
       mailbox_id: 77,
       member_mailbox_ids: [10, 20],
@@ -330,7 +330,7 @@ describe("shared mailbox lifecycle tools", () => {
         mailbox_id: 77,
         member_mailbox_ids: [10, 20],
       }),
-    ).toBe(key);
+    ).not.toBe(key);
   });
 
   it("convertMailboxToShared returns error when allowDestructive=false", () => {
@@ -359,17 +359,15 @@ describe("shared mailbox lifecycle tools", () => {
     );
   });
 
-  it("convertSharedMailboxToRegular generates deterministic idempotency key based on mailbox_id only (not password)", () => {
-    // The idempotency key for this tool intentionally omits the password
-    // so that a client retry with the same mailbox_id is idempotent even
-    // if the user re-types the password.
+  it("convertSharedMailboxToRegular permits a new conversion after reverting", () => {
+    // Distinct conversions need fresh keys; explicit keys identify retries.
     const key = idempotencyKey("convert_shared_mailbox_to_regular", {
       mailbox_id: 99,
     });
     expect(key).toMatch(/^mcp_convert_shared_mailbox_to_regular_/);
     expect(
       idempotencyKey("convert_shared_mailbox_to_regular", { mailbox_id: 99 }),
-    ).toBe(key);
+    ).not.toBe(key);
   });
 
   it("convertSharedMailboxToRegular key differs for different mailbox_ids", () => {

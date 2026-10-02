@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { toolAnnotations } from "./tool-annotations.js";
 import {
   catalogEntryForTool,
   hasCapabilityForTool,
@@ -66,11 +67,7 @@ export function withToolFilter(
         const [definition, handler] = args;
         const normalizedDefinition = {
           ...definition,
-          annotations: {
-            ...(definition?.annotations ?? {}),
-            readOnlyHint: entry.access === "read",
-            destructiveHint: entry.safetyGate === "destructive",
-          },
+          annotations: toolAnnotations(entry, definition?.annotations, definition?.title),
         };
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return (target.registerTool as any).call(

@@ -33,7 +33,7 @@ export function registerAutoReplyTools(
     {
       title: "Set Auto-Reply",
       description:
-        "Configure the vacation auto-reply for a mailbox. Set a custom subject, message body, optional date range, and whether to skip mailing lists. Each sender receives the reply at most once every 7 days. Starter, Pro, and Agency plans.",
+        "Configure the vacation auto-reply for a mailbox. Set a custom subject, message body, optional date range, and whether to skip mailing lists. Each sender receives the reply at most once every 7 days. Requires API write access available on Pro and Agency plans. API: PUT /api/v1/mailboxes/{id}/auto-reply. API documentation: https://trekmail.net/docs/ai-agents-api/api-overview",
       inputSchema: {
         mailbox_id: z
           .number()

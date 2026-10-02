@@ -11,6 +11,20 @@ export function registerCloudflareTools(
   config: Config,
 ): void {
   server.registerTool(
+    "get_domain_connect_setup",
+    {
+      title: "Get One-Time Cloudflare DNS Setup",
+      description:
+        "Check whether one-time Cloudflare Domain Connect is available for a TrekMail domain. If the domain and current grant allow it, return a TrekMail browser link for the customer to open and approve on Cloudflare. No Cloudflare API token is needed or saved; this read-only tool never starts consent or changes DNS. If unavailable, return the actual blockers instead of suggesting a nonworking link.",
+      inputSchema: {
+        domain_id: z.number().int().positive().describe("TrekMail domain ID"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ domain_id }) => callApi(() => client.getDomainConnectSetup(domain_id)),
+  );
+
+  server.registerTool(
     "validate_cloudflare_token",
     {
       title: "Validate Cloudflare Token",

@@ -1,6 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { TrekMailClient, type ClientConfig } from "../src/client.js";
 import { createMockFetch, getLastFetchCall } from "./helpers/mock-fetch.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerCloudflareTools } from "../src/tools/cloudflare.js";
+import type { Config } from "../src/config.js";
 
 describe("TrekMailClient — Cloudflare DNS apply/preview", () => {
   let client: TrekMailClient;
@@ -64,5 +67,42 @@ describe("TrekMailClient — Cloudflare DNS apply/preview", () => {
     const { init } = getLastFetchCall(mockFetch);
     const body = JSON.parse(init.body as string);
     expect(body).not.toHaveProperty("included_records");
+  });
+
+  it("reads Domain Connect eligibility without sending an API token or mutation", async () => {
+    await client.getDomainConnectSetup(2275);
+    const { url, init } = getLastFetchCall(mockFetch);
+    expect(new URL(url).pathname).toBe("/api/v1/domains/2275/domain-connect/setup");
+    expect(init.method).toBe("GET");
+    expect(init.body).toBeUndefined();
+  });
+});
+
+describe("one-time Domain Connect MCP handoff", () => {
+  it("uses a read-only tool and returns the API result without starting consent", async () => {
+    const server = new McpServer({ name: "test", version: "1" });
+    const getDomainConnectSetup = vi.fn().mockResolvedValue({
+      domain_setup: { domain_connect_available: false, blockers: ["dns_not_on_cloudflare"], domain_connect_url: null },
+    });
+    const client = { getDomainConnectSetup } as unknown as TrekMailClient;
+    const config = { allowDestructive: false } as Config;
+    let handler: ((args: { domain_id: number }) => Promise<unknown>) | undefined;
+    const original = server.registerTool.bind(server);
+    server.registerTool = ((name: string, definition: unknown, callback: never) => {
+      if (name === "get_domain_connect_setup") handler = callback;
+      return original(name, definition as Parameters<typeof original>[1], callback);
+    }) as typeof server.registerTool;
+    registerCloudflareTools(server, client, config);
+
+    const tool = (server as unknown as {
+      _registeredTools: Record<string, { annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean } }>;
+    })._registeredTools.get_domain_connect_setup;
+    expect(tool.annotations?.readOnlyHint).toBe(true);
+    expect(tool.annotations?.destructiveHint).toBeFalsy();
+    const result = await handler!({ domain_id: 7 });
+    expect(getDomainConnectSetup).toHaveBeenCalledExactlyOnceWith(7);
+    expect(result).toMatchObject({
+      content: [{ type: "text", text: expect.stringContaining("dns_not_on_cloudflare") }],
+    });
   });
 });

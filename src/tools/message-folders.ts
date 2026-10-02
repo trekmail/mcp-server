@@ -43,7 +43,7 @@ export function registerMessageFolderTools(
     {
       title: "Rename Folder",
       description:
-        "Rename an existing IMAP folder. Special folders (INBOX, Sent, Drafts, Junk, Trash, Archive, Scheduled) cannot be renamed.",
+        "Rename an existing IMAP folder. Special folders (INBOX, Sent, Drafts, Junk, Trash, Archive, Scheduled) cannot be renamed. API: PATCH /api/v1/messages/folders/{path}. API documentation: https://trekmail.net/docs/ai-agents-api/api-overview",
       inputSchema: {
         path: z
           .string()
@@ -71,7 +71,7 @@ export function registerMessageFolderTools(
     {
       title: "Delete Folder",
       description:
-        "Delete a leaf IMAP folder and all messages it contains. A folder with child folders is rejected; delete its children explicitly first. Special folders cannot be deleted. Requires TREKMAIL_ALLOW_DESTRUCTIVE=true.",
+        "Delete a leaf IMAP folder and all messages it contains. A folder with child folders is rejected; delete its children explicitly first. Special folders cannot be deleted. Requires TREKMAIL_ALLOW_DESTRUCTIVE=true. API: DELETE /api/v1/messages/folders/{path}. API documentation: https://trekmail.net/docs/ai-agents-api/api-overview",
       inputSchema: {
         path: z
           .string()

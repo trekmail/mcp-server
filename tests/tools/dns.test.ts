@@ -18,11 +18,11 @@ describe("dns tools", () => {
     expect(client.getDnsRequirements).toHaveBeenCalledWith(5);
   });
 
-  it("dnsRecheck generates deterministic idempotency key", () => {
+  it("dnsRecheck starts a new check unless the caller explicitly retries", () => {
     const key = idempotencyKey("dns_recheck", { domain_id: 5 });
     expect(key).toMatch(/^mcp_dns_recheck_/);
-    // Same call = same key
-    expect(idempotencyKey("dns_recheck", { domain_id: 5 })).toBe(key);
+    expect(idempotencyKey("dns_recheck", { domain_id: 5 })).not.toBe(key);
+    expect(idempotencyKey("dns_recheck", { domain_id: 5 }, key)).toBe(key);
   });
 
   it("getDnsCheck passes check_id to client", async () => {

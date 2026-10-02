@@ -199,6 +199,7 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
     "update_domain_signature",
     "bulk_add_domains",
     "get_dns_requirements",
+    "get_domain_connect_setup",
     "dns_recheck",
     "get_dns_check",
     "validate_cloudflare_token",
@@ -448,7 +449,7 @@ const POLICY_RULES: readonly PolicyRule[] = [
   // that address, so it carries the same destructive gate as delete_alias even
   // though the REST scope behind it is domains:write.
   rule("domains:write", "destructive", ["delete_forwarding_address", "remove_domain_alias"]),
-  rule("domains:dns:read", "read", ["get_dns_requirements", "get_dns_check"]),
+  rule("domains:dns:read", "read", ["get_dns_requirements", "get_domain_connect_setup", "get_dns_check"]),
   rule("domains:dns:recheck", "write", ["dns_recheck"]),
   rule("cloudflare:read", "read", [
     "validate_cloudflare_token", "list_cloudflare_zones", "preview_cloudflare_dns",
@@ -652,7 +653,7 @@ for (const name of policyByName.keys()) {
 export const TOOL_CATALOG: readonly ToolCatalogEntry[] = Object.freeze(entries);
 
 /** Bump whenever grouping/capability/safety semantics change. */
-export const TOOL_CATALOG_VERSION = "2026-09-27.1";
+export const TOOL_CATALOG_VERSION = "2026-10-02.1";
 
 function fnv1a(value: string): string {
   let hash = 0x811c9dc5;

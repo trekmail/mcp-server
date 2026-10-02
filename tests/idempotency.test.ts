@@ -27,7 +27,7 @@ describe("idempotencyKey", () => {
 
   it("generates key with correct format prefix", () => {
     const key = idempotencyKey("dns_recheck", { domain_id: 42 });
-    expect(key).toMatch(/^mcp_dns_recheck_[a-f0-9]{32}$/);
+    expect(key).toMatch(/^mcp_dns_recheck_[a-f0-9-]{36}$/);
   });
 
   it("produces stable keys regardless of param insertion order", () => {
