@@ -66,7 +66,12 @@ export interface CreateMailboxParams {
   display_name?: string;
   /** Optional dedicated allocation in MB; omit for shared pool. */
   storage_allocation_mb?: number;
+  /** Mail-app sign-in mode; omit for the default for new mailboxes (the response says which applied). */
+  client_auth_mode?: MailboxClientAuthMode;
 }
+
+/** What mail apps (IMAP, SMTP, ManageSieve, CalDAV/CardDAV) may sign in with. */
+export type MailboxClientAuthMode = "app_password_only" | "password_or_app_password";
 
 export interface CreateInviteParams {
   domain_id: number;
@@ -661,9 +666,64 @@ export class TrekMailClient {
     mailboxId: number,
     password: string,
     idempotencyKey: string,
+    revokeAppPasswords?: boolean,
   ): Promise<unknown> {
     return this.request("POST", `mailboxes/${mailboxId}/password`, {
-      body: { password },
+      // JSON drops an undefined flag, so a call that does not ask sends the
+      // same body (and the API binds the same request hash) as before.
+      body: { password, revoke_app_passwords: revokeAppPasswords },
+      idempotencyKey,
+    });
+  }
+
+  // --- Mailbox app passwords (mail-app sign-in) ---
+
+  async listMailboxAppPasswords(mailboxId: number): Promise<unknown> {
+    return this.request("GET", `mailboxes/${mailboxId}/app-passwords`);
+  }
+
+  async createMailboxAppPassword(
+    mailboxId: number,
+    name: string,
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", `mailboxes/${mailboxId}/app-passwords`, {
+      body: { name },
+      idempotencyKey,
+    });
+  }
+
+  async rotateMailboxAppPassword(
+    mailboxId: number,
+    appPasswordId: number,
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request(
+      "POST",
+      `mailboxes/${mailboxId}/app-passwords/${appPasswordId}:rotate`,
+      { idempotencyKey },
+    );
+  }
+
+  async revokeMailboxAppPassword(
+    mailboxId: number,
+    appPasswordId: number,
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request(
+      "DELETE",
+      `mailboxes/${mailboxId}/app-passwords/${appPasswordId}`,
+      { idempotencyKey },
+    );
+  }
+
+  async setMailboxClientAuthMode(
+    mailboxId: number,
+    mode: MailboxClientAuthMode,
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", `mailboxes/${mailboxId}:client-auth-mode`, {
+      body: { mode },
       idempotencyKey,
     });
   }

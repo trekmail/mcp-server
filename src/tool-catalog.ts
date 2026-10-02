@@ -243,6 +243,11 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
     "suspend_mailbox_login",
     "resume_mailbox_login",
     "set_mailboxes_login_access",
+    "list_mailbox_app_passwords",
+    "create_mailbox_app_password",
+    "rotate_mailbox_app_password",
+    "revoke_mailbox_app_password",
+    "set_mailbox_client_auth_mode",
     "update_mailbox_note",
     "pause_mailbox",
     "resume_mailbox",
@@ -479,7 +484,7 @@ const POLICY_RULES: readonly PolicyRule[] = [
   rule("mailboxes:read", "read", [
     "list_mailboxes", "get_mailbox", "get_mail_client_setup", "get_apple_mail_profile",
     "list_aliases", "list_shared_mailbox_members", "list_trashed_mailboxes",
-    "list_mailbox_bounces",
+    "list_mailbox_bounces", "list_mailbox_app_passwords",
   ]),
   rule("mailboxes:create", "write", [
     "create_mailbox_generated_password", "bulk_create_mailboxes", "create_shared_mailbox",
@@ -491,8 +496,14 @@ const POLICY_RULES: readonly PolicyRule[] = [
     "resume_mailbox", "enable_imap", "create_alias", "update_alias",
     "add_shared_mailbox_member", "update_shared_mailbox_member", "remove_shared_mailbox_member",
     "convert_mailbox_to_shared", "convert_shared_mailbox_to_regular",
+    // App passwords: the API also demands mailboxes:password:set of a member's
+    // token, exactly as for change_mailbox_password; the catalog mirrors the
+    // REST scope and leaves that membership check to the API.
+    "create_mailbox_app_password", "set_mailbox_client_auth_mode",
   ]),
-  rule("mailboxes:write", "destructive", ["delete_alias"]),
+  rule("mailboxes:write", "destructive", [
+    "delete_alias", "rotate_mailbox_app_password", "revoke_mailbox_app_password",
+  ]),
   rule("mailboxes:invites:create", "write", ["create_invite", "create_invites_bulk"]),
   rule("mailboxes:forwarding:read", "read", ["get_forwarding"]),
   rule("mailboxes:forwarding:write", "write", ["set_forwarding"]),
@@ -652,7 +663,7 @@ for (const name of policyByName.keys()) {
 export const TOOL_CATALOG: readonly ToolCatalogEntry[] = Object.freeze(entries);
 
 /** Bump whenever grouping/capability/safety semantics change. */
-export const TOOL_CATALOG_VERSION = "2026-09-27.1";
+export const TOOL_CATALOG_VERSION = "2026-10-02.1";
 
 function fnv1a(value: string): string {
   let hash = 0x811c9dc5;

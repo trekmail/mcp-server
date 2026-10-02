@@ -1,6 +1,6 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 265 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 270 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
 ## Quickstart
 
@@ -36,7 +36,7 @@ The MCP server supports two independent token types. At least one is required:
 
 | Token | Env Var | Prefix | Unlocks |
 |-------|---------|--------|---------|
-| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 201 infrastructure tools (White Label branding, clients, team access and activity; domains; DNS; mailboxes; Drive; migrations; SMTP; tickets; account; billing; verifier; Cloudflare; and related administration) |
+| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 206 infrastructure tools (White Label branding, clients, team access and activity; domains; DNS; mailboxes; Drive; migrations; SMTP; tickets; account; billing; verifier; Cloudflare; and related administration) |
 | **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 64 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, connected accounts, identities, templates, blocked senders) |
 
 Tools are registered conditionally — only token types you provide get their tools. You can supply one or both:
@@ -88,12 +88,12 @@ TREKMAIL_SCOPE_AWARE_REGISTRATION=true \
 npm start
 ```
 
-## Tools (265)
+## Tools (270)
 
-> The full catalog is **265** tools over stdio. On the hosted **HTTP** transport
+> The full catalog is **270** tools over stdio. On the hosted **HTTP** transport
 > `drive_file_upload` is intentionally not registered (its `local_path` would read
 > files on our server — see the note in `src/tools/drive.ts`), so the HTTP MCP
-> exposes 264. Tools also split by token type: **64** need a message token
+> exposes 269. Tools also split by token type: **64** need a message token
 > (`tm_msg_`), the rest an ops token (`tm_live_`).
 >
 > **Safety gates apply to the whole list, not just the rows that say so.** Read
@@ -158,16 +158,21 @@ writes and delegated access are removed.
 
 ### Mailboxes (ops token)
 - **list_mailboxes** — List mailboxes with optional domain/search filters
-- **get_mailbox** — Get details for a specific mailbox
-- **get_mail_client_setup** — Get password-free IMAP/SMTP settings, actual sending readiness, localized guides for five app families, and delegated shared-mailbox folders for a regular member mailbox
+- **get_mailbox** — Get details for a specific mailbox, including `client_auth_mode` (what mail apps may sign in with) where app passwords are available
+- **get_mail_client_setup** — Get password-free IMAP/SMTP settings, actual sending readiness, localized guides for five app families, and delegated shared-mailbox folders for a regular member mailbox; `authentication.password_source` and `accepted_passwords` say whether the mail app takes the mailbox password or an app password
 - **get_apple_mail_profile** — Generate a password-free Apple Mail `.mobileconfig` file as Base64 (13 locales)
-- **create_mailbox_generated_password** — Create mailbox with auto-generated one-time password (optional `storage_allocation_mb` carves out dedicated storage from the account pool; omit for shared)
-- **change_mailbox_password** — Change the password for a mailbox (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **create_mailbox_generated_password** — Create mailbox with auto-generated one-time password (optional `storage_allocation_mb` carves out dedicated storage from the account pool; omit for shared). Optional `client_auth_mode`; on an `app_password_only` mailbox the generated password opens TrekMail webmail only, so mail apps (classic webmail included) need **create_mailbox_app_password** next
+- **change_mailbox_password** — Change the password for a mailbox; `revoke_app_passwords: true` also revokes its app passwords (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **update_mailbox** — Update a mailbox display name, a regular mailbox's webmail `conversation_view` preference, or its `drive_access` level (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **set_mailboxes_drive_access** — Set `drive_access` on many mailboxes at once, chosen by explicit `mailbox_ids`, by `domain_id`, or `all`; shared mailboxes are skipped and counted (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **suspend_mailbox_login** — Stop someone signing in to a mailbox while its mail keeps arriving: webmail/IMAP/SMTP and device passwords refused, open sessions ended, reset links dead, delivery untouched (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **resume_mailbox_login** — Lift a sign-in suspension; device passwords revoked by it are not restored (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **set_mailboxes_login_access** — Suspend or restore sign-in on many mailboxes, chosen by explicit `mailbox_ids`, by `domain_id`, or `all`; shared, paused and trashed mailboxes are skipped and counted (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **list_mailbox_app_passwords** — List a mailbox's app passwords (name, created, last used, revoked) and its `client_auth_mode`; secrets are never returned
+- **create_mailbox_app_password** — Create an app password for one mail app (IMAP, SMTP, ManageSieve, CalDAV/CardDAV): 16 letters returned once, up to 25 active per mailbox; never opens TrekMail webmail, though classic webmail takes it like any IMAP app (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **rotate_mailbox_app_password** — Replace an app password with a new secret under the same name; the old one stops working at once (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **revoke_mailbox_app_password** — Revoke an app password for good and sign out the app using it (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **set_mailbox_client_auth_mode** — Set one mailbox to `app_password_only` (mail apps, classic webmail included, need an app password; TrekMail webmail keeps the mailbox password) or `password_or_app_password` (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **update_mailbox_note** — Update the admin note on a mailbox
 - **pause_mailbox** — Disable a mailbox entirely, delivery included — unlike `suspend_mailbox_login` (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **resume_mailbox** — Re-enable a paused mailbox
@@ -502,6 +507,24 @@ Additionally, each write tool requires a per-call confirmation parameter (`confi
 1. create_mailbox_generated_password(domain_id: 5, local_part: "alice")
    → { id: 10, email: "alice@example.com", password: "..." }
 2. set_forwarding(mailbox_id: 10, enabled: true, targets: ["alice@gmail.com"], keep_copy: true)
+```
+
+### Set Up a Mail App on a Mailbox That Takes App Passwords Only
+```
+# The generated password opens TrekMail webmail; Outlook, phones and calendars
+# need an app password. Hand the secret to the user once and do not keep it.
+# Ask for the mode explicitly: without client_auth_mode a new mailbox gets the
+# platform default, password_or_app_password until the account-level default
+# is switched on. The response's client_auth_mode is what was applied.
+1. create_mailbox_generated_password(domain_id: 5, local_part: "dana", client_auth_mode: "app_password_only")
+   → { id: 12, email: "dana@example.com", client_auth_mode: "app_password_only", one_time_password: "..." }
+2. create_mailbox_app_password(mailbox_id: 12, name: "Outlook on work laptop")
+   → { data: { id: 31, name: "Outlook on work laptop", password: "abcdefghijklmnop" }, message: "Shown once. ..." }
+3. get_mail_client_setup(mailbox_id: 12)
+   → { authentication: { username: "dana@example.com", password_source: "app_password",
+       accepted_passwords: ["app_password"], ... }, incoming: {...}, outgoing: {...} }
+# Lost it later? rotate_mailbox_app_password(mailbox_id: 12, app_password_id: 31)
+# returns a new secret and stops the old one at once.
 ```
 
 ### Create Mailbox + Multi-Destination Forwarding

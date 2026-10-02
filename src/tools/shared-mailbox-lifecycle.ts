@@ -93,7 +93,7 @@ export function registerSharedMailboxLifecycleTools(
     {
       title: "Convert Mailbox to Shared",
       description:
-        "Convert an existing regular mailbox into a shared (team) mailbox. The specified members are added immediately. IMPORTANT: this rotates the mailbox password and ends direct login for the original owner. The mailbox is then accessed through members' own accounts in Webmail and, when enabled, delegated native IMAP/SMTP folders. Use get_mail_client_setup with a member mailbox ID to discover the folder path.",
+        "Convert an existing regular mailbox into a shared (team) mailbox. The specified members are added immediately. IMPORTANT: this rotates the mailbox password, revokes all of its app passwords and ends direct login for the original owner. The mailbox is then accessed through members' own accounts in Webmail and, when enabled, delegated native IMAP/SMTP folders. Use get_mail_client_setup with a member mailbox ID to discover the folder path.",
       inputSchema: {
         mailbox_id: z
           .number()
