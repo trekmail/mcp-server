@@ -236,6 +236,13 @@ export class TrekMailClient {
     return this.request("GET", "account");
   }
 
+  async updateAccount(
+    body: { new_mailbox_client_auth_mode: MailboxClientAuthMode },
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("PATCH", "account", { body, idempotencyKey });
+  }
+
   async getBillingStatus(): Promise<unknown> {
     return this.request("GET", "billing/status");
   }
@@ -670,12 +677,9 @@ export class TrekMailClient {
     mailboxId: number,
     password: string,
     idempotencyKey: string,
-    revokeAppPasswords?: boolean,
   ): Promise<unknown> {
     return this.request("POST", `mailboxes/${mailboxId}/password`, {
-      // JSON drops an undefined flag, so a call that does not ask sends the
-      // same body (and the API binds the same request hash) as before.
-      body: { password, revoke_app_passwords: revokeAppPasswords },
+      body: { password },
       idempotencyKey,
     });
   }
@@ -730,6 +734,18 @@ export class TrekMailClient {
       body: { mode },
       idempotencyKey,
     });
+  }
+
+  async setMailboxesClientAuthMode(
+    body: {
+      mode: MailboxClientAuthMode;
+      mailbox_ids?: number[];
+      domain_id?: number;
+      all?: boolean;
+    },
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", "mailboxes:client-auth-mode", { body, idempotencyKey });
   }
 
   async updateMailboxNote(

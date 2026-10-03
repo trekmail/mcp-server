@@ -51,7 +51,7 @@ export function registerInfraTools(
   client: TrekMailClient,
   config: Config,
 ): void {
-  registerAccountTools(server, client);
+  registerAccountTools(server, client, { allowDestructive: config.allowDestructive });
   registerMachinePaymentTools(server, client);
   registerDomainTools(server, client, config);
   registerDnsTools(server, client);

@@ -14,7 +14,7 @@ export function registerMailboxTools(
     {
       title: "List Mailboxes",
       description:
-        "List mailboxes on the TrekMail account. Supports filtering by domain and searching by address. Returns paginated results. Where app passwords are available, each mailbox carries client_auth_mode: 'app_password_only' (mail apps need an app password) or 'password_or_app_password' (the mailbox password works in mail apps too).",
+        "List mailboxes on the TrekMail account. Supports filtering by domain and searching by address. Returns paginated results. Where app passwords are available, each mailbox carries app_passwords_count (active visible app passwords, excluding platform system credentials) and client_auth_mode: 'app_password_only' (mail apps need an app password) or 'password_or_app_password' (the mailbox password works in mail apps too).",
       inputSchema: {
         domain_id: z
           .number()
@@ -49,7 +49,7 @@ export function registerMailboxTools(
     {
       title: "Get Mailbox",
       description:
-        "Get detailed information about a specific mailbox including its status, forwarding config, and domain. Where app passwords are available it also returns client_auth_mode: 'app_password_only' means mail apps (IMAP, SMTP, ManageSieve, CalDAV/CardDAV) must sign in with an app password (see list_mailbox_app_passwords); 'password_or_app_password' means the mailbox password works in them too. TrekMail webmail always signs in with the mailbox password; classic webmail (/webmail-old/) is a mail app here, so on an app_password_only mailbox it takes an app password.",
+        "Get detailed information about a specific mailbox including its status, forwarding config, and domain. Where app passwords are available it also returns app_passwords_count (active visible app passwords, excluding platform system credentials) and client_auth_mode: 'app_password_only' means mail apps (IMAP, SMTP, ManageSieve, CalDAV/CardDAV) must sign in with an app password (see list_mailbox_app_passwords); 'password_or_app_password' means the mailbox password works in them too. TrekMail webmail always signs in with the mailbox password; classic webmail (/webmail-old/) is a mail app here, so on an app_password_only mailbox it takes an app password.",
       inputSchema: {
         mailbox_id: z
           .number()
@@ -68,7 +68,7 @@ export function registerMailboxTools(
     {
       title: "Create Mailbox",
       description:
-        "Create a new mailbox with an auto-generated one-time password. The password is returned once and must be saved immediately — it cannot be retrieved later. Storage defaults to the shared account pool; pass storage_allocation_mb to carve out a dedicated allocation. Where app passwords are available the response carries client_auth_mode, which is authoritative: the mode you pass, otherwise the platform default for new mailboxes (password_or_app_password until the account-level default is switched on). When it is 'app_password_only', the generated password signs in to TrekMail webmail only: mail apps (Outlook, Apple Mail, phones, IMAP/SMTP, calendars and contacts, and classic webmail at /webmail-old/) need an app password, so call create_mailbox_app_password next for each app the user sets up.",
+        "Create a new mailbox with an auto-generated one-time password. The password is returned once and must be saved immediately — it cannot be retrieved later. Storage defaults to the shared account pool; pass storage_allocation_mb to carve out a dedicated allocation. Where app passwords are available the response carries client_auth_mode, which is authoritative: the mode you pass, otherwise the platform default for new mailboxes (password_or_app_password until the account-level default is switched on). When it is 'app_password_only', the generated password signs in to TrekMail webmail only: mail apps (Outlook, Apple Mail, phones, IMAP/SMTP, calendars and contacts, and classic webmail at /webmail-old/) need an app password, so call create_mailbox_app_password next for each app the user sets up. To reset an existing mailbox password, use change_mailbox_password: while app passwords are enabled on the platform, that reset automatically revokes all its app passwords (reason mailbox_password_reset).",
       inputSchema: {
         domain_id: z
           .number()
@@ -146,7 +146,7 @@ export function registerMailboxTools(
     {
       title: "Change Mailbox Password",
       description:
-        "Change the password of a mailbox. Requires TREKMAIL_ALLOW_DESTRUCTIVE=true because password changes are irreversible. App passwords keep working after an ordinary change unless revoke_app_passwords is true.",
+        "Change the password of a mailbox. Requires TREKMAIL_ALLOW_DESTRUCTIVE=true because password changes are irreversible. While app passwords are enabled on the platform, this reset automatically revokes every app password of the mailbox (reason mailbox_password_reset), and the response includes app_passwords_revoked. Mail apps need new app passwords afterwards.",
       inputSchema: {
         mailbox_id: z
           .number()
@@ -159,12 +159,6 @@ export function registerMailboxTools(
           .describe(
             "New password (min 12 chars, must contain uppercase, lowercase, and numeric)",
           ),
-        revoke_app_passwords: z
-          .boolean()
-          .optional()
-          .describe(
-            "Also revoke every app password of this mailbox, signing out the mail apps that use them (default false). Use it when the old password may have leaked. Ignored where app passwords are not available.",
-          ),
         idempotency_key: z
           .string()
           .optional()
@@ -172,23 +166,20 @@ export function registerMailboxTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ mailbox_id, password, revoke_app_passwords, idempotency_key }) => {
+    async ({ mailbox_id, password, idempotency_key }) => {
       if (!config?.allowDestructive) {
         return errorResult(
           "Password change is disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true in environment to enable.",
         );
       }
       const timeBucket = Math.floor(Date.now() / (5 * 60 * 1000));
-      // The flag is part of the body, so it is part of the derived key too:
-      // the API refuses one key with two different bodies. An omitted flag is
-      // dropped, so existing calls keep the key they always had.
       const idemKey = idempotencyKey(
         "change_mailbox_password",
-        { mailbox_id, revoke_app_passwords, _t: timeBucket },
+        { mailbox_id, _t: timeBucket },
         idempotency_key,
       );
       return callApi(() =>
-        client.changeMailboxPassword(mailbox_id, password, idemKey, revoke_app_passwords),
+        client.changeMailboxPassword(mailbox_id, password, idemKey),
       );
     },
   );

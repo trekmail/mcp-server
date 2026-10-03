@@ -2,7 +2,7 @@
   "name": "@trekmail/mcp-server",
   "version": "1.10.0",
   "packageManager": "npm@10.9.8",
-  "description": "Model Context Protocol (MCP) server for TrekMail. Exposes 271 agent tools covering infrastructure and the full webmail surface, including one-time Cloudflare DNS setup handoff.",
+  "description": "Model Context Protocol (MCP) server for TrekMail. Exposes 272 agent tools covering infrastructure and the full webmail surface, including one-time Cloudflare DNS setup handoff.",
   "type": "module",
   "private": true,
   "license": "MIT",

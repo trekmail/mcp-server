@@ -1,11 +1,13 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
-import { callApi } from "./util.js";
+import { callApi, errorResult } from "./util.js";
+import { operationIdempotencyKey } from "../idempotency.js";
 
 export function registerAccountTools(
   server: McpServer,
   client: TrekMailClient,
+  config?: { allowDestructive?: boolean },
 ): void {
   server.registerTool(
     "whoami",
@@ -25,11 +27,32 @@ export function registerAccountTools(
     {
       title: "Get Account",
       description:
-        "Get account information including current plan, resource limits, feature flags, and usage counts.",
+        "Get account information including current plan, resource limits, feature flags, and usage counts. Includes new_mailbox_client_auth_mode only when app passwords and the platform default for new mailboxes are both enabled. Existing mailboxes keep their own mode; use update_account to change the default for future mailboxes.",
       inputSchema: {},
     },
     async () => {
       return callApi(() => client.getAccount());
+    },
+  );
+
+  server.registerTool(
+    "update_account",
+    {
+      title: "Update Account New-Mailbox Default",
+      description:
+        "Set new_mailbox_client_auth_mode for mailboxes created from now on; existing mailboxes keep their own setting. 'app_password_only' requires app passwords in mail apps; 'password_or_app_password' also accepts the mailbox password. Requires mailboxes:write and the account owner's token or connector; every account member is refused with scope_blocked_by_membership. Returns 404 unless app passwords and the platform default for new mailboxes are both enabled. Requires TREKMAIL_ALLOW_DESTRUCTIVE=true.",
+      inputSchema: {
+        new_mailbox_client_auth_mode: z.enum(["app_password_only", "password_or_app_password"]),
+        idempotency_key: z.string().optional().describe("Optional idempotency key"),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ new_mailbox_client_auth_mode, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult("Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to change the account default for new mailboxes.");
+      }
+      const idemKey = operationIdempotencyKey("update_account", idempotency_key);
+      return callApi(() => client.updateAccount({ new_mailbox_client_auth_mode }, idemKey));
     },
   );
 

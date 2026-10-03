@@ -170,24 +170,35 @@ export function registerMailboxAppPasswordTools(
     },
   );
 
-  // One mailbox per call today. The bulk endpoint (POST
-  // /mailboxes:client-auth-mode with mailbox_ids | domain_id | all) is not in
-  // the API yet. When it lands, make mailbox_id optional, add those
-  // three selectors with the "exactly one" check set_mailboxes_login_access
-  // uses, and send mailbox_id to the per-mailbox route as now: the name and
-  // the client_auth_mode field stay, so existing callers keep working.
   server.registerTool(
     "set_mailbox_client_auth_mode",
     {
       title: "Set Mailbox Mail-App Sign-In Mode",
       description:
-        "Choose what mail apps (IMAP, SMTP, ManageSieve, CalDAV/CardDAV) may sign in to a mailbox with. 'app_password_only': only app passwords work in mail apps; open mail-app sessions are signed out (apps using an app password reconnect on their own) and an app that tries the mailbox password gets 'Sign-in failed. This mailbox accepts app passwords only'. 'password_or_app_password': the mailbox password works in mail apps again, next to app passwords. TrekMail webmail always signs in with the mailbox password (plus two-factor when it is on) in both modes; classic webmail (/webmail-old/) is a mail app here, so on an app_password_only mailbox it needs an app password too. Before tightening, create an app password for each device the user still syncs (create_mailbox_app_password), or those devices stop. Refused for shared mailboxes, and platform system mailboxes cannot be made app_password_only. Setting the current mode again changes nothing. Works on one mailbox per call.",
+        "Choose what mail apps (IMAP, SMTP, ManageSieve, CalDAV/CardDAV) may sign in to a mailbox with. 'app_password_only': only app passwords work in mail apps; open mail-app sessions are signed out (apps using an app password reconnect on their own) and an app that tries the mailbox password gets 'Sign-in failed. This mailbox accepts app passwords only'. 'password_or_app_password': the mailbox password works in mail apps again, next to app passwords. TrekMail webmail always signs in with the mailbox password (plus two-factor when it is on) in both modes; classic webmail (/webmail-old/) is a mail app here, so on an app_password_only mailbox it needs an app password too. Before tightening, create an app password for each device the user still syncs (create_mailbox_app_password), or those devices stop. Refused for shared mailboxes, and platform system mailboxes cannot be made app_password_only. Setting the current mode again changes nothing. Choose exactly ONE of mailbox_id, mailbox_ids, domain_id or all. Bulk selection is limited to 1000 matched mailboxes and narrowed to the token's allowed domains/mailboxes. Shared, trashed or deleting mailboxes, and system mailboxes when tightening, are skipped and counted; paused or sign-in-suspended mailboxes are updated. The bulk response has data.client_auth_mode, matched, updated and skipped. Returns 404 while app passwords are disabled; member tokens also need mailboxes:password:set.",
       inputSchema: {
         mailbox_id: z
           .number()
           .int()
           .positive()
-          .describe("The regular mailbox ID"),
+          .optional()
+          .describe("The regular mailbox ID for a single-mailbox call"),
+        mailbox_ids: z
+          .array(z.number().int().positive())
+          .min(1)
+          .max(1000)
+          .optional()
+          .describe("Explicit list of mailbox IDs to update."),
+        domain_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Update every mailbox on this domain."),
+        all: z
+          .boolean()
+          .optional()
+          .describe("Update every mailbox on the account."),
         client_auth_mode: z
           .enum(CLIENT_AUTH_MODES)
           .describe(
@@ -200,17 +211,36 @@ export function registerMailboxAppPasswordTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ mailbox_id, client_auth_mode, idempotency_key }) => {
+    async ({ mailbox_id, mailbox_ids, domain_id, all, client_auth_mode, idempotency_key }) => {
       const gated = requireDestructive("change how mail apps sign in");
       if (gated !== null) return gated;
+      const selectors = [
+        mailbox_id !== undefined,
+        mailbox_ids !== undefined,
+        domain_id !== undefined,
+        all === true,
+      ].filter(Boolean).length;
+      if (selectors !== 1) {
+        return errorResult("Choose exactly one of mailbox_id, mailbox_ids, domain_id or all.");
+      }
       // A key derived from the arguments would make "tighten, loosen,
       // tighten" inside the API's 24-hour idempotency window replay the first
       // answer and leave the mailbox loose. Repeating a mode is already a
       // no-op on the server, so one key per call loses nothing.
       const idemKey = operationIdempotencyKey("set_mailbox_client_auth_mode", idempotency_key);
-      return callApi(() =>
-        client.setMailboxClientAuthMode(mailbox_id, client_auth_mode, idemKey),
-      );
+      if (mailbox_id !== undefined) {
+        return callApi(() => client.setMailboxClientAuthMode(mailbox_id, client_auth_mode, idemKey));
+      }
+      const body: {
+        mode: typeof client_auth_mode;
+        mailbox_ids?: number[];
+        domain_id?: number;
+        all?: boolean;
+      } = { mode: client_auth_mode };
+      if (mailbox_ids !== undefined) body.mailbox_ids = mailbox_ids;
+      if (domain_id !== undefined) body.domain_id = domain_id;
+      if (all === true) body.all = true;
+      return callApi(() => client.setMailboxesClientAuthMode(body, idemKey));
     },
   );
 }

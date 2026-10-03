@@ -6,6 +6,7 @@ import { TrekMailClient } from "../../src/client.js";
 import { TOOL_CATALOG_BY_NAME, toolsForToolsets } from "../../src/tool-catalog.js";
 import { withToolFilter } from "../../src/tool-filter.js";
 import { registerMailboxAppPasswordTools } from "../../src/tools/mailbox-app-passwords.js";
+import { registerAccountTools } from "../../src/tools/account.js";
 import { registerMailboxTools } from "../../src/tools/mailboxes.js";
 import { registerMailClientSetupTools } from "../../src/tools/mail-client-setup.js";
 import { createMockFetch, getLastFetchCall, mockFetchResponse } from "../helpers/mock-fetch.js";
@@ -41,6 +42,7 @@ function harness(allowDestructive: boolean, filtered = false) {
   registerMailboxAppPasswordTools(server, client, { allowDestructive });
   registerMailboxTools(server, client, { allowDestructive });
   registerMailClientSetupTools(server, client);
+  registerAccountTools(server, client, { allowDestructive });
 
   const call = async (name: string, input: Record<string, unknown>) => {
     const tool = tools.get(name)!;
@@ -145,6 +147,86 @@ describe("mailbox app password tools", () => {
     expect(again.key).not.toBe(tighten.key);
   });
 
+  it.each([{ mailbox_ids: [7, 8] }, { domain_id: 5 }, { all: true }])("sends bulk selector %j to the bulk route", async (selector) => {
+    const { call } = harness(true);
+    const resultBody = { data: { client_auth_mode: "app_password_only", matched: 2, updated: 1, skipped: 1 } };
+    mockFetchResponse(mockFetch, { body: resultBody });
+    const result = await call("set_mailbox_client_auth_mode", { ...selector, client_auth_mode: "app_password_only", idempotency_key: "bulk-7" });
+    expect(lastRequest(mockFetch)).toEqual({ method: "POST", path: "/api/v1/mailboxes:client-auth-mode", body: { mode: "app_password_only", ...selector }, key: "bulk-7" });
+    expect(JSON.parse((result.content[0] as { text: string }).text)).toEqual(resultBody);
+  });
+
+  it.each([{}, { all: false }, { mailbox_id: 7, mailbox_ids: [8] }, { mailbox_id: 7, domain_id: 5 }, { mailbox_id: 7, all: true }, { mailbox_ids: [7], domain_id: 5 }, { domain_id: 5, all: true }, { mailbox_ids: [7], all: true }])("rejects conflicting or absent selectors %j without an API call", async (selector) => {
+    const { call } = harness(true);
+    const result = await call("set_mailbox_client_auth_mode", { ...selector, client_auth_mode: "app_password_only" });
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { text: string }).text).toContain("Choose exactly one");
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("ignores all:false with a valid selector and reuses only explicit retry keys", async () => {
+    const { call } = harness(true);
+    const input = { domain_id: 5, all: false, client_auth_mode: "app_password_only" };
+    await call("set_mailbox_client_auth_mode", input);
+    const first = lastRequest(mockFetch);
+    await call("set_mailbox_client_auth_mode", { ...input, client_auth_mode: "password_or_app_password" });
+    await call("set_mailbox_client_auth_mode", input);
+    expect(lastRequest(mockFetch).key).not.toBe(first.key);
+    expect(first.body).toEqual({ mode: "app_password_only", domain_id: 5 });
+    await call("set_mailbox_client_auth_mode", { ...input, idempotency_key: "retry" });
+    await call("set_mailbox_client_auth_mode", { ...input, idempotency_key: "retry" });
+    expect(lastRequest(mockFetch).key).toBe("retry");
+  });
+
+  it.each([[], [0], [1.5], Array.from({ length: 1001 }, (_, i) => i + 1)].map((mailbox_ids) => ({ mailbox_ids })))("rejects an invalid ID list before calling the API", async ({ mailbox_ids }) => {
+    const { call } = harness(true);
+    await expect(call("set_mailbox_client_auth_mode", { mailbox_ids, client_auth_mode: "app_password_only" })).rejects.toThrow();
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("uses the same selector Zod shapes as set_mailboxes_login_access", () => {
+    const { tools } = harness(true);
+    const bulk = tools.get("set_mailbox_client_auth_mode")!.definition.inputSchema;
+    const login = tools.get("set_mailboxes_login_access")!.definition.inputSchema;
+    for (const name of ["mailbox_ids", "domain_id", "all"]) {
+      for (const value of [undefined, [], [1], [0], [1.5], Array(1000).fill(1), Array(1001).fill(1), 1, 0, 1.5, true, false, "1"]) {
+        expect(bulk[name].safeParse(value).success).toBe(login[name].safeParse(value).success);
+      }
+    }
+  });
+
+  it.each([404, 403, 422])("preserves an upstream bulk or account refusal at %i", async (status) => {
+    const { call } = harness(true);
+    const code = status === 404 ? "not_found" : status === 403 ? "scope_blocked_by_membership" : "selection_too_large";
+    for (const [name, input] of [["set_mailbox_client_auth_mode", { all: true, client_auth_mode: "app_password_only" }], ["update_account", { new_mailbox_client_auth_mode: "app_password_only" }]] as const) {
+      mockFetchResponse(mockFetch, { status, body: { error: { code, message: "Refused" } } });
+      const result = await call(name, input);
+      expect(result.isError).toBe(true);
+      expect((result.content[0] as { text: string }).text).toContain(code);
+    }
+  });
+
+  it("writes only the account default via PATCH, with fresh operations and explicit retries", async () => {
+    const { call, tools } = harness(true);
+    const input = { new_mailbox_client_auth_mode: "app_password_only" };
+    await call("update_account", input);
+    const first = lastRequest(mockFetch);
+    await call("update_account", { new_mailbox_client_auth_mode: "password_or_app_password" });
+    await call("update_account", input);
+    expect(lastRequest(mockFetch)).toMatchObject({ method: "PATCH", path: "/api/v1/account", body: input });
+    expect(lastRequest(mockFetch).key).not.toBe(first.key);
+    await call("update_account", { ...input, idempotency_key: "account-retry" });
+    expect(lastRequest(mockFetch).key).toBe("account-retry");
+    expect(tools.get("get_account")!.definition.description).toContain("new_mailbox_client_auth_mode");
+    expect(tools.get("update_account")!.definition.description).toContain("owner");
+  });
+
+  it.each(["app_password", "", null])("rejects an unknown account default %j", async (new_mailbox_client_auth_mode) => {
+    const { call } = harness(true);
+    await expect(call("update_account", { new_mailbox_client_auth_mode })).rejects.toThrow();
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it("rejects a mode the API does not know before calling it", async () => {
     const { call } = harness(true);
     await expect(call("set_mailbox_client_auth_mode", { mailbox_id: 7, client_auth_mode: "app_password" })).rejects.toThrow();
@@ -156,6 +238,8 @@ describe("mailbox app password tools", () => {
     ["rotate_mailbox_app_password", { mailbox_id: 7, app_password_id: 3 }],
     ["revoke_mailbox_app_password", { mailbox_id: 7, app_password_id: 3 }],
     ["set_mailbox_client_auth_mode", { mailbox_id: 7, client_auth_mode: "app_password_only" }],
+    ["set_mailbox_client_auth_mode", { all: true, client_auth_mode: "app_password_only" }],
+    ["update_account", { new_mailbox_client_auth_mode: "app_password_only" }],
   ])("%s stays behind TREKMAIL_ALLOW_DESTRUCTIVE", async (name, input) => {
     const { call } = harness(false);
     const result = await call(name, input);
@@ -173,12 +257,13 @@ describe("mailbox app password tools", () => {
     }
   });
 
-  it("files the five tools with the mailbox admin tools, under the REST scopes the API checks", () => {
+  it("files app-password and account-default tools with the mailbox admin tools, under the REST scopes the API checks", () => {
     const mailAdmin = toolsForToolsets(["mail_admin"]);
     const expected = {
       list_mailbox_app_passwords: ["mailboxes:read", "read"],
       create_mailbox_app_password: ["mailboxes:write", "write"],
       set_mailbox_client_auth_mode: ["mailboxes:write", "write"],
+      update_account: ["mailboxes:write", "write"],
       rotate_mailbox_app_password: ["mailboxes:write", "destructive"],
       revoke_mailbox_app_password: ["mailboxes:write", "destructive"],
     } as const;
@@ -202,6 +287,7 @@ describe("mailbox app password tools", () => {
     expect(hint("rotate_mailbox_app_password")).toBe(true);
     expect(hint("revoke_mailbox_app_password")).toBe(true);
     expect(hint("set_mailbox_client_auth_mode")).toBe(true);
+    expect(hint("update_account")).toBe(true);
   });
 });
 
@@ -218,19 +304,23 @@ describe("existing mailbox tools and app passwords", () => {
     globalThis.fetch = originalFetch;
   });
 
-  it("change_mailbox_password sends revoke_app_passwords only when asked, and keys the two bodies apart", async () => {
+  it.each([200, 202])("password resets send only password and preserve the revocation count at %i", async (status) => {
+    const { tools, call } = harness(true);
+    expect(tools.get("change_mailbox_password")!.definition.inputSchema).not.toHaveProperty("revoke_app_passwords");
+    mockFetchResponse(mockFetch, { status, body: { app_passwords_revoked: 3, sync_pending: status === 202 } });
+    const result = await call("change_mailbox_password", { mailbox_id: 7, password: "Correct-Horse-42", idempotency_key: "reset-7" });
+    expect(lastRequest(mockFetch)).toEqual({ method: "POST", path: "/api/v1/mailboxes/7/password", body: { password: "Correct-Horse-42" }, key: "reset-7" });
+    expect(JSON.parse((result.content[0] as { text: string }).text).app_passwords_revoked).toBe(3);
+    for (const name of ["change_mailbox_password", "create_mailbox_generated_password"]) {
+      expect(tools.get(name)!.definition.description).toMatch(/app passwords are enabled.*automatically revokes.*mailbox_password_reset/s);
+    }
+  });
+
+  it("does not invent a revocation count when the feature is off", async () => {
     const { call } = harness(true);
-
-    await call("change_mailbox_password", { mailbox_id: 7, password: "Correct-Horse-42" });
-    const plain = lastRequest(mockFetch);
-    await call("change_mailbox_password", { mailbox_id: 7, password: "Correct-Horse-42", revoke_app_passwords: true });
-    const revoking = lastRequest(mockFetch);
-
-    expect(plain.body).toEqual({ password: "Correct-Horse-42" });
-    expect(revoking).toMatchObject({ path: "/api/v1/mailboxes/7/password", body: { password: "Correct-Horse-42", revoke_app_passwords: true } });
-    // One key with two bodies is a 409 idempotency_mismatch from the API.
-    expect(revoking.key).not.toBe(plain.key);
-    expect(revoking.key).not.toContain("Correct-Horse-42");
+    mockFetchResponse(mockFetch, { body: { status: "updated", sync_pending: false } });
+    const result = await call("change_mailbox_password", { mailbox_id: 7, password: "Correct-Horse-42" });
+    expect(JSON.parse((result.content[0] as { text: string }).text)).not.toHaveProperty("app_passwords_revoked");
   });
 
   it("create_mailbox_generated_password passes client_auth_mode through, and leaves calls without it unchanged", async () => {
@@ -254,6 +344,7 @@ describe("existing mailbox tools and app passwords", () => {
       .toMatch(/password_source.*accepted_passwords.*create_mailbox_app_password/s);
     for (const name of ["get_mailbox", "list_mailboxes"]) {
       expect(tools.get(name)!.definition.description, name).toContain("client_auth_mode");
+      expect(tools.get(name)!.definition.description, name).toContain("app_passwords_count");
     }
   });
 

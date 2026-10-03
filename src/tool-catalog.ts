@@ -235,6 +235,7 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
   ],
 
   mail_admin: [
+    "update_account",
     "list_mailboxes",
     "get_mailbox",
     "create_mailbox_generated_password",
@@ -491,6 +492,7 @@ const POLICY_RULES: readonly PolicyRule[] = [
     "create_mailbox_generated_password", "bulk_create_mailboxes", "create_shared_mailbox",
   ]),
   rule("mailboxes:write", "write", [
+    "update_account",
     "change_mailbox_password", "update_mailbox", "set_mailboxes_drive_access",
     "suspend_mailbox_login", "resume_mailbox_login", "set_mailboxes_login_access",
     "update_mailbox_note", "pause_mailbox",
@@ -664,7 +666,7 @@ for (const name of policyByName.keys()) {
 export const TOOL_CATALOG: readonly ToolCatalogEntry[] = Object.freeze(entries);
 
 /** Bump whenever grouping/capability/safety semantics change. */
-export const TOOL_CATALOG_VERSION = "2026-10-02.1";
+export const TOOL_CATALOG_VERSION = "2026-10-03.1";
 
 function fnv1a(value: string): string {
   let hash = 0x811c9dc5;
