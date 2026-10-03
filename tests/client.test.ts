@@ -31,6 +31,22 @@ describe("TrekMailClient", () => {
     expect(headers.Authorization).toBe("Bearer tm_live_testtoken");
   });
 
+  it("returns complete verification CSV while preserving JSON errors", async () => {
+    const csv = 'Email,Status,Trust Score\nqa@example.invalid,invalid,0\n';
+    globalThis.fetch = vi.fn().mockResolvedValueOnce(new Response(csv, {
+      status: 200, headers: { "Content-Type": "text/csv" },
+    })).mockResolvedValueOnce(new Response(JSON.stringify({ error: {
+      code: "job_not_downloadable", message: "No results yet.",
+    } }), { status: 409, headers: { "Content-Type": "application/json" } }));
+    await expect(client.getVerifyJobDownload(7, "all")).resolves.toBe(csv);
+    await expect(client.getVerifyJobDownload(7)).rejects.toMatchObject({ code: "job_not_downloadable" });
+  });
+
+  it("does not report a malformed successful JSON endpoint as tool success", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response('<html>Unexpected upstream page</html>', { status: 200 }));
+    await expect(client.listDomains()).rejects.toMatchObject({ code: "non_json_response" });
+  });
+
   it("adopts a reissued key for subsequent calls on the shared client", async () => {
     mockFetchResponse(mockFetch, { status: 201, body: { status: "reissued", api_token: "tm_live_replacement" } });
     await expect(client.agentReissueKey()).resolves.toEqual({ status: "reissued", api_token: "tm_live_replacement" });

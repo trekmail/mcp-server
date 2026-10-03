@@ -15,7 +15,7 @@ export function registerMessageToolHandlers(
     {
       title: "List Messages",
       description:
-        "List messages in a mailbox IMAP folder, sorted newest-first with cursor-based pagination. Requires a message token with messages:read scope.",
+        "List messages in an authorized mailbox IMAP folder, sorted newest-first with cursor-based pagination. By default reads the TrekMail mailbox; external_account_id reads a previously connected external provider's IMAP inbox belonging to that mailbox. Requires messages:read scope; does not accept arbitrary server addresses or credentials.",
       inputSchema: {
         folder: z
           .string()
@@ -68,7 +68,7 @@ export function registerMessageToolHandlers(
     {
       title: "Read Message",
       description:
-        "Get a single message by IMAP UID, including full body and attachment metadata. Requires a message token with messages:read scope.",
+        "Read one message by IMAP UID, including full body and attachment metadata, from the authorized TrekMail mailbox or, with external_account_id, its previously connected external provider's IMAP inbox. Only sources belonging to the authorized mailbox are accessible. Requires messages:read scope; does not accept arbitrary server addresses or credentials.",
       inputSchema: {
         uid: z
           .number()

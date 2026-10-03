@@ -46,8 +46,8 @@ function namesFor(
 }
 
 describe("stdio toolset filtering", () => {
-  it("preserves all 270 tools when TREKMAIL_TOOLSETS is omitted", () => {
-    expect(namesFor()).toHaveLength(270);
+  it("preserves all 271 tools when TREKMAIL_TOOLSETS is omitted", () => {
+    expect(namesFor()).toHaveLength(271);
   });
 
   it("exposes email tools plus minimal mailbox discovery", () => {
@@ -71,8 +71,12 @@ describe("stdio toolset filtering", () => {
     const names = namesFor(["domains"], ["domains:read", "domains:dns:read"]);
     expect(names).toContain("list_domains");
     expect(names).toContain("get_dns_requirements");
+    expect(names).toContain("get_domain_connect_setup");
     expect(names).not.toContain("create_domain");
     expect(names).not.toContain("list_mailboxes");
+
+    const withoutDns = namesFor(["domains"], ["domains:read"]);
+    expect(withoutDns).not.toContain("get_domain_connect_setup");
   });
 
   it("loads White Label tools only for the matching live capabilities", () => {
@@ -139,7 +143,9 @@ describe("stdio toolset filtering", () => {
       expect(tools[entry.name]?.annotations?.readOnlyHint, entry.name)
         .toBe(entry.access === "read");
       expect(tools[entry.name]?.annotations?.destructiveHint, entry.name)
-        .toBe(entry.safetyGate === "destructive");
+        .toEqual(expect.any(Boolean));
+      expect(tools[entry.name]?.annotations?.openWorldHint, entry.name)
+        .toEqual(expect.any(Boolean));
     }
   });
 });

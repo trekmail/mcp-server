@@ -401,6 +401,10 @@ export class TrekMailClient {
     return this.request("GET", `domains/${id}`);
   }
 
+  async getDomainConnectSetup(id: number): Promise<unknown> {
+    return this.request("GET", `domains/${id}/domain-connect/setup`);
+  }
+
   async getDomainAlias(domainId: number): Promise<unknown> {
     return this.request("GET", `domains/${domainId}/matching-addresses`);
   }
@@ -1968,6 +1972,8 @@ export class TrekMailClient {
   ): Promise<unknown> {
     return this.request("GET", `verify/bulk/${jobId}/download`, {
       query: { filter: filter ?? "all" },
+      headers: { Accept: "text/csv, application/json" },
+      responseType: "text",
     });
   }
 
@@ -2351,6 +2357,7 @@ export class TrekMailClient {
       body?: Record<string, unknown>;
       idempotencyKey?: string;
       headers?: Record<string, string>;
+      responseType?: "text";
     } = {},
   ): Promise<unknown> {
     const url = new URL(`/api/v1/${path}`, this.baseUrl);
@@ -2399,7 +2406,9 @@ export class TrekMailClient {
 
         const text = await response.text();
         let data: unknown;
-        if (response.ok && text.trim() === "") {
+        if (response.ok && opts.responseType === "text") {
+          data = text;
+        } else if (response.ok && text.trim() === "") {
           // DELETE endpoints commonly signal success with 204 No Content.
           // Returning an explicit object keeps the MCP tool result useful and
           // avoids misreporting a completed mutation as non_json_response.
@@ -2416,6 +2425,9 @@ export class TrekMailClient {
                 hint: snippet ? `First 200 chars: ${snippet}` : "Response body was empty.",
               },
             };
+            if (response.ok) {
+              throw TrekMailApiError.fromResponse(response.status, data as Record<string, unknown>);
+            }
           }
         }
 

@@ -71,10 +71,11 @@ describe("migration tools", () => {
     expect(idempotencyKey("start_migration", { mailbox_id: 5, source_host: "imap.gmail.com", source_email: "user@gmail.com" })).toBe(key);
   });
 
-  it("cancelMigration generates deterministic idempotency key", () => {
+  it("cancelMigration permits cancellation after a new retry", () => {
     const key = idempotencyKey("cancel_migration", { migration_id: 10 });
     expect(key).toMatch(/^mcp_cancel_migration_/);
-    expect(idempotencyKey("cancel_migration", { migration_id: 10 })).toBe(key);
+    expect(idempotencyKey("cancel_migration", { migration_id: 10 })).not.toBe(key);
+    expect(idempotencyKey("cancel_migration", { migration_id: 10 }, key)).toBe(key);
   });
 
   it("deleteMigration generates deterministic idempotency key", () => {

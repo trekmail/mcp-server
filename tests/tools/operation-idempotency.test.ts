@@ -6,6 +6,11 @@ import type { Config } from "../../src/config.js";
 import { registerCloudflareTools } from "../../src/tools/cloudflare.js";
 import { registerDomainSmtpTools } from "../../src/tools/domain-smtp.js";
 import { registerSmtpTools } from "../../src/tools/smtp.js";
+import { registerForwardingTools } from "../../src/tools/forwarding.js";
+import { registerAutoReplyTools } from "../../src/tools/auto-reply.js";
+import { registerRulesTools } from "../../src/tools/rules.js";
+import { registerMailboxTools } from "../../src/tools/mailboxes.js";
+import { registerDeleteIntentTools } from "../../src/tools/delete-intents.js";
 
 function harness(client: TrekMailClient) {
   const tools = new Map<string, {
@@ -24,6 +29,11 @@ function harness(client: TrekMailClient) {
   registerCloudflareTools(server, client, config);
   registerDomainSmtpTools(server, client, config);
   registerSmtpTools(server, client, config);
+  registerForwardingTools(server, client, config);
+  registerAutoReplyTools(server, client, config);
+  registerRulesTools(server, client, config);
+  registerMailboxTools(server, client, config);
+  registerDeleteIntentTools(server, client, config);
 
   return async (name: string, input: Record<string, unknown>) => {
     const tool = tools.get(name)!;
@@ -35,6 +45,37 @@ describe("SMTP and Cloudflare operation identities", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.useRealTimers();
+  });
+
+  it.each([
+    ["set_forwarding", { mailbox_id: 9, enabled: true, targets: ["qa@example.invalid"] }, { enabled: false, targets: [] }],
+    ["set_auto_reply", { mailbox_id: 9, enabled: true, subject: "Original", body: "Original reply" }, { subject: "Changed", body: "Changed reply" }],
+    ["update_mail_rule", { mailbox_id: 9, rule_id: 3, conditions: [{ field: "subject", operator: "is", value: "Original" }], actions: [{ type: "addflag", value: "\\Flagged" }] }, { conditions: [{ field: "subject", operator: "is", value: "Changed" }] }],
+    ["update_mailbox", { mailbox_id: 9, conversation_view: true }, { conversation_view: false }],
+    ["pause_mailbox", { mailbox_id: 9 }, {}],
+    ["restore_mailbox", { mailbox_id: 9 }, {}],
+    ["create_delete_intent", { mailbox_id: 9 }, {}],
+  ])("%s applies each new operation while explicit retries replay", async (tool, original, changes) => {
+    const cached = new Map<string, string>();
+    const requests: Array<{ key: string; body: string }> = [];
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, options: RequestInit) => {
+      const key = (options.headers as Record<string, string>)["Idempotency-Key"];
+      const body = String(options.body ?? "");
+      requests.push({ key, body });
+      if (!cached.has(key)) cached.set(key, JSON.stringify({ applied_body: body, operation: cached.size + 1 }));
+      return new Response(cached.get(key), { status: 200 });
+    }));
+    const invoke = harness(new TrekMailClient({ baseUrl: "https://trekmail.test", token: "tm_live_test", timeoutMs: 30_000, userAgent: "test" }));
+    await invoke(tool as string, original as Record<string, unknown>);
+    await invoke(tool as string, { ...original, ...changes });
+    await invoke(tool as string, original as Record<string, unknown>);
+    expect(cached.size).toBe(3);
+    expect(requests[2].body).toBe(requests[0].body);
+    expect(requests[2].key).not.toBe(requests[0].key);
+    await invoke(tool as string, { ...original, idempotency_key: "same-operation-retry" });
+    await invoke(tool as string, { ...original, idempotency_key: "same-operation-retry" });
+    expect(cached.size).toBe(4);
+    expect(requests[4].key).toBe(requests[3].key);
   });
 
   it.each([

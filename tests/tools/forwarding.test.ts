@@ -17,7 +17,7 @@ describe("forwarding tools", () => {
     expect(client.getForwarding).toHaveBeenCalledWith(10);
   });
 
-  it("setForwarding generates deterministic idempotency key", () => {
+  it("setForwarding uses fresh keys for new state changes", () => {
     const key = idempotencyKey("set_forwarding", {
       mailbox_id: 10,
       enabled: true,
@@ -25,13 +25,14 @@ describe("forwarding tools", () => {
       keep_copy: false,
     });
     expect(key).toMatch(/^mcp_set_forwarding_/);
-    // Same params = same key
+    // Repeating a state change must not replay an older cached state.
     const key2 = idempotencyKey("set_forwarding", {
       mailbox_id: 10,
       enabled: true,
       targets: ["x@y.com"],
       keep_copy: false,
     });
-    expect(key).toBe(key2);
+    expect(key).not.toBe(key2);
+    expect(idempotencyKey("set_forwarding", { mailbox_id: 10 }, key)).toBe(key);
   });
 });

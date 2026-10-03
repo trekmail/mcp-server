@@ -26,7 +26,7 @@ export function registerDeleteIntentTools(
           .string()
           .optional()
           .describe(
-            "Optional idempotency key. If omitted, a deterministic key is generated from the params.",
+            "Optional retry key. Reuse an explicit key only when retrying the same operation; omit it for a new change.",
           ),
       },
       annotations: {
@@ -72,7 +72,7 @@ export function registerDeleteIntentTools(
           .string()
           .optional()
           .describe(
-            "Optional idempotency key. If omitted, a deterministic key is generated from the params.",
+            "Optional retry key. Reuse an explicit key only when retrying the same operation; omit it for a new change.",
           ),
       },
       annotations: {
@@ -119,7 +119,7 @@ export function registerDeleteIntentTools(
           .string()
           .optional()
           .describe(
-            "Optional idempotency key. If omitted, a deterministic key is generated from the params.",
+            "Optional retry key. Reuse an explicit key only when retrying the same operation; omit it for a new change.",
           ),
       },
       annotations: {
