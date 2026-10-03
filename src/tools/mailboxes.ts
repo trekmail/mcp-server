@@ -68,7 +68,7 @@ export function registerMailboxTools(
     {
       title: "Create Mailbox",
       description:
-        "Create a new mailbox with an auto-generated one-time password. The password is returned once and must be saved immediately — it cannot be retrieved later. Storage defaults to the shared account pool; pass storage_allocation_mb to carve out a dedicated allocation. Where app passwords are available the response carries client_auth_mode, which is authoritative: the mode you pass, otherwise the platform default for new mailboxes (password_or_app_password until the account-level default is switched on). When it is 'app_password_only', the generated password signs in to TrekMail webmail only: mail apps (Outlook, Apple Mail, phones, IMAP/SMTP, calendars and contacts, and classic webmail at /webmail-old/) need an app password, so call create_mailbox_app_password next for each app the user sets up. To reset an existing mailbox password, use change_mailbox_password: while app passwords are enabled on the platform, that reset automatically revokes all its app passwords (reason mailbox_password_reset).",
+        "Create a new mailbox with an auto-generated one-time password. The password is returned once and must be saved immediately — it cannot be retrieved later. Storage defaults to the shared account pool; pass storage_allocation_mb to carve out a dedicated allocation. Where app passwords are available the response carries client_auth_mode, which is authoritative: the mode you pass, otherwise the platform default for new mailboxes (password_or_app_password until the account-level default is switched on). When it is 'app_password_only', the generated password signs in to TrekMail webmail only: mail apps (Outlook, Apple Mail, phones, IMAP/SMTP, calendars and contacts, and classic webmail at /webmail-old/) need an app password, so pass create_app_password: true to get the first app password in this same response, or call create_mailbox_app_password for each app the user sets up. To reset an existing mailbox password, use change_mailbox_password: while app passwords are enabled on the platform, that reset automatically revokes all its app passwords (reason mailbox_password_reset).",
       inputSchema: {
         domain_id: z
           .number()
@@ -101,6 +101,12 @@ export function registerMailboxTools(
           .describe(
             "Optional mail-app sign-in mode for this mailbox. Omit for the default for new mailboxes (password_or_app_password until the account-level default is switched on; the response's client_auth_mode is authoritative). 'app_password_only' makes mail apps use app passwords from the start. 'password_or_app_password' keeps the mailbox password working in mail apps, for an integration that signs in to IMAP or SMTP with the generated password. Ignored where app passwords are not available.",
           ),
+        create_app_password: z
+          .boolean()
+          .optional()
+          .describe(
+            "Optional. true also issues the mailbox's first app password and returns it once as app_password (with its secret in app_password.password, shown only in this response), so a mail app can be set up without a second call. No 'new app password' email is sent for it. Omit (default) to keep the response unchanged. Ignored where app passwords are not available.",
+          ),
         idempotency_key: z
           .string()
           .optional()
@@ -116,6 +122,7 @@ export function registerMailboxTools(
       display_name,
       storage_allocation_mb,
       client_auth_mode,
+      create_app_password,
       idempotency_key,
     }) => {
       if (!config?.allowDestructive) {
@@ -124,13 +131,15 @@ export function registerMailboxTools(
         );
       }
       // Omitted optionals are dropped from both the JSON body and the derived
-      // key, so calls without client_auth_mode keep their exact key and body.
+      // key, so calls without client_auth_mode or create_app_password keep
+      // their exact key and body.
       const params = {
         domain_id,
         local_part,
         display_name,
         storage_allocation_mb,
         client_auth_mode,
+        create_app_password,
       };
       const idemKey = idempotencyKey(
         "create_mailbox_generated_password",
@@ -630,7 +639,7 @@ export function registerMailboxTools(
     {
       title: "Bulk Create Mailboxes",
       description:
-        "Create multiple mailboxes at once (1-100). Each item specifies a domain and local part. password_mode='generated_one_time' lets the server generate one-time passwords (returned in each result row); 'user_supplied' requires items.*.password (default if omitted, for backward compat). Per-item storage_allocation_mb is optional — items without it use the shared account pool; the sum of all dedicated allocations across the batch is validated against the available pool. Returns per-item results with status codes (200 created, 207 partial success, 422 all failed).",
+        "Create multiple mailboxes at once (1-100). Each item specifies a domain and local part. password_mode='generated_one_time' lets the server generate one-time passwords (returned in each result row); 'user_supplied' requires items.*.password (default if omitted, for backward compat). Per-item storage_allocation_mb is optional — items without it use the shared account pool; the sum of all dedicated allocations across the batch is validated against the available pool. Returns per-item results with status codes (200 created, 207 partial success, 422 all failed). Pass create_app_password: true to also get each created mailbox's first app password in its result row (app_password, shown once).",
       inputSchema: {
         password_mode: z
           .enum(["user_supplied", "generated_one_time"])
@@ -674,6 +683,12 @@ export function registerMailboxTools(
           .min(1)
           .max(100)
           .describe("Array of mailboxes to create (1-100 items)"),
+        create_app_password: z
+          .boolean()
+          .optional()
+          .describe(
+            "Optional. true also issues each created mailbox's first app password, returned once in that row's app_password (null where it could not be issued). Omit (default) to keep the response unchanged.",
+          ),
         idempotency_key: z
           .string()
           .optional()
@@ -683,7 +698,7 @@ export function registerMailboxTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ password_mode, items, idempotency_key }) => {
+    async ({ password_mode, items, create_app_password, idempotency_key }) => {
       // #163 followup CLAIM 2 — runtime gate matches the destructiveHint
       // annotation. Without this, prompt injection could spawn 100 mailboxes
       // (billing grows), and the delete path IS gated → stuck-in-paid-loop.
@@ -692,12 +707,19 @@ export function registerMailboxTools(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to bulk-create mailboxes (creates entries that will be billed and cannot be auto-deleted while this flag remains off).",
         );
       }
+      // create_app_password joins the derived key only when given, so calls
+      // without it keep their exact key.
       const idemKey = idempotencyKey(
         "bulk_create_mailboxes",
-        { mode: password_mode ?? "user_supplied", count: items.length, first: items[0]?.local_part },
+        {
+          mode: password_mode ?? "user_supplied",
+          count: items.length,
+          first: items[0]?.local_part,
+          ...(create_app_password !== undefined ? { create_app_password } : {}),
+        },
         idempotency_key,
       );
-      return callApi(() => client.bulkCreateMailboxes(items, idemKey, password_mode));
+      return callApi(() => client.bulkCreateMailboxes(items, idemKey, password_mode, create_app_password));
     },
   );
 

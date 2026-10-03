@@ -68,6 +68,8 @@ export interface CreateMailboxParams {
   storage_allocation_mb?: number;
   /** Mail-app sign-in mode; omit for the default for new mailboxes (the response says which applied). */
   client_auth_mode?: MailboxClientAuthMode;
+  /** True: also issue the mailbox's first app password, returned once as app_password. */
+  create_app_password?: boolean;
 }
 
 /** What mail apps (IMAP, SMTP, ManageSieve, CalDAV/CardDAV) may sign in with. */
@@ -862,11 +864,13 @@ export class TrekMailClient {
     }>,
     idempotencyKey: string,
     passwordMode?: "user_supplied" | "generated_one_time",
+    createAppPassword?: boolean,
   ): Promise<unknown> {
     return this.request("POST", "mailboxes:bulk", {
       body: {
         items,
         ...(passwordMode ? { password_mode: passwordMode } : {}),
+        ...(createAppPassword !== undefined ? { create_app_password: createAppPassword } : {}),
       },
       idempotencyKey,
     });

@@ -336,6 +336,37 @@ describe("existing mailbox tools and app passwords", () => {
     expect(explicit.key).not.toBe(plain.key);
   });
 
+  it("create_app_password rides along only when given, on single and bulk create", async () => {
+    const { call } = harness(true);
+
+    await call("create_mailbox_generated_password", { domain_id: 5, local_part: "alice" });
+    const plain = lastRequest(mockFetch);
+    await call("create_mailbox_generated_password", { domain_id: 5, local_part: "alice", create_app_password: true });
+    const withApw = lastRequest(mockFetch);
+    expect(plain.body).not.toHaveProperty("create_app_password");
+    expect(withApw.body).toEqual({ domain_id: 5, local_part: "alice", create_app_password: true, password_mode: "generated_one_time" });
+    expect(withApw.key).not.toBe(plain.key);
+
+    const items = [{ domain_id: 5, local_part: "bob" }];
+    await call("bulk_create_mailboxes", { password_mode: "generated_one_time", items });
+    const bulkPlain = lastRequest(mockFetch);
+    await call("bulk_create_mailboxes", { password_mode: "generated_one_time", items, create_app_password: true });
+    const bulkApw = lastRequest(mockFetch);
+    expect(bulkPlain.method).toBe("POST");
+    expect(bulkPlain.path).toMatch(/mailboxes:bulk$/);
+    expect(bulkPlain.body).toEqual({ items, password_mode: "generated_one_time" });
+    expect(bulkApw.body).toEqual({ items, password_mode: "generated_one_time", create_app_password: true });
+    expect(bulkApw.key).not.toBe(bulkPlain.key);
+  });
+
+  it("offers create_app_password on both create tools", () => {
+    const { tools } = harness(true);
+    for (const name of ["create_mailbox_generated_password", "bulk_create_mailboxes"]) {
+      expect(tools.get(name)!.definition.inputSchema, name).toHaveProperty("create_app_password");
+      expect(tools.get(name)!.definition.description, name).toContain("create_app_password");
+    }
+  });
+
   it("points the agent from a webmail-only generated password to create_mailbox_app_password", () => {
     const { tools } = harness(true);
     expect(tools.get("create_mailbox_generated_password")!.definition.description)
