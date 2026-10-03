@@ -11,6 +11,7 @@ const ADDITIVE = new Set([
   "create_alias", "create_mail_rule", "create_domain_smtp_profile",
   "drive_folder_create", "drive_upload_initiate", "drive_upload_refresh_parts",
   "drive_file_upload", "drive_device_create", "create_branding_preview",
+  "create_mailbox_app_password",
 ]);
 
 const OPEN_WORLD = new Set([
