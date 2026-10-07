@@ -11,7 +11,7 @@ const ADDITIVE = new Set([
   "create_alias", "create_mail_rule", "create_domain_smtp_profile",
   "drive_folder_create", "drive_upload_initiate", "drive_upload_refresh_parts",
   "drive_file_upload", "drive_device_create", "create_branding_preview",
-  "create_mailbox_app_password",
+  "create_mailbox_app_password", "create_private_note_encrypted",
 ]);
 
 const OPEN_WORLD = new Set([
@@ -27,6 +27,8 @@ const OPEN_WORLD = new Set([
   "resume_bulk_migration", "test_external_account", "test_saved_external_account",
   "detect_external_account", "verify_email", "verify_email_bulk",
   "create_ticket", "reply_to_ticket", "drive_share_create",
+  // Private Notes can send a future receipt to the verified actor.
+  "create_private_note_encrypted", "update_private_note",
   // These settings can forward future mail or send vacation responses to
   // external recipients even though this call does not send immediately.
   "set_forwarding", "create_forwarding_address", "update_forwarding_address",

@@ -46,6 +46,15 @@ describe("tool effect annotations", () => {
     expect(hints(name).openWorldHint).toBe(true);
   });
 
+  it("describes Private Notes reads, additive creation and irreversible consumption", () => {
+    expect(hints("create_private_note_encrypted")).toMatchObject({ readOnlyHint: false, destructiveHint: false, openWorldHint: true });
+    expect(hints("get_private_note_status")).toMatchObject({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
+    expect(hints("update_private_note")).toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
+    expect(hints("consume_private_note_encrypted")).toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: false });
+    expect(hints("revoke_private_note").destructiveHint).toBe(true);
+    expect(hints("update_private_note_settings").destructiveHint).toBe(true);
+  });
+
   it("always supplies all three booleans for the complete catalog", () => {
     for (const entry of TOOL_CATALOG) {
       for (const key of ["readOnlyHint", "destructiveHint", "openWorldHint"]) {

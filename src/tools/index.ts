@@ -1,3 +1,4 @@
+import { registerPrivateNoteTools } from "./private-notes.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
 import type { Config } from "../config.js";
@@ -52,6 +53,7 @@ export function registerInfraTools(
   config: Config,
 ): void {
   registerAccountTools(server, client, { allowDestructive: config.allowDestructive });
+  registerPrivateNoteTools(server, client, config);
   registerMachinePaymentTools(server, client);
   registerDomainTools(server, client, config);
   registerDnsTools(server, client);

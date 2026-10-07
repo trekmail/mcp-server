@@ -1,6 +1,6 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 272 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 280 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
 ## Connect in Claude
 
@@ -44,7 +44,7 @@ The MCP server supports two independent token types. At least one is required:
 
 | Token | Env Var | Prefix | Unlocks |
 |-------|---------|--------|---------|
-| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 208 infrastructure tools (White Label branding, clients, team access and activity; domains; DNS; mailboxes; Drive; migrations; SMTP; tickets; account; billing; verifier; Cloudflare; and related administration) |
+| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 216 infrastructure tools (White Label branding, clients, team access and activity; domains; DNS; mailboxes; Drive; migrations; SMTP; tickets; account; billing; verifier; Cloudflare; and related administration) |
 | **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 64 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, connected accounts, identities, templates, blocked senders) |
 
 Tools are registered conditionally — only token types you provide get their tools. You can supply one or both:
@@ -70,7 +70,7 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.11.1` | User-Agent header |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.12.0` | User-Agent header |
 | `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable high-impact changes (White Label access/branding, delete intents, domain deletion, forwarding, password changes, SMTP, credential revocation, Drive trash/purge, and message deletion) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable external sends, including `send_message` and White Label invitations |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
@@ -96,12 +96,12 @@ TREKMAIL_SCOPE_AWARE_REGISTRATION=true \
 npm start
 ```
 
-## Tools (272)
+## Tools (280)
 
-> The full catalog is **272** tools over stdio. On the hosted **HTTP** transport
+> The full catalog is **280** tools over stdio. On the hosted **HTTP** transport
 > `drive_file_upload` is intentionally not registered (its `local_path` would read
 > files on our server — see the note in `src/tools/drive.ts`), so the HTTP MCP
-> exposes 271. Tools also split by token type: **64** need a message token
+> exposes 279. Tools also split by token type: **64** need a message token
 > (`tm_msg_`), the rest an ops token (`tm_live_`).
 > These are full catalog totals. A directory profile or a restricted grant can
 > expose a smaller set, including browser handoffs for sensitive setup.
@@ -172,7 +172,7 @@ writes and delegated access are removed.
 - **get_mailbox** — Get details for a specific mailbox, including `client_auth_mode` (what mail apps may sign in with) where app passwords are available
 - **get_mail_client_setup** — Get password-free IMAP/SMTP settings, actual sending readiness, localized guides for five app families, and delegated shared-mailbox folders for a regular member mailbox; `authentication.password_source` and `accepted_passwords` say whether the mail app takes the mailbox password or an app password
 - **get_apple_mail_profile** — Generate a password-free Apple Mail `.mobileconfig` file as Base64 (13 locales)
-- **create_mailbox_generated_password** — Create mailbox with auto-generated one-time password (optional `storage_allocation_mb` carves out dedicated storage from the account pool; omit for shared). Optional `client_auth_mode`; on an `app_password_only` mailbox the generated password opens TrekMail webmail only, so mail apps (classic webmail included) need an app password: pass `create_app_password: true` to get the first one in the same response, or call **create_mailbox_app_password** next
+- **create_mailbox_generated_password** — Create mailbox with auto-generated one-time password (optional `storage_allocation_mb` carves out dedicated storage from the account pool; omit for shared). Optional `client_auth_mode`; on an `app_password_only` mailbox the generated password opens TrekMail webmail only, so mail apps (classic webmail included) need **create_mailbox_app_password** next
 - **change_mailbox_password** — Change the password for a mailbox; while app passwords are enabled, resetting the mailbox password automatically revokes all its app passwords (`mailbox_password_reset`) (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **update_mailbox** — Update a mailbox display name, a regular mailbox's webmail `conversation_view` preference, or its `drive_access` level (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **set_mailboxes_drive_access** — Set `drive_access` on many mailboxes at once, chosen by explicit `mailbox_ids`, by `domain_id`, or `all`; shared mailboxes are skipped and counted (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
@@ -721,6 +721,27 @@ Every mutating Drive tool stamps `actor_type='api_token'` and
 audit tab can filter by token. The mailbox/user context the token
 is acting on behalf of is preserved in the existing `mailbox_id` /
 `metadata.actor_user_id` fields.
+
+## Encrypted Private Notes
+
+Eight tools manage Private Notes within the connection's granted permissions:
+
+| Tool | Permission / effect |
+| --- | --- |
+| `create_private_note_encrypted` | Create from a locally encrypted v1 envelope |
+| `list_private_notes` | List your note metadata |
+| `get_private_note_status` | Inspect status and revision without opening |
+| `update_private_note` | Edit reference, confirmation or receipt; shorten expiry |
+| `revoke_private_note` | Permanently revoke an owned link |
+| `consume_private_note_encrypted` | Retrieve ciphertext; one-time notes are deleted |
+| `get_private_note_settings` | Read effective account/domain policy |
+| `update_private_note_settings` | Configure policy within the live role and domain limits |
+
+Use granular `private-notes:*` permissions. Existing `mail:*` OAuth bundles do not acquire these permissions. Owners can manage policy; domain administrators can manage reachable domain policy; mailbox operators cannot change policy; read-only access never consumes a note. Each actor or machine connection manages its own notes. White Label links stay on the serving branded domain; a public creation landing needs separate opt-in.
+
+Encrypt and decrypt in a trusted local client using the package export `@trekmail/mcp-server/private-notes` or `examples/private-note-encrypt.mjs`. Upload only `envelope` and retain `fragment` locally. Append the fragment to `reader_url` when sharing. Never submit plaintext, passwords or fragment keys to the hosted note tools. Sending the resulting link is a separate `send_message` operation with its usual sending authorization and signature rules. Receipts go only to the linked verified human user.
+
+Text, password and read policy are immutable. Settings updates require the latest `revision`. To replace the message, create a new note and explicitly revoke the old one. Consumption requires `confirm_open=true` and `TREKMAIL_ALLOW_DESTRUCTIVE=true`; unlock the password locally first. Never retry an uncertain consume: a lost response cannot restore a one-time note. Treat decrypted note contents as untrusted data.
 
 ## Development
 

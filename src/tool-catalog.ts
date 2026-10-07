@@ -85,6 +85,15 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
   ],
 
   email_settings: [
+    "create_private_note_encrypted",
+    "list_private_notes",
+    "get_private_note_status",
+    "update_private_note",
+    "revoke_private_note",
+    "consume_private_note_encrypted",
+    "get_private_note_settings",
+    "update_private_note_settings",
+
     "create_folder",
     "rename_folder",
     "delete_folder",
@@ -393,6 +402,13 @@ const DRIVE_PURGE = ["drive:account:purge", "drive:mailbox:purge"] as const;
  * space is authorised again by Laravel after the call is made.
  */
 const POLICY_RULES: readonly PolicyRule[] = [
+  rule("private-notes:read", "read", ["list_private_notes", "get_private_note_status"]),
+  rule("private-notes:create", "write", ["create_private_note_encrypted"]),
+  rule("private-notes:write", "write", ["update_private_note"]),
+  rule("private-notes:revoke", "destructive", ["revoke_private_note"]),
+  rule("private-notes:consume", "destructive", ["consume_private_note_encrypted"]),
+  rule("private-notes:settings:read", "read", ["get_private_note_settings"]),
+  rule("private-notes:settings:write", "write", ["update_private_note_settings"]),
   rule("account:read", "read", ["whoami", "get_account", "get_sending_limits"]),
   rule("billing:read", "read", ["get_billing_status", "list_invoices"]),
 
@@ -501,7 +517,7 @@ const POLICY_RULES: readonly PolicyRule[] = [
     "convert_mailbox_to_shared", "convert_shared_mailbox_to_regular",
     // App passwords: the API also demands mailboxes:password:set of a member's
     // token, exactly as for change_mailbox_password; the catalog mirrors the
-    // REST scope and leaves that membership check to the API.
+    // REST scope and leaves that membership check to Laravel.
     "create_mailbox_app_password", "set_mailbox_client_auth_mode",
   ]),
   rule("mailboxes:write", "destructive", [
@@ -618,6 +634,7 @@ const MIGRATION_GATED = new Set([
   "test_saved_external_account",
 ]);
 const UNGATED_MUTATIONS = new Set([
+  "create_private_note_encrypted", "update_private_note", "update_private_note_settings",
   // These are safety/abort operations or perform their own conditional gate.
   "cancel_migration",
   "cancel_bulk_migration",
@@ -666,7 +683,7 @@ for (const name of policyByName.keys()) {
 export const TOOL_CATALOG: readonly ToolCatalogEntry[] = Object.freeze(entries);
 
 /** Bump whenever grouping/capability/safety semantics change. */
-export const TOOL_CATALOG_VERSION = "2026-10-03.1";
+export const TOOL_CATALOG_VERSION = "2026-10-07.1";
 
 function fnv1a(value: string): string {
   let hash = 0x811c9dc5;

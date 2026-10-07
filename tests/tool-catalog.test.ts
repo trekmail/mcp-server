@@ -27,17 +27,17 @@ function registeredToolNames(): Set<string> {
 
 describe("tool catalog", () => {
   it("has an explicit version and deterministic parity hash", () => {
-    expect(TOOL_CATALOG_VERSION).toBe("2026-10-03.1");
-    expect(TOOL_CATALOG_HASH).toBe("b1717268");
+    expect(TOOL_CATALOG_VERSION).toBe("2026-10-07.1");
+    expect(TOOL_CATALOG_HASH).toBe("a0dee9c5");
   });
 
-  it("covers all 272 registered tools exactly once", () => {
+  it("covers all 280 registered tools exactly once", () => {
     const registered = registeredToolNames();
     const catalogued = new Set(TOOL_CATALOG.map((entry) => entry.name));
 
-    expect(registered.size).toBe(272);
-    expect(TOOL_CATALOG).toHaveLength(272);
-    expect(TOOL_CATALOG_BY_NAME.size).toBe(272);
+    expect(registered.size).toBe(280);
+    expect(TOOL_CATALOG).toHaveLength(280);
+    expect(TOOL_CATALOG_BY_NAME.size).toBe(280);
     expect([...registered].filter((name) => !catalogued.has(name))).toEqual([]);
     expect([...catalogued].filter((name) => !registered.has(name))).toEqual([]);
   });
@@ -66,7 +66,7 @@ describe("tool catalog", () => {
     // 21 since get_message_delivery and get_mailbox_sending_limits joined
     // send_message: an agent that sends needs to know whether it went out.
     expect(toolsForToolsets(["email"]).size).toBe(21);
-    expect(toolsForToolsets(["email_settings"]).size).toBe(28);
+    expect(toolsForToolsets(["email_settings"]).size).toBe(36);
     expect(toolsForToolsets(["contacts"]).size).toBe(14);
     expect(toolsForToolsets(["calendar"]).size).toBe(5);
   });

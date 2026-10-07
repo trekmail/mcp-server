@@ -66,7 +66,7 @@ export interface CreateMailboxParams {
   display_name?: string;
   /** Optional dedicated allocation in MB; omit for shared pool. */
   storage_allocation_mb?: number;
-  /** Mail-app sign-in mode; omit for the default for new mailboxes (the response says which applied). */
+  /** Mail-app sign-in mode; omit for the account's default for new mailboxes. */
   client_auth_mode?: MailboxClientAuthMode;
   /** True: also issue the mailbox's first app password, returned once as app_password. */
   create_app_password?: boolean;
@@ -2369,6 +2369,32 @@ export class TrekMailClient {
 
   // --- Core Request ---
 
+  async createPrivateNote(body: Record<string, unknown>): Promise<unknown> {
+    return this.request("POST", "private-notes", {body, idempotencyKey: typeof body.idempotency_key === "string" ? body.idempotency_key : randomUUID()});
+  }
+  async listPrivateNotes(query: Record<string, unknown> = {}): Promise<unknown> {
+    return this.request("GET", "private-notes", {query});
+  }
+  async getPrivateNote(id: string, query: Record<string, unknown> = {}): Promise<unknown> {
+    return this.request("GET", `private-notes/${encodeURIComponent(id)}`, {query});
+  }
+  async updatePrivateNote(id: string, body: Record<string, unknown>): Promise<unknown> {
+    return this.request("PATCH", `private-notes/${encodeURIComponent(id)}`, {body});
+  }
+  async revokePrivateNote(id: string, body: Record<string, unknown> = {}): Promise<unknown> {
+    return this.request("POST", `private-notes/${encodeURIComponent(id)}/revoke`, {body});
+  }
+  async consumePrivateNote(id: string, body: Record<string, unknown>): Promise<unknown> {
+    // No idempotency key: consumption must never retry or replay ciphertext.
+    return this.request("POST", `private-notes/${encodeURIComponent(id)}/consume`, {body});
+  }
+  async getPrivateNoteSettings(query: Record<string, unknown> = {}): Promise<unknown> {
+    return this.request("GET", "private-notes/settings", {query});
+  }
+  async updatePrivateNoteSettings(body: Record<string, unknown>): Promise<unknown> {
+    return this.request("PATCH", "private-notes/settings", {body});
+  }
+
   private async request(
     method: string,
     path: string,
@@ -2381,6 +2407,7 @@ export class TrekMailClient {
     } = {},
   ): Promise<unknown> {
     const url = new URL(`/api/v1/${path}`, this.baseUrl);
+    const safePath = path.replace(/(private-notes\/)[A-Za-z0-9_-]{43}/g, "$1[note]");
 
     if (opts.query) {
       for (const [key, value] of Object.entries(opts.query)) {
@@ -2467,17 +2494,18 @@ export class TrekMailClient {
           error.name === "AbortError"
         ) {
           throw new TrekMailClientError(
-            `Request timed out after ${this.timeoutMs}ms: ${method} ${path}`,
+            `Request timed out after ${this.timeoutMs}ms: ${method} ${safePath}`,
             error,
           );
         }
 
         if (error instanceof TypeError) {
+          if (path.startsWith("private-notes/")) throw new TrekMailClientError(`Request failed: ${method} ${safePath}`);
           throw error; // Let retry handle network TypeErrors
         }
 
         throw new TrekMailClientError(
-          `Request failed: ${method} ${path}`,
+          `Request failed: ${method} ${safePath}`,
           error,
         );
       } finally {

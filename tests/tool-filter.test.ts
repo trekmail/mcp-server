@@ -46,8 +46,8 @@ function namesFor(
 }
 
 describe("stdio toolset filtering", () => {
-  it("preserves all 272 tools when TREKMAIL_TOOLSETS is omitted", () => {
-    expect(namesFor()).toHaveLength(272);
+  it("preserves all 280 tools when TREKMAIL_TOOLSETS is omitted", () => {
+    expect(namesFor()).toHaveLength(280);
   });
 
   it("exposes email tools plus minimal mailbox discovery", () => {
