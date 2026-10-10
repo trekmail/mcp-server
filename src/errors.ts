@@ -155,12 +155,47 @@ export class TrekMailApiError extends Error {
           : `\nAction: Do not retry before ${typeof resetsAt === "string" ? resetsAt : "the allowance renews"}. get_mailbox_sending_limits (message token) or get_sending_limits (account token) shows the allowance and when it renews.`;
     }
 
+    const sharedMailboxAction = SHARED_MAILBOX_ACTIONS[this.code];
+    if (sharedMailboxAction) text += `\nAction: ${sharedMailboxAction}`;
+    const details = this.extra["details"];
+    if (
+      this.code === "validation_error" &&
+      details !== null &&
+      typeof details === "object" &&
+      "shared_mailbox_id" in details
+    ) {
+      text +=
+        "\nAction: Call save_draft or update_draft again without shared_mailbox_id, or send directly with send_message and shared_mailbox_id.";
+    }
+
     if (Object.keys(this.extra).length > 0) {
       text += `\nDetails: ${JSON.stringify(this.extra)}`;
     }
     return text;
   }
 }
+
+/**
+ * Shared mailbox refusals name the MCP tool that fixes each one, so an agent
+ * acts on it instead of retrying or switching to another From address. The
+ * API hint names the REST call; Details carries the ids for the next call.
+ */
+const SHARED_MAILBOX_ACTIONS: Readonly<Record<string, string>> = {
+  no_access_left:
+    "Keep can_read or can_send true. To take away all access, call remove_shared_mailbox_member.",
+  send_only_disabled:
+    "Do not retry. Keep can_read true, or set can_send false for read-only access; send-only access is not turned on for this service yet.",
+  last_reader:
+    "Give another member Read first (update_shared_mailbox_member with can_read=true, or add_shared_mailbox_member), then repeat this call.",
+  already_member:
+    "Call update_shared_mailbox_member with the member_id from Details instead of adding the member again.",
+  shared_mailbox_send_denied:
+    "Do not retry with another From address or identity. Tell the user that an administrator can grant Read and Send as (update_shared_mailbox_member), or that they can send from webmail or a mail app.",
+  identity_unavailable:
+    "Call list_identities and use an id from it, or leave identity_id out. Team addresses from send-only access cannot be used through MCP.",
+  identity_delegated:
+    "Leave this identity unchanged. Its access follows the shared mailbox (update_shared_mailbox_member or remove_shared_mailbox_member); its signature is edited in webmail.",
+};
 
 /**
  * Error thrown for client-side issues (network, timeout, config).
