@@ -27,8 +27,8 @@ function registeredToolNames(): Set<string> {
 
 describe("tool catalog", () => {
   it("has an explicit version and deterministic parity hash", () => {
-    expect(TOOL_CATALOG_VERSION).toBe("2026-10-09.1");
-    expect(TOOL_CATALOG_HASH).toBe("a0dee9c5");
+    expect(TOOL_CATALOG_VERSION).toBe("2026-10-09.2");
+    expect(TOOL_CATALOG_HASH).toBe("c4b7bbbb");
   });
 
   it("covers all 280 registered tools exactly once", () => {

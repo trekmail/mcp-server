@@ -501,11 +501,11 @@ const POLICY_RULES: readonly PolicyRule[] = [
 
   rule("mailboxes:read", "read", [
     "list_mailboxes", "get_mailbox", "get_mail_client_setup", "get_apple_mail_profile",
-    "list_aliases", "list_shared_mailbox_members", "list_trashed_mailboxes",
+    "list_aliases", "list_trashed_mailboxes",
     "list_mailbox_bounces", "list_mailbox_app_passwords",
   ]),
   rule("mailboxes:create", "write", [
-    "create_mailbox_generated_password", "bulk_create_mailboxes", "create_shared_mailbox",
+    "create_mailbox_generated_password", "bulk_create_mailboxes",
   ]),
   rule("mailboxes:write", "write", [
     "update_account",
@@ -513,13 +513,17 @@ const POLICY_RULES: readonly PolicyRule[] = [
     "suspend_mailbox_login", "resume_mailbox_login", "set_mailboxes_login_access",
     "update_mailbox_note", "pause_mailbox",
     "resume_mailbox", "enable_imap", "create_alias", "update_alias",
-    "add_shared_mailbox_member", "update_shared_mailbox_member", "remove_shared_mailbox_member",
-    "convert_mailbox_to_shared", "convert_shared_mailbox_to_regular",
     // App passwords: the API also demands mailboxes:password:set of a member's
     // token, exactly as for change_mailbox_password; the catalog mirrors the
     // REST scope and leaves that membership check to Laravel.
     "create_mailbox_app_password", "set_mailbox_client_auth_mode",
   ]),
+  rule("mailboxes:read", "read", ["list_shared_mailbox_members"], ["shared_mailboxes:read"]),
+  rule("mailboxes:create", "write", ["create_shared_mailbox"], ["shared_mailboxes:write"]),
+  rule("mailboxes:write", "write", [
+    "add_shared_mailbox_member", "update_shared_mailbox_member", "remove_shared_mailbox_member",
+    "convert_mailbox_to_shared", "convert_shared_mailbox_to_regular",
+  ], ["shared_mailboxes:write"]),
   rule("mailboxes:write", "destructive", [
     "delete_alias", "rotate_mailbox_app_password", "revoke_mailbox_app_password",
   ]),
@@ -683,7 +687,7 @@ for (const name of policyByName.keys()) {
 export const TOOL_CATALOG: readonly ToolCatalogEntry[] = Object.freeze(entries);
 
 /** Bump whenever grouping/capability/safety semantics change. */
-export const TOOL_CATALOG_VERSION = "2026-10-09.1";
+export const TOOL_CATALOG_VERSION = "2026-10-09.2";
 
 function fnv1a(value: string): string {
   let hash = 0x811c9dc5;

@@ -46,6 +46,21 @@ function namesFor(
 }
 
 describe("stdio toolset filtering", () => {
+  it("requires shared mailbox permissions in addition to mailbox grants", () => {
+    const mailboxOnly = namesFor(undefined, ["mailboxes:read", "mailboxes:write", "mailboxes:create"]);
+    expect(mailboxOnly).not.toContain("list_shared_mailbox_members");
+    expect(mailboxOnly).not.toContain("add_shared_mailbox_member");
+    expect(mailboxOnly).not.toContain("update_shared_mailbox_member");
+    expect(mailboxOnly).not.toContain("create_shared_mailbox");
+    const readable = namesFor(undefined, ["mailboxes:read", "mailboxes:write", "shared_mailboxes:read"]);
+    expect(readable).toContain("list_shared_mailbox_members");
+    expect(readable).not.toContain("update_shared_mailbox_member");
+    const writable = namesFor(undefined, ["mailboxes:write", "shared_mailboxes:write"]);
+    expect(writable).toContain("add_shared_mailbox_member");
+    expect(writable).toContain("update_shared_mailbox_member");
+    expect(writable).toContain("remove_shared_mailbox_member");
+    expect(namesFor(undefined, ["shared_mailboxes:write"])).not.toContain("update_shared_mailbox_member");
+  });
   it("preserves all 280 tools when TREKMAIL_TOOLSETS is omitted", () => {
     expect(namesFor()).toHaveLength(280);
   });

@@ -15,7 +15,7 @@ export function registerSharedMailboxMemberTools(
     {
       title: "List Shared Mailbox Members",
       description:
-        "List all members of a shared (team) mailbox. Shows each member's membership id, the underlying user mailbox, email, and permissions: `can_read` (opens the shared inbox and, when enabled, a shared IMAP folder), `can_send` (Send as), and `access` (read_send, read_only or send_only). Send-only members send from their own webmail or mail app with no access to the team inbox. The Message API does not support delegated sending yet. In mail apps, members sign in with their own address and app password; no shared password exists. Use list_mailboxes to find mailbox IDs.",
+        "List reachable members of a shared (team) mailbox within the caller's domain and mailbox limits. Delegated dashboard roles need shared_mailboxes:read in addition to the mailboxes:read API grant. Shows each member's membership id, the underlying user mailbox, email, and permissions: `can_read` (opens the shared inbox and, when enabled, a shared IMAP folder), `can_send` (Send as), and `access` (read_send, read_only or send_only). Send-only members send from their own webmail or mail app with no access to the team inbox. The Message API does not support delegated sending yet. In mail apps, members sign in with their own address and app password; no shared password exists. Use list_mailboxes to find mailbox IDs.",
       inputSchema: {
         mailbox_id: z
           .number()
@@ -34,7 +34,7 @@ export function registerSharedMailboxMemberTools(
     {
       title: "Add Shared Mailbox Member",
       description:
-        "Add a member to a shared (team) mailbox. Read (`can_read`) and Send as (`can_send`) both default to true. Set can_read=false and can_send=true for send-only access while the feature is enabled and another active reader remains. The API refuses no_access_left, send_only_disabled or last_reader with 422. Send-only members use webmail or a mail app; the Message API cannot send as their team address yet. For readers, use get_mail_client_setup with the member mailbox ID to wait for native_access_ready and verify effective send_as_ready plus exact folder paths.",
+        "Add a member to a shared (team) mailbox. Delegated dashboard roles need shared_mailboxes:write in addition to the mailboxes:write API grant; both mailboxes must be within the caller's domain and mailbox limits. Read (`can_read`) and Send as (`can_send`) both default to true. Set can_read=false and can_send=true for send-only access while the feature is enabled and another active reader remains. The API refuses no_access_left, send_only_disabled or last_reader with 422. Send-only members use webmail or a mail app; the Message API cannot send as their team address yet. For readers, use get_mail_client_setup with the member mailbox ID to wait for native_access_ready and verify effective send_as_ready plus exact folder paths.",
       inputSchema: {
         mailbox_id: z
           .number()
@@ -93,7 +93,7 @@ export function registerSharedMailboxMemberTools(
     {
       title: "Update Shared Mailbox Member",
       description:
-        "Update a shared mailbox member's Read (`can_read`) and Send as (`can_send`) permissions independently; omitted fields stay unchanged. At least one of can_read, can_send or custom_label is required. Both permissions cannot be false (422 no_access_left); send-only access requires the feature (send_only_disabled) and another active reader (last_reader). Send-only members use webmail or a mail app, with no team inbox access or Message API sending. Optionally set `custom_label`, the member's personal name for the shared mailbox in their own Webmail (pass an empty string to clear it). A retryable `native_access_sync_failed` means no permission change was saved. Pass the membership row id from list_shared_mailbox_members, not the member mailbox id.",
+        "Delegated dashboard roles need shared_mailboxes:write in addition to the mailboxes:write API grant; both mailboxes must be within the caller's domain and mailbox limits. Update a shared mailbox member's Read (`can_read`) and Send as (`can_send`) permissions independently; omitted fields stay unchanged. At least one of can_read, can_send or custom_label is required. Both permissions cannot be false (422 no_access_left); send-only access requires the feature (send_only_disabled) and another active reader (last_reader). Send-only members use webmail or a mail app, with no team inbox access or Message API sending. Optionally set `custom_label`, the member's personal name for the shared mailbox in their own Webmail (pass an empty string to clear it). A retryable `native_access_sync_failed` means no permission change was saved. Pass the membership row id from list_shared_mailbox_members, not the member mailbox id.",
       inputSchema: {
         mailbox_id: z
           .number()
@@ -148,7 +148,7 @@ export function registerSharedMailboxMemberTools(
     {
       title: "Remove Shared Mailbox Member",
       description:
-        "Remove a member from a shared (team) mailbox, revoking Read and Send as access without deleting the member's own mailbox. The last active reader cannot be removed (422 last_reader when send-only members remain; last_member for the legacy case). A retryable `native_access_sync_failed` keeps the membership. Pass the membership row id from list_shared_mailbox_members.",
+        "Delegated dashboard roles need shared_mailboxes:write in addition to the mailboxes:write API grant; both mailboxes must be within the caller's domain and mailbox limits. Remove a member from a shared (team) mailbox, revoking Read and Send as access without deleting the member's own mailbox. The last active reader cannot be removed (422 last_reader when send-only members remain; last_member for the legacy case). A retryable `native_access_sync_failed` keeps the membership. Pass the membership row id from list_shared_mailbox_members.",
       inputSchema: {
         mailbox_id: z
           .number()

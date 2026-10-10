@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import packageMetadata from "../package.json" with { type: "json" };
 
 // We test loadConfig by manipulating env vars and dynamically importing
 describe("loadConfig", () => {
@@ -103,7 +104,7 @@ describe("loadConfig", () => {
     expect(config.baseUrl).toBe("https://trekmail.test"); // trailing slash stripped
     expect(config.apiToken).toBe("tm_live_abc123");
     expect(config.timeoutMs).toBe(30_000);
-    expect(config.userAgent).toMatch(/^trekmail-mcp\/\d+\.\d+\.\d+$/);
+    expect(config.userAgent).toBe(`trekmail-mcp/${packageMetadata.version}`);
     expect(config.allowDestructive).toBe(false);
     expect(config.allowSending).toBe(false);
     expect(config.scopeAwareRegistration).toBe(true);

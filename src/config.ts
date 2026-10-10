@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { TOOLSETS, type Toolset } from "./tool-catalog.js";
 
+export const PACKAGE_VERSION = "1.13.1";
+
 const toolsetSchema = z
   .string()
   .transform((value, ctx): Toolset[] => {
@@ -31,7 +33,7 @@ const configSchema = z
     apiToken: z.string().startsWith("tm_live_").optional(),
     messageToken: z.string().startsWith("tm_msg_").optional(),
     timeoutMs: z.coerce.number().int().positive().default(30_000),
-    userAgent: z.string().default("trekmail-mcp/1.13.0"),
+    userAgent: z.string().default(`trekmail-mcp/${PACKAGE_VERSION}`),
     allowDestructive: z
       .enum(["true", "false"])
       .default("false")

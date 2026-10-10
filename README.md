@@ -2,6 +2,8 @@
 
 A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 280 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
+Current release: package **1.13.1**, catalogue **2026-10-09.2**.
+
 ## Connect in Claude
 
 For the hosted service, open [TrekMail in the Claude directory](https://claude.ai/directory/connectors/trekmail), select **Connect**, sign in to TrekMail and approve the requested permissions. TrekMail is published as a **Community** connector. Available tools depend on the connected account's plan and permissions.
@@ -70,7 +72,7 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.13.0` | User-Agent header |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.13.1` | User-Agent header |
 | `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable high-impact changes (White Label access/branding, delete intents, domain deletion, forwarding, password changes, SMTP, credential revocation, Drive trash/purge, and message deletion) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable external sends, including `send_message` and White Label invitations |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
@@ -83,6 +85,10 @@ Tool visibility is the intersection of token capability, `TREKMAIL_TOOLSETS`,
 authoritative. Account Drive and Mailbox Drive deliberately share one `drive`
 toolset; all White Label capabilities share `white_label`. The concrete resource,
 membership, entitlement, and token constraints decide what a call can access.
+Shared mailbox member tools require the matching shared mailbox permission
+from your dashboard role as well as the mailbox API permission. Roles with
+Read access can list members; changing members requires permission to manage
+shared mailboxes.
 Compact email, contacts, calendar, and email-settings selections also include
 the existing read-only `list_mailboxes` tool so an agent can discover the
 required mailbox ID without loading the full administration toolset.

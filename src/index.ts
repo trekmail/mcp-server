@@ -2,7 +2,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { loadConfig } from "./config.js";
+import { loadConfig, PACKAGE_VERSION } from "./config.js";
 import { TrekMailClient, makeClientConfig } from "./client.js";
 import { registerInfraTools, registerMessageTools } from "./tools/index.js";
 import { withToolFilter } from "./tool-filter.js";
@@ -12,7 +12,7 @@ const config = loadConfig();
 
 const server = new McpServer({
   name: "TrekMail",
-  version: "1.13.0",
+  version: PACKAGE_VERSION,
 });
 ensureToolListCapability(server);
 // Create clients conditionally based on available tokens
