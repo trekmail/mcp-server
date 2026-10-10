@@ -183,7 +183,7 @@ export function registerMessageToolHandlers(
           .positive()
           .optional()
           .describe(
-            "Use one identity returned by list_identities. For a connected-inbox Send As identity, external_account_id must identify the same source.",
+            "Use one identity returned by list_identities. Delegated team identities are excluded and cannot be used here. For a connected-inbox Send As identity, external_account_id must identify the same source.",
           ),
         shared_mailbox_id: z
           .number()
@@ -191,7 +191,7 @@ export function registerMessageToolHandlers(
           .positive()
           .optional()
           .describe(
-            "Send AS a shared (team) mailbox. mailbox_id stays the member acting — the sender you hold a membership on — and this names the shared mailbox the message goes out as. Requires can_send on that membership. A shared mailbox cannot send on its own.",
+            "Send AS a shared (team) mailbox. The token stays the acting member; this names the shared mailbox the message goes out as. Requires both can_read and can_send. Send-only members must use webmail or a mail app; delegated identities are not supported by the Message API yet. A shared mailbox cannot send on its own.",
           ),
       },
       annotations: {

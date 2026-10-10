@@ -36,7 +36,7 @@ export function registerMessageScheduledTools(
           ),
         external_account_id: z.number().int().positive().optional().describe("Connected inbox used for sending"),
         identity_id: z.number().int().positive().optional().describe("From identity returned by list_identities"),
-        shared_mailbox_id: z.number().int().positive().optional().describe("Schedule as a shared (team) mailbox. The token stays the acting member; requires can_send on that membership."),
+        shared_mailbox_id: z.number().int().positive().optional().describe("Schedule as a shared (team) mailbox. The token stays the acting member; requires both can_read and can_send. Send-only members must use webmail or a mail app; delegated identities are not supported by the Message API yet."),
         confirm_send: z.boolean().describe("Must be true to schedule"),
         idempotency_key: z.string().optional(),
         apply_default_recipients: z

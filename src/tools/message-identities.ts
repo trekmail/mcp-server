@@ -13,10 +13,10 @@ export function registerMessageIdentityTools(
   server.registerTool("list_identities", {
     title: "List Sending Addresses",
     description:
-      "List valid From addresses, connected-inbox Send As identities, reply policy, eligible domains, and permitted saved SMTP profiles. Pass external_account_id to see addresses usable from that connected inbox. Requires scope: messages:read.",
+      "List valid From addresses, connected-inbox Send As identities, reply policy, eligible domains, and permitted saved SMTP profiles. Pass external_account_id to see addresses usable from that connected inbox. Delegated team identities for send-only access are excluded and cannot be used for Message API sending or scheduling. Use webmail or a mail app for them. Requires scope: messages:read.",
     inputSchema: {
       external_account_id: z.number().int().positive().optional().describe("Connected inbox whose From addresses should be listed"),
-      shared_mailbox_id: z.number().int().positive().optional().describe("Shared (team) mailbox to list the From addresses of. Requires a membership with can_send; use the returned address with send_message's shared_mailbox_id."),
+      shared_mailbox_id: z.number().int().positive().optional().describe("Shared (team) mailbox to list the From addresses of. Requires a membership with both can_read and can_send; use the returned address with send_message's shared_mailbox_id."),
     },
   }, async ({ external_account_id, shared_mailbox_id }) => callApi(() => client.listIdentities({ external_account_id, shared_mailbox_id })));
 
@@ -79,7 +79,7 @@ export function registerMessageIdentityTools(
   server.registerTool("delete_identity", {
     title: "Delete Send As Identity",
     description:
-      "Delete a Send As identity. Managed mailbox/alias identities cannot be deleted here. Pass external_account_id for a connected-inbox identity. Requires scope: messages:write and TREKMAIL_ALLOW_DESTRUCTIVE=true.",
+      "Delete a Send As identity. Managed mailbox/alias and delegated team identities cannot be deleted here. Delegated identities are managed through shared-mailbox access (422 identity_delegated). Pass external_account_id for a connected-inbox identity. Requires scope: messages:write and TREKMAIL_ALLOW_DESTRUCTIVE=true.",
     inputSchema: {
       id: z.number().int().positive().describe("Identity ID"),
       external_account_id: z.number().int().positive().optional(),

@@ -70,7 +70,7 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.12.0` | User-Agent header |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.13.0` | User-Agent header |
 | `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable high-impact changes (White Label access/branding, delete intents, domain deletion, forwarding, password changes, SMTP, credential revocation, Drive trash/purge, and message deletion) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable external sends, including `send_message` and White Label invitations |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
@@ -201,12 +201,12 @@ writes and delegated access are removed.
 - **delete_alias** — Permanently remove an alias (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 
 ### Shared Mailbox Members (ops token)
-- **list_shared_mailbox_members** — List members and their flat `can_read` / `can_send` permissions; membership grants Webmail and, when enabled, delegated native IMAP access
-- **add_shared_mailbox_member** — Add an existing regular mailbox; `can_send` defaults to true (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
-- **update_shared_mailbox_member** — Toggle send-as permission or set the member's personal Webmail label; retryable native-sync failures preserve the old permission (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
-- **remove_shared_mailbox_member** — Revoke Webmail/native access without deleting the member mailbox; the last member cannot be removed (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **list_shared_mailbox_members**: List independent `can_read` / `can_send` permissions and `access` (read_send, read_only, send_only); Read opens the shared inbox and, when enabled, a shared IMAP folder
+- **add_shared_mailbox_member**: Add an existing regular mailbox; `can_read` and `can_send` default to true (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **update_shared_mailbox_member**: Change Read or Send as independently, or set the member's personal Webmail label; omitted fields keep their values; retryable native-sync failures preserve the old permission (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **remove_shared_mailbox_member**: Revoke Webmail/native access without deleting the member mailbox; the last active reader cannot be removed (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 
-Shared mailboxes never authenticate directly. Call **get_mail_client_setup** with a regular member mailbox id, wait for `native_access_ready=true` and (for sending) `send_as_ready=true`, then inspect `shared_mailboxes.items[]` for exact Inbox/Sent/Archive/Junk paths and allowed operations. SMTP does not save a Sent copy; configure the client to append it to the returned shared Sent folder.
+Shared mailboxes never authenticate directly. Call **get_mail_client_setup** with a regular member mailbox id, wait for `native_access_ready=true` and (for sending) `send_as_ready=true`, then inspect `shared_mailboxes.items[]` for exact Inbox/Sent/Archive/Junk paths and allowed operations. SMTP does not save a Sent copy; configure the client to append it to the returned shared Sent folder. Send-only addresses appear in `delegated_send_addresses` as `{id, email, display_name}` even when shared IMAP is disabled. Add each as an extra From address using the member’s own sign-in and app password; no shared folder is available, and sent mail belongs in their own Sent. The Message API excludes delegated identities and cannot send or schedule as a team address with send-only access yet. Permission changes may return `no_access_left`, `send_only_disabled` or `last_reader` (422).
 
 ### Shared Mailbox Lifecycle (ops token)
 - **create_shared_mailbox** — Create a shared mailbox with a required display name and one or more regular member mailbox ids (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
@@ -253,7 +253,7 @@ Shared mailboxes never authenticate directly. Call **get_mail_client_setup** wit
 
 - **list_messages** — List messages in a mailbox folder with cursor pagination (optional `external_account_id`)
 - **read_message** — Get a single message by IMAP UID with full body (optional `external_account_id`)
-- **send_message** — Send an email from the mailbox — or, with `external_account_id`, from a connected account via its own SMTP, or, with `shared_mailbox_id`, as a shared team mailbox the acting member holds send permission on (dual safety gates, validates total recipients ≤ 10, requires body). The mailbox's Default CC/BCC apply exactly as they do in the web app; pass `apply_default_recipients: false` to skip them for one message. Returns once the message is accepted, not sent — confirm with `get_message_delivery`. A used-up sending allowance fails at once with `sending_limit_exceeded`, naming the allowance and when it renews (`resets_at`); it is never worth retrying before then
+- **send_message**: Send an email from the mailbox: or, with `external_account_id`, from a connected account via its own SMTP, or, with `shared_mailbox_id`, as a shared team mailbox where the acting member has both Read and Send as (dual safety gates, validates total recipients ≤ 10, requires body). The mailbox's Default CC/BCC apply exactly as they do in the web app; pass `apply_default_recipients: false` to skip them for one message. Delegated team identities for send-only members are excluded; use webmail or a mail app for those addresses. Returns once the message is accepted, not sent: confirm with `get_message_delivery`. A used-up sending allowance fails at once with `sending_limit_exceeded`, naming the allowance and when it renews (`resets_at`); it is never worth retrying before then
 - **get_message_delivery** — What happened to a message `send_message` accepted (pending, sending, sent, failed, delivery_uncertain), looked up by the `request_id` it returned; a message refused by a sending allowance reports which one and when it renews. Works with any message token for the same mailbox, not only the one that sent the message, so a later hosted session or a renewed token can check an earlier send; an unknown `request_id` is a 404
 - **get_mailbox_sending_limits** — How many more recipients this mailbox can send to today (`remaining_today`), the most recipients one message may have, when the allowance renews, and the API's own caps for this token. While the lowest allowance is the account-wide total, `limit_today` is `null` and so is `remaining_today` until that total is spent (then `0`); an ops token reads the total with `get_sending_limits`
 - **delete_message** — Permanently delete a message by IMAP UID (requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)

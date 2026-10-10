@@ -683,7 +683,7 @@ for (const name of policyByName.keys()) {
 export const TOOL_CATALOG: readonly ToolCatalogEntry[] = Object.freeze(entries);
 
 /** Bump whenever grouping/capability/safety semantics change. */
-export const TOOL_CATALOG_VERSION = "2026-10-07.1";
+export const TOOL_CATALOG_VERSION = "2026-10-09.1";
 
 function fnv1a(value: string): string {
   let hash = 0x811c9dc5;

@@ -12,7 +12,7 @@ const config = loadConfig();
 
 const server = new McpServer({
   name: "TrekMail",
-  version: "1.12.0",
+  version: "1.13.0",
 });
 ensureToolListCapability(server);
 // Create clients conditionally based on available tokens

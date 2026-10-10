@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { TrekMailClient } from "../../src/client.js";
 import { idempotencyKey } from "../../src/idempotency.js";
+import { registerSharedMailboxMemberTools } from "../../src/tools/shared-mailbox-members.js";
 import { registerSharedMailboxLifecycleTools } from "../../src/tools/shared-mailbox-lifecycle.js";
+import { registerMessageToolHandlers } from "../../src/tools/messages.js";
+import { registerMessageScheduledTools } from "../../src/tools/message-scheduled.js";
+import { registerMessageIdentityTools } from "../../src/tools/message-identities.js";
 import { errorResult } from "../../src/tools/util.js";
 import type { Config } from "../../src/config.js";
 
@@ -26,7 +30,7 @@ const blockedConfig: Config = {
 };
 
 // ---------------------------------------------------------------------------
-// Part A — updated member tools (flat model: no role, can_send only)
+// Part A: independent Read and Send as permissions
 // ---------------------------------------------------------------------------
 
 describe("shared mailbox member tools (flat model)", () => {
@@ -53,6 +57,60 @@ describe("shared mailbox member tools (flat model)", () => {
       }),
       removeSharedMailboxMember: vi.fn().mockResolvedValue(null),
     } as unknown as TrekMailClient;
+  });
+
+  function memberTools(config: Config = allowedConfig) {
+    const server = new McpServer({ name: "test", version: "0.0.0" });
+    const handlers = new Map<string, (args: Record<string, unknown>) => Promise<unknown>>();
+    const original = server.registerTool.bind(server);
+    server.registerTool = ((name: string, definition: unknown, handler: never) => {
+      handlers.set(name, handler);
+      return original(name, definition as Parameters<typeof original>[1], handler);
+    }) as typeof server.registerTool;
+    registerSharedMailboxMemberTools(server, client, config);
+    const tools = (server as unknown as {
+      _registeredTools: Record<string, { description: string; inputSchema: { parse: (args: unknown) => Record<string, unknown> } }>;
+    })._registeredTools;
+    return { tools, handlers };
+  }
+
+  it("registered add tool forwards send-only access and an explicit retry key", async () => {
+    const { tools, handlers } = memberTools();
+    const input = tools.add_shared_mailbox_member.inputSchema.parse({
+      mailbox_id: 10, member_mailbox_id: 42, can_read: false, can_send: true, idempotency_key: "send-only-add",
+    });
+    await handlers.get("add_shared_mailbox_member")!(input);
+    expect(client.addSharedMailboxMember).toHaveBeenCalledWith(10,
+      { member_mailbox_id: 42, can_read: false, can_send: true }, "send-only-add");
+  });
+
+  it("registered update tool accepts a Read-only patch and preserves omitted fields", async () => {
+    const { tools, handlers } = memberTools();
+    const input = tools.update_shared_mailbox_member.inputSchema.parse({
+      mailbox_id: 10, member_id: 1, can_read: false,
+    });
+    await handlers.get("update_shared_mailbox_member")!(input);
+    expect(client.updateSharedMailboxMember).toHaveBeenCalledWith(10, 1, { can_read: false });
+  });
+
+  it("registered update tool permits label-only patches and the legacy send-only field shape", async () => {
+    const { tools, handlers } = memberTools();
+    for (const patch of [{ custom_label: "Team" }, { can_send: false }]) {
+      const input = tools.update_shared_mailbox_member.inputSchema.parse({ mailbox_id: 10, member_id: 1, ...patch });
+      await handlers.get("update_shared_mailbox_member")!(input);
+      expect(client.updateSharedMailboxMember).toHaveBeenLastCalledWith(10, 1, patch);
+    }
+  });
+
+  it("member descriptions explain independent permissions and access refusals", () => {
+    const { tools } = memberTools();
+    expect(tools.list_shared_mailbox_members.description).toContain("read_send, read_only or send_only");
+    expect(tools.list_shared_mailbox_members.description).not.toContain("always true");
+    for (const name of ["add_shared_mailbox_member", "update_shared_mailbox_member"]) {
+      for (const reason of ["no_access_left", "send_only_disabled", "last_reader"]) {
+        expect(tools[name].description).toContain(reason);
+      }
+    }
   });
 
   // --- list ---
@@ -134,7 +192,7 @@ describe("shared mailbox member tools (flat model)", () => {
     );
   });
 
-  // --- update: client method shape (can_send REQUIRED, no role) ---
+  // --- update: legacy client shape ---
 
   it("updateSharedMailboxMember sends can_send as required param", async () => {
     await client.updateSharedMailboxMember(10, 1, { can_send: false });
@@ -400,5 +458,32 @@ describe("shared mailbox lifecycle tools", () => {
       "my-explicit-key",
     );
     expect(key).toBe("my-explicit-key");
+  });
+});
+
+
+describe("delegated Message API guidance", () => {
+  it.each(["send_message", "schedule_message", "list_identities", "delete_identity"])("documents delegated restrictions on %s", (name) => {
+    const server = new McpServer({ name: "test", version: "0.0.0" });
+    const client = {} as TrekMailClient;
+    registerMessageToolHandlers(server, client, allowedConfig);
+    registerMessageScheduledTools(server, client, allowedConfig);
+    registerMessageIdentityTools(server, client, allowedConfig);
+    const tools = (server as unknown as {
+      _registeredTools: Record<string, {
+        description: string;
+        inputSchema: { shape: Record<string, { description?: string }> };
+      }>;
+    })._registeredTools;
+    const tool = tools[name];
+    if (name === "delete_identity") {
+      expect(tool.description).toContain("delegated team identities cannot be deleted");
+      expect(tool.description).toContain("identity_delegated");
+    } else {
+      expect(tool.inputSchema.shape.shared_mailbox_id.description).toContain("both can_read and can_send");
+      const guidance = name === "list_identities" ? tool.description : tool.inputSchema.shape.shared_mailbox_id.description;
+      expect(guidance).toContain("webmail or a mail app");
+      expect(guidance).toContain("Message API");
+    }
   });
 });

@@ -4,7 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { TrekMailClient } from "../../src/client.js";
 import { TOOL_CATALOG_BY_NAME, toolsForToolsets } from "../../src/tool-catalog.js";
-import { withToolFilter } from "../../src/tool-filter.js";
+import { toolAnnotations } from "../../src/tool-annotations.js";
 import { registerMailboxAppPasswordTools } from "../../src/tools/mailbox-app-passwords.js";
 import { registerAccountTools } from "../../src/tools/account.js";
 import { registerMailboxTools } from "../../src/tools/mailboxes.js";
@@ -21,18 +21,13 @@ type Tool = {
   handler: (input: Record<string, unknown>) => Promise<CallToolResult>;
 };
 
-function harness(allowDestructive: boolean, filtered = false) {
+function harness(allowDestructive: boolean) {
   const tools = new Map<string, Tool>();
-  const recorder = {
+  const server = {
     registerTool(name: string, definition: Tool["definition"], handler: Tool["handler"]) {
       tools.set(name, { definition, handler });
     },
   } as unknown as McpServer;
-  // With `filtered`, register through withToolFilter as src/index.ts does, so
-  // the recorded annotations are the ones a client actually sees.
-  const server = filtered
-    ? withToolFilter(recorder, { transport: "stdio", safety: { destructive: true, sending: true, migration: true } })
-    : recorder;
   const client = new TrekMailClient({
     baseUrl: "https://trekmail.test",
     token: "tm_live_test",
@@ -277,11 +272,14 @@ describe("mailbox app password tools", () => {
       expect(entry.safetyGate, name).toBe(access === "read" ? undefined : "destructive");
     }
 
-    // The hint a client sees, as withToolFilter projects it from the catalog.
-    // Minting a credential asks for confirmation like drive_device_create;
-    // replacing, revoking and tightening the mode cut off a running mail app.
-    const { tools } = harness(true, true);
-    const hint = (name: string) => tools.get(name)!.definition.annotations?.destructiveHint;
+    // The hint a client sees, merged the way withToolFilter and the HTTP
+    // session do: catalog entry plus the tool's own declaration. Minting a
+    // credential asks for confirmation like drive_device_create and
+    // create_message_token; replacing, revoking and tightening the mode cut
+    // off a running mail app.
+    const { tools } = harness(true);
+    const hint = (name: string) =>
+      toolAnnotations(TOOL_CATALOG_BY_NAME.get(name)!, tools.get(name)!.definition.annotations).destructiveHint;
     expect(hint("list_mailbox_app_passwords")).toBe(false);
     expect(hint("create_mailbox_app_password")).toBe(true);
     expect(hint("rotate_mailbox_app_password")).toBe(true);
@@ -379,7 +377,7 @@ describe("existing mailbox tools and app passwords", () => {
     }
   });
 
-  it("does not tell the agent that every webmail ignores the mode (classic webmail signs in like a mail app)", () => {
+  it("does not tell the agent that every webmail ignores the mode (decision D3)", () => {
     // Classic webmail (Roundcube) signs in over IMAP like any mail app, so on
     // an app_password_only mailbox it takes an app password. A text that says
     // only "webmail always takes the mailbox password" would have the agent

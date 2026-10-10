@@ -50,6 +50,9 @@ describe("mail client setup tools", () => {
     expect(description).toContain("send_as_ready=true");
     expect(description).toContain("Inbox/Sent/Archive/Junk");
     expect(description).toContain("whether SMTP saves a Sent copy");
+    expect(description).toContain("delegated_send_addresses");
+    expect(description).toContain("{id, email, display_name}");
+    expect(description).toContain("They have no shared folders");
   });
 
   it("forwards mailbox id to the setup API", async () => {

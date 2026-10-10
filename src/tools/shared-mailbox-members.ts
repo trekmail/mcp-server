@@ -15,7 +15,7 @@ export function registerSharedMailboxMemberTools(
     {
       title: "List Shared Mailbox Members",
       description:
-        "List all members of a shared (team) mailbox. Shows each member's membership id, the underlying user mailbox, email, and permissions: `can_read` (always true — access in Webmail and, when enabled, a delegated native IMAP folder) and `can_send` (whether the member may reply or send as the shared address). Members authenticate with their own regular mailbox credentials; no shared password exists. Use list_mailboxes to find mailbox IDs.",
+        "List all members of a shared (team) mailbox. Shows each member's membership id, the underlying user mailbox, email, and permissions: `can_read` (opens the shared inbox and, when enabled, a shared IMAP folder), `can_send` (Send as), and `access` (read_send, read_only or send_only). Send-only members send from their own webmail or mail app with no access to the team inbox. The Message API does not support delegated sending yet. In mail apps, members sign in with their own address and app password; no shared password exists. Use list_mailboxes to find mailbox IDs.",
       inputSchema: {
         mailbox_id: z
           .number()
@@ -34,7 +34,7 @@ export function registerSharedMailboxMemberTools(
     {
       title: "Add Shared Mailbox Member",
       description:
-        "Add a member to a shared (team) mailbox. All members can read incoming mail in Webmail and, when enabled, through a delegated native IMAP folder under their own login. Optionally grant `can_send` (default true) so the member may also manage messages and request Send As permission. Use get_mail_client_setup with the member mailbox ID to wait for native_access_ready and verify effective send_as_ready plus exact folder paths.",
+        "Add a member to a shared (team) mailbox. Read (`can_read`) and Send as (`can_send`) both default to true. Set can_read=false and can_send=true for send-only access while the feature is enabled and another active reader remains. The API refuses no_access_left, send_only_disabled or last_reader with 422. Send-only members use webmail or a mail app; the Message API cannot send as their team address yet. For readers, use get_mail_client_setup with the member mailbox ID to wait for native_access_ready and verify effective send_as_ready plus exact folder paths.",
       inputSchema: {
         mailbox_id: z
           .number()
@@ -48,6 +48,10 @@ export function registerSharedMailboxMemberTools(
           .describe(
             "The mailbox ID of the user mailbox to add as a member. Must be another mailbox in the same account.",
           ),
+        can_read: z
+          .boolean()
+          .optional()
+          .describe("Whether the member can open the shared inbox (default: true). False requires send-only access to be enabled and another active reader."),
         can_send: z
           .boolean()
           .optional()
@@ -63,7 +67,7 @@ export function registerSharedMailboxMemberTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ mailbox_id, member_mailbox_id, can_send, idempotency_key }) => {
+    async ({ mailbox_id, member_mailbox_id, can_read, can_send, idempotency_key }) => {
       if (!config.allowDestructive) {
         return errorResult(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to add shared mailbox members.",
@@ -71,13 +75,13 @@ export function registerSharedMailboxMemberTools(
       }
       const idemKey = idempotencyKey(
         "add_shared_mailbox_member",
-        { mailbox_id, member_mailbox_id, can_send },
+        { mailbox_id, member_mailbox_id, can_read, can_send },
         idempotency_key,
       );
       return callApi(() =>
         client.addSharedMailboxMember(
           mailbox_id,
-          { member_mailbox_id, can_send },
+          { member_mailbox_id, can_read, can_send },
           idemKey,
         ),
       );
@@ -89,7 +93,7 @@ export function registerSharedMailboxMemberTools(
     {
       title: "Update Shared Mailbox Member",
       description:
-        "Update a shared mailbox member's send permission in Webmail and native SMTP. Pass `can_send: true` to allow the member to send or reply as the shared address, or `false` to keep read-only access. Optionally set `custom_label` — the member's personal name for the shared mailbox in their own Webmail (pass an empty string to clear it). A retryable `native_access_sync_failed` means no permission change was saved. Pass the membership row id from list_shared_mailbox_members, not the member mailbox id.",
+        "Update a shared mailbox member's Read (`can_read`) and Send as (`can_send`) permissions independently; omitted fields stay unchanged. At least one of can_read, can_send or custom_label is required. Both permissions cannot be false (422 no_access_left); send-only access requires the feature (send_only_disabled) and another active reader (last_reader). Send-only members use webmail or a mail app, with no team inbox access or Message API sending. Optionally set `custom_label`, the member's personal name for the shared mailbox in their own Webmail (pass an empty string to clear it). A retryable `native_access_sync_failed` means no permission change was saved. Pass the membership row id from list_shared_mailbox_members, not the member mailbox id.",
       inputSchema: {
         mailbox_id: z
           .number()
@@ -103,8 +107,13 @@ export function registerSharedMailboxMemberTools(
           .describe(
             "The membership row id (the `id` field from list_shared_mailbox_members), not the member's mailbox id",
           ),
+        can_read: z
+          .boolean()
+          .optional()
+          .describe("Whether the member can open the shared inbox. Omit to keep current Read access."),
         can_send: z
           .boolean()
+          .optional()
           .describe(
             "Whether the member may send or reply as the shared mailbox address",
           ),
@@ -118,7 +127,7 @@ export function registerSharedMailboxMemberTools(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ mailbox_id, member_id, can_send, custom_label }) => {
+    async ({ mailbox_id, member_id, can_read, can_send, custom_label }) => {
       if (!config.allowDestructive) {
         return errorResult(
           "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to update shared mailbox members.",
@@ -126,7 +135,8 @@ export function registerSharedMailboxMemberTools(
       }
       return callApi(() =>
         client.updateSharedMailboxMember(mailbox_id, member_id, {
-          can_send,
+          ...(can_read !== undefined ? { can_read } : {}),
+          ...(can_send !== undefined ? { can_send } : {}),
           ...(custom_label !== undefined ? { custom_label } : {}),
         }),
       );
@@ -138,7 +148,7 @@ export function registerSharedMailboxMemberTools(
     {
       title: "Remove Shared Mailbox Member",
       description:
-        "Remove a member from a shared (team) mailbox, revoking both Webmail and delegated native IMAP access without deleting the member's own mailbox. The last remaining member cannot be removed (422 last_member). A retryable `native_access_sync_failed` keeps the membership. Pass the membership row id from list_shared_mailbox_members.",
+        "Remove a member from a shared (team) mailbox, revoking Read and Send as access without deleting the member's own mailbox. The last active reader cannot be removed (422 last_reader when send-only members remain; last_member for the legacy case). A retryable `native_access_sync_failed` keeps the membership. Pass the membership row id from list_shared_mailbox_members.",
       inputSchema: {
         mailbox_id: z
           .number()

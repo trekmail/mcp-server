@@ -5,8 +5,8 @@ import { idempotencyKey, operationIdempotencyKey } from "../idempotency.js";
 import { callApi, errorResult } from "./util.js";
 
 /**
- * Mailbox app passwords (REST `/api/v1/mailboxes/{id}/app-passwords` and
- * `POST /api/v1/mailboxes/{id}:client-auth-mode`).
+ * Mailbox app passwords (REST `/api/v1/mailboxes/{id}/app-passwords`,
+ * docs/plans/MAIL-APP-PASSWORDS-PLAN-2026-10-01.md §5.10-5.11).
  *
  * An app password is a separate password a mail app (IMAP, SMTP, ManageSieve,
  * CalDAV/CardDAV) signs in with; it never opens TrekMail webmail (classic
@@ -83,7 +83,8 @@ export function registerMailboxAppPasswordTools(
           .optional()
           .describe("Optional idempotency key. Omit it: every call then creates a new app password, and retries inside the call are still deduplicated."),
       },
-      // Minting a credential: confirm first, like drive_device_create.
+      // Minting a credential: confirm first, like drive_device_create and
+      // create_message_token (it stays in ADDITIVE, as drive_device_create does).
       annotations: { destructiveHint: true },
     },
     async ({ mailbox_id, name, idempotency_key }) => {
