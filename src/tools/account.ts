@@ -40,7 +40,7 @@ export function registerAccountTools(
     {
       title: "Update Account New-Mailbox Default",
       description:
-        "Set new_mailbox_client_auth_mode for mailboxes created from now on; existing mailboxes keep their own setting. 'app_password_only' requires app passwords in mail apps; 'password_or_app_password' also accepts the mailbox password. Requires mailboxes:write and the account owner's token or connector; every account member is refused with scope_blocked_by_membership. Returns 404 unless app passwords and the platform default for new mailboxes are both enabled. Requires TREKMAIL_ALLOW_DESTRUCTIVE=true.",
+        "Set new_mailbox_client_auth_mode for mailboxes created from now on; existing mailboxes keep their own setting. 'app_password_only' requires app passwords in mail apps; 'password_or_app_password' also accepts the mailbox password. Requires mailboxes:write and the account owner's token or connector, not limited to some domains or mailboxes; every account member is refused with scope_blocked_by_membership. Returns 404 unless app passwords and the platform default for new mailboxes are both enabled. Requires TREKMAIL_ALLOW_DESTRUCTIVE=true.",
       inputSchema: {
         new_mailbox_client_auth_mode: z.enum(["app_password_only", "password_or_app_password"]),
         idempotency_key: z.string().optional().describe("Optional idempotency key"),

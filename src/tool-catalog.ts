@@ -42,6 +42,19 @@ export interface ToolCatalogEntry {
   allOfCapabilities: readonly string[];
   access: ToolAccess;
   safetyGate?: ToolSafetyGate;
+  /** The API refuses it to every caller confined to some domains. */
+  requiresAllDomains: boolean;
+  /** The API refuses it to every caller confined to some mailboxes. */
+  requiresAllMailboxes: boolean;
+}
+
+/**
+ * A connection's resource confinement as Laravel reports it (GET /me for a
+ * key, introspection for OAuth): null means every domain or mailbox.
+ */
+export interface ToolResourceConstraints {
+  domainIds: readonly number[] | null;
+  mailboxIds: readonly number[] | null;
 }
 
 const BOTH_TRANSPORTS = ["stdio", "http"] as const;
@@ -660,6 +673,26 @@ const UNGATED_MUTATIONS = new Set([
   "update_message_token",
 ]);
 
+/**
+ * Tools the API refuses outright to a caller confined to some domains,
+ * whatever its scopes or arguments, so a confined connection never loads them.
+ * Only whole-tool refusals belong here: a tool that a confined caller can still
+ * use with other arguments (branding with scope=domain, a member invited to
+ * listed domains, a mailbox-bound Drive device) stays visible and Laravel
+ * refuses the account-wide form.
+ *
+ *   update_account       AccountController::update: token_resource_constrained
+ *                        for a domain- or mailbox-confined caller (an account-
+ *                        wide default for new mailboxes).
+ *   set_client_limit,    WhiteLabelClientLimitController::constrainedWriterRefusal:
+ *   remove_client_limit  scope_blocked_by_membership / token_resource_constrained
+ *                        for a domain-confined member or key (plan D12). Reading
+ *                        stays open: list_client_limits shows a confined
+ *                        reader the limits on its own domains.
+ */
+const REQUIRES_ALL_DOMAINS = new Set(["update_account", "set_client_limit", "remove_client_limit"]);
+const REQUIRES_ALL_MAILBOXES = new Set(["update_account"]);
+
 function safetyGateFor(name: string, access: ToolAccess): ToolSafetyGate | undefined {
   if (SENDING_GATED.has(name)) return "sending";
   if (MIGRATION_GATED.has(name)) return "migration";
@@ -686,6 +719,8 @@ for (const toolset of TOOLSETS) {
       transports: name === "drive_file_upload" ? STDIO_ONLY : BOTH_TRANSPORTS,
       ...policy,
       safetyGate: safetyGateFor(name, policy.access),
+      requiresAllDomains: REQUIRES_ALL_DOMAINS.has(name),
+      requiresAllMailboxes: REQUIRES_ALL_MAILBOXES.has(name),
     });
   }
 }
@@ -695,11 +730,16 @@ for (const name of policyByName.keys()) {
     throw new Error(`Policy exists for unknown MCP tool: ${name}`);
   }
 }
+for (const name of [...REQUIRES_ALL_DOMAINS, ...REQUIRES_ALL_MAILBOXES]) {
+  if (!seen.has(name)) {
+    throw new Error(`Resource requirement exists for unknown MCP tool: ${name}`);
+  }
+}
 
 export const TOOL_CATALOG: readonly ToolCatalogEntry[] = Object.freeze(entries);
 
 /** Bump whenever grouping/capability/safety semantics change. */
-export const TOOL_CATALOG_VERSION = "2026-10-14.1";
+export const TOOL_CATALOG_VERSION = "2026-10-14.2";
 
 function fnv1a(value: string): string {
   let hash = 0x811c9dc5;
@@ -719,6 +759,8 @@ export const TOOL_CATALOG_HASH = fnv1a(JSON.stringify(
     allOfCapabilities: [...entry.allOfCapabilities].sort(),
     access: entry.access,
     safetyGate: entry.safetyGate ?? null,
+    requiresAllDomains: entry.requiresAllDomains,
+    requiresAllMailboxes: entry.requiresAllMailboxes,
   })),
 ));
 
@@ -749,6 +791,22 @@ export function toolsForToolsets(toolsets: readonly Toolset[]): ReadonlySet<stri
     }
   }
   return names;
+}
+
+/**
+ * Whether a connection with these constraints can use the tool at all.
+ * Undefined constraints mean they were not discovered: nothing is hidden for
+ * them, and the API still refuses what it must.
+ */
+export function fitsResourceConstraints(
+  name: string,
+  constraints: ToolResourceConstraints | undefined,
+): boolean {
+  const entry = catalogEntryForTool(name);
+  if (!entry || constraints === undefined) return true;
+  if (entry.requiresAllDomains && constraints.domainIds !== null) return false;
+  if (entry.requiresAllMailboxes && constraints.mailboxIds !== null) return false;
+  return true;
 }
 
 export function hasCapabilityForTool(

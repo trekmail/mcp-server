@@ -7,6 +7,7 @@ import {
   TOOL_CATALOG_BY_NAME,
   TOOL_CATALOG_HASH,
   TOOL_CATALOG_VERSION,
+  fitsResourceConstraints,
   toolsForToolsets,
 } from "../src/tool-catalog.js";
 
@@ -27,8 +28,8 @@ function registeredToolNames(): Set<string> {
 
 describe("tool catalog", () => {
   it("has an explicit version and deterministic parity hash", () => {
-    expect(TOOL_CATALOG_VERSION).toBe("2026-10-14.1");
-    expect(TOOL_CATALOG_HASH).toBe("c4cf3243");
+    expect(TOOL_CATALOG_VERSION).toBe("2026-10-14.2");
+    expect(TOOL_CATALOG_HASH).toBe("5c6b4d71");
   });
 
   it("covers all 284 registered tools exactly once", () => {
@@ -118,6 +119,8 @@ describe("tool catalog", () => {
       allOfCapabilities: [],
       access: "read",
       safetyGate: undefined,
+      requiresAllDomains: false,
+      requiresAllMailboxes: false,
     });
     expect(TOOL_CATALOG_BY_NAME.get("set_client_limit")).toMatchObject({
       toolset: "white_label",
@@ -148,5 +151,29 @@ describe("tool catalog", () => {
       anyOfCapabilities: ["cloudflare:write"],
       allOfCapabilities: [],
     });
+  });
+
+  it("flags exactly the tools the API refuses to every confined caller", () => {
+    // Verified against the PHP (ticket #482): AccountController::update refuses
+    // a domain- or mailbox-confined caller; WhiteLabelClientLimitController::
+    // constrainedWriterRefusal refuses a domain-confined member or key. Tools
+    // that a confined caller can still use with other arguments are not here.
+    expect(TOOL_CATALOG.filter((entry) => entry.requiresAllDomains).map((entry) => entry.name).sort())
+      .toEqual(["remove_client_limit", "set_client_limit", "update_account"]);
+    expect(TOOL_CATALOG.filter((entry) => entry.requiresAllMailboxes).map((entry) => entry.name))
+      .toEqual(["update_account"]);
+
+    const confined = { domainIds: [7], mailboxIds: null };
+    const mailboxOnly = { domainIds: null, mailboxIds: [9] };
+    const everything = { domainIds: null, mailboxIds: null };
+    for (const name of ["set_client_limit", "remove_client_limit", "update_account"]) {
+      expect(fitsResourceConstraints(name, confined), name).toBe(false);
+      expect(fitsResourceConstraints(name, everything), name).toBe(true);
+      expect(fitsResourceConstraints(name, undefined), name).toBe(true);
+    }
+    // A confined reader still sees the limits on its own domains.
+    expect(fitsResourceConstraints("list_client_limits", confined)).toBe(true);
+    expect(fitsResourceConstraints("update_account", mailboxOnly)).toBe(false);
+    expect(fitsResourceConstraints("set_client_limit", mailboxOnly)).toBe(true);
   });
 });

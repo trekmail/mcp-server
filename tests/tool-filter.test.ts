@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it } from "vitest";
 import type { Config } from "../src/config.js";
 import type { TrekMailClient } from "../src/client.js";
-import { withToolFilter } from "../src/tool-filter.js";
+import { withToolFilter, type ToolFilterOptions } from "../src/tool-filter.js";
 import { TOOL_CATALOG } from "../src/tool-catalog.js";
 import { registerInfraTools, registerMessageTools } from "../src/tools/index.js";
 
@@ -30,6 +30,7 @@ function namesFor(
   capabilities?: readonly string[],
   readOnly = false,
   safety?: { destructive: boolean; sending: boolean; migration: boolean },
+  constraints?: ToolFilterOptions["constraints"],
 ): string[] {
   const server = new McpServer({ name: "test", version: "1" });
   const filtered = withToolFilter(server, {
@@ -38,6 +39,7 @@ function namesFor(
     capabilities,
     readOnly,
     safety,
+    constraints,
   });
   registerInfraTools(filtered, client, config);
   registerMessageTools(filtered, client, config);
@@ -141,6 +143,28 @@ describe("stdio toolset filtering", () => {
     expect(readOnly).toContain("list_client_limits");
     expect(readOnly).not.toContain("set_client_limit");
     expect(readOnly).not.toContain("set_mailbox_storage");
+  });
+
+  it("omits the tools the API refuses to a confined key, and only those", () => {
+    const writer = ["members:read", "members:write", "mailboxes:read", "mailboxes:write"];
+    const accountWide = ["update_account", "set_client_limit", "remove_client_limit"];
+    const storage = (constraints?: ToolFilterOptions["constraints"]) =>
+      namesFor(["white_label", "mail_admin"], writer, false, undefined, constraints)
+        .filter((name) => [...accountWide, "list_client_limits", "set_mailbox_storage"].includes(name));
+
+    // Unconfined, or constraints not discovered: everything the scopes allow.
+    expect(storage({ domainIds: null, mailboxIds: null })).toEqual(expect.arrayContaining([...accountWide, "list_client_limits", "set_mailbox_storage"]));
+    expect(storage(undefined)).toHaveLength(5);
+    // Confined to some domains: the three account-wide writes go; the list
+    // (its own limits) and per-mailbox storage stay.
+    expect(storage({ domainIds: [7], mailboxIds: null }).sort()).toEqual(["list_client_limits", "set_mailbox_storage"]);
+    // Confined to some mailboxes only: the API still lets it change a client
+    // limit, but not the account-wide default for new mailboxes.
+    expect(storage({ domainIds: null, mailboxIds: [9] }).sort())
+      .toEqual(["list_client_limits", "remove_client_limit", "set_client_limit", "set_mailbox_storage"]);
+    // Nothing else in the catalogue depends on confinement.
+    expect(namesFor(undefined, undefined, false, undefined, { domainIds: [7], mailboxIds: [9] }))
+      .toHaveLength(284 - accountWide.length);
   });
 
   it("keeps message writes separate from permission to send", () => {

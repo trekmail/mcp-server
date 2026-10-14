@@ -2,8 +2,10 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { toolAnnotations } from "./tool-annotations.js";
 import {
   catalogEntryForTool,
+  fitsResourceConstraints,
   hasCapabilityForTool,
   toolsForToolsets,
+  type ToolResourceConstraints,
   type Toolset,
   type ToolTransport,
 } from "./tool-catalog.js";
@@ -14,6 +16,11 @@ export interface ToolFilterOptions {
   toolsets?: readonly Toolset[];
   /** Undefined preserves legacy exposure; an empty array exposes none. */
   capabilities?: readonly string[];
+  /**
+   * The key's domain/mailbox confinement from GET /me. Tools the API refuses
+   * to any confined caller are omitted; undefined hides nothing.
+   */
+  constraints?: ToolResourceConstraints;
   /** Hide every write/destructive schema, independently of token scopes. */
   readOnly?: boolean;
   /** Omit tools whose existing environment safety gate is disabled. */
@@ -56,6 +63,9 @@ export function withToolFilter(
           options.capabilities !== undefined &&
           !hasCapabilityForTool(name, options.capabilities)
         ) {
+          return undefined;
+        }
+        if (!fitsResourceConstraints(name, options.constraints)) {
           return undefined;
         }
         if (options.readOnly && entry.access !== "read") {

@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 284 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
-Current release: package **1.14.0**, catalogue **2026-10-14.1**.
+Current release: package **1.14.0**, catalogue **2026-10-14.2**.
 
 ## Connect in Claude
 
@@ -77,11 +77,14 @@ npm start
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable external sends, including `send_message` and White Label invitations |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
 | `TREKMAIL_TOOLSETS` | No | all | Comma-separated product sets to register, for example `email` or `email,contacts,calendar` |
-| `TREKMAIL_SCOPE_AWARE_REGISTRATION` | No | `true` | Discover the token's effective capabilities at startup and omit unusable tool schemas; set `false` only as a compatibility escape hatch |
+| `TREKMAIL_SCOPE_AWARE_REGISTRATION` | No | `true` | Discover the token's effective capabilities and domain/mailbox constraints at startup and omit unusable tool schemas; set `false` only as a compatibility escape hatch |
 | `TREKMAIL_READ_ONLY` | No | `false` | Register read tools only, even when the token can write |
 
 Tool visibility is the intersection of token capability, `TREKMAIL_TOOLSETS`,
-`TREKMAIL_READ_ONLY`, and transport support. Runtime API authorization remains
+`TREKMAIL_READ_ONLY`, and transport support. A token limited to some domains
+also does not get `update_account`, `set_client_limit` or `remove_client_limit`,
+which the API refuses to it whatever its scopes; `update_account` is withheld
+from a token limited to some mailboxes as well. Runtime API authorization remains
 authoritative. Account Drive and Mailbox Drive deliberately share one `drive`
 toolset; all White Label capabilities share `white_label`. The concrete resource,
 membership, entitlement, and token constraints decide what a call can access.
