@@ -608,10 +608,18 @@ const POLICY_RULES: readonly PolicyRule[] = [
   rule(DRIVE_WRITE, "write", [
     "drive_file_rename", "drive_file_move", "drive_file_trash", "drive_file_restore",
     "drive_folder_create", "drive_folder_update", "drive_folder_move", "drive_folder_trash",
-    "drive_folder_restore", "drive_folder_share_with_account", "drive_folder_stop_sharing",
+    "drive_folder_restore",
     "drive_bulk_trash", "drive_bulk_restore", "drive_bulk_move", "drive_upload_initiate",
     "drive_upload_complete", "drive_upload_refresh_parts", "drive_upload_abort", "drive_file_upload",
   ]),
+  // Sharing a folder with every mailbox, or stopping it, is a sharing act on
+  // Account Drive: Api\V1\Drive\FolderController::requireFolderSharingScopes()
+  // asks drive:account:write AND drive:account:share, as the dashboard's routes
+  // ask drive:account:share. (A shared create through drive_folder_create needs
+  // both too, but a plain create does not, so that tool stays above.)
+  rule("drive:account:write", "write", [
+    "drive_folder_share_with_account", "drive_folder_stop_sharing",
+  ], ["drive:account:share"]),
   rule(DRIVE_SHARE, "read", ["drive_share_list"]),
   rule(DRIVE_SHARE, "write", ["drive_share_create"]),
   rule(DRIVE_SHARE, "destructive", ["drive_share_revoke"]),
@@ -689,9 +697,22 @@ const UNGATED_MUTATIONS = new Set([
  *                        for a domain-confined member or key (plan D12). Reading
  *                        stays open: list_client_limits shows a confined
  *                        reader the limits on its own domains.
+ *   drive_folder_stop_sharing
+ *                        Api\V1\Drive\FolderController::stopSharing: 403
+ *                        shared_folder_stop_sharing_admin_only for a caller
+ *                        confined to mailboxes, as no mailbox stops a share in
+ *                        webmail; on a folder that is not shared it is a no-op.
+ *                        Domain-only confinement does not matter: Account Drive
+ *                        has no domain.
+ *
+ * Checked and left visible for a mailbox-confined connection, because each has
+ * a use inside its mailboxes: drive_trash_empty (a mailbox:N space; only the
+ * account space answers 403 shared_folders_only), drive_folder_share_with_account
+ * (the mailbox's own top-level folders), drive_folder_create (inside a shared
+ * folder, or a new shared one), drive_upload_initiate (into a shared folder).
  */
 const REQUIRES_ALL_DOMAINS = new Set(["update_account", "set_client_limit", "remove_client_limit"]);
-const REQUIRES_ALL_MAILBOXES = new Set(["update_account"]);
+const REQUIRES_ALL_MAILBOXES = new Set(["update_account", "drive_folder_stop_sharing"]);
 
 function safetyGateFor(name: string, access: ToolAccess): ToolSafetyGate | undefined {
   if (SENDING_GATED.has(name)) return "sending";
@@ -739,7 +760,7 @@ for (const name of [...REQUIRES_ALL_DOMAINS, ...REQUIRES_ALL_MAILBOXES]) {
 export const TOOL_CATALOG: readonly ToolCatalogEntry[] = Object.freeze(entries);
 
 /** Bump whenever grouping/capability/safety semantics change. */
-export const TOOL_CATALOG_VERSION = "2026-10-14.2";
+export const TOOL_CATALOG_VERSION = "2026-10-14.3";
 
 function fnv1a(value: string): string {
   let hash = 0x811c9dc5;

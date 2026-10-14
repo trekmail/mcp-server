@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 284 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
-Current release: package **1.14.0**, catalogue **2026-10-14.2**.
+Current release: package **1.14.0**, catalogue **2026-10-14.3**.
 
 ## Connect in Claude
 
@@ -83,11 +83,14 @@ npm start
 Tool visibility is the intersection of token capability, `TREKMAIL_TOOLSETS`,
 `TREKMAIL_READ_ONLY`, and transport support. A token limited to some domains
 also does not get `update_account`, `set_client_limit` or `remove_client_limit`,
-which the API refuses to it whatever its scopes; `update_account` is withheld
-from a token limited to some mailboxes as well. Runtime API authorization remains
+which the API refuses to it whatever its scopes; `update_account` and
+`drive_folder_stop_sharing` are withheld from a token limited to some mailboxes
+(no mailbox stops a folder share, as in webmail). Runtime API authorization remains
 authoritative. Account Drive and Mailbox Drive deliberately share one `drive`
 toolset; all White Label capabilities share `white_label`. The concrete resource,
-membership, entitlement, and token constraints decide what a call can access.
+membership, entitlement, and token constraints decide what a call can access:
+a token limited to some mailboxes, for one, reaches Account Drive only through
+the folders shared with all mailboxes, as those mailboxes do in webmail.
 Shared mailbox member tools require the matching shared mailbox permission
 from your dashboard role as well as the mailbox API permission. Roles with
 Read access can list members; changing members requires permission to manage
@@ -680,7 +683,7 @@ REST reference.
 | `drive_file_download_url` | Short-lived download URL (forced attachment) |
 | `drive_file_rename` / `_move` / `_trash` / `_restore` / `_purge` | File CRUD |
 | `drive_folder_create` / `_update` / `_move` / `_trash` / `_restore` / `_purge` | Folder CRUD; `_update` accepts `name` and/or `color` (#RRGGBB); `_create` accepts `is_shared` to publish to the whole account immediately |
-| `drive_folder_share_with_account` / `_stop_sharing` | Toggle whether a folder is visible to every mailbox in the account (Phase H — moves the folder + subtree from mailbox-personal Drive to account-drive when needed). A mailbox under a client storage limit cannot share out and does not see shared folders (`shared_folder_client_storage_limit`) |
+| `drive_folder_share_with_account` / `_stop_sharing` | Toggle whether a folder is visible to every mailbox in the account (Phase H — moves the folder + subtree from mailbox-personal Drive to account-drive when needed). A mailbox under a client storage limit cannot share out and does not see shared folders (`shared_folder_client_storage_limit`). Stopping a share needs a connection that is not restricted to mailboxes (`shared_folder_stop_sharing_admin_only`) |
 | `drive_trash_list` / `_empty` | Trash listing + nuke |
 | `drive_bulk_trash` / `_restore` / `_move` / `_purge` | One call, N items (cap 5000) |
 | `drive_share_create` / `_list` / `_revoke` | Public share-links (raw token returned ONCE) |
@@ -709,7 +712,7 @@ Drive API/MCP scopes:
 |---|---|
 | `drive:account:read` | Browse Account Drive, inspect metadata, list folders/trash/share links, and request download URLs |
 | `drive:account:write` | Upload files, create/update/move/trash/restore files and folders in Account Drive |
-| `drive:account:share` | Create and revoke public share links for Account Drive files |
+| `drive:account:share` | Create and revoke public share links for Account Drive files; with `drive:account:write`, share a folder with all mailboxes or stop sharing it |
 | `drive:account:purge` | Permanently purge trashed Account Drive files/folders and empty trash |
 | `drive:mailbox:read` | Browse mailbox Drive spaces allowed by token mailbox constraints |
 | `drive:mailbox:write` | Upload and mutate files/folders in allowed mailbox Drive spaces |

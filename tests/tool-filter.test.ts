@@ -162,9 +162,14 @@ describe("stdio toolset filtering", () => {
     // limit, but not the account-wide default for new mailboxes.
     expect(storage({ domainIds: null, mailboxIds: [9] }).sort())
       .toEqual(["list_client_limits", "remove_client_limit", "set_client_limit", "set_mailbox_storage"]);
-    // Nothing else in the catalogue depends on confinement.
+    // Nothing else in the catalogue depends on confinement, except stopping
+    // a folder share, which a mailbox-confined key never gets to do.
     expect(namesFor(undefined, undefined, false, undefined, { domainIds: [7], mailboxIds: [9] }))
-      .toHaveLength(284 - accountWide.length);
+      .toHaveLength(284 - accountWide.length - 1);
+    expect(namesFor(undefined, undefined, false, undefined, { domainIds: [7], mailboxIds: [9] }))
+      .not.toContain("drive_folder_stop_sharing");
+    expect(namesFor(undefined, undefined, false, undefined, { domainIds: [7], mailboxIds: null }))
+      .toContain("drive_folder_stop_sharing");
   });
 
   it("keeps message writes separate from permission to send", () => {

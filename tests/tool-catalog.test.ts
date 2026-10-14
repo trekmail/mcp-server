@@ -6,6 +6,7 @@ import {
   TOOL_CATALOG,
   TOOL_CATALOG_BY_NAME,
   TOOL_CATALOG_HASH,
+  hasCapabilityForTool,
   TOOL_CATALOG_VERSION,
   fitsResourceConstraints,
   toolsForToolsets,
@@ -28,8 +29,8 @@ function registeredToolNames(): Set<string> {
 
 describe("tool catalog", () => {
   it("has an explicit version and deterministic parity hash", () => {
-    expect(TOOL_CATALOG_VERSION).toBe("2026-10-14.2");
-    expect(TOOL_CATALOG_HASH).toBe("5c6b4d71");
+    expect(TOOL_CATALOG_VERSION).toBe("2026-10-14.3");
+    expect(TOOL_CATALOG_HASH).toBe("7547bd70");
   });
 
   it("covers all 284 registered tools exactly once", () => {
@@ -160,8 +161,11 @@ describe("tool catalog", () => {
     // that a confined caller can still use with other arguments are not here.
     expect(TOOL_CATALOG.filter((entry) => entry.requiresAllDomains).map((entry) => entry.name).sort())
       .toEqual(["remove_client_limit", "set_client_limit", "update_account"]);
-    expect(TOOL_CATALOG.filter((entry) => entry.requiresAllMailboxes).map((entry) => entry.name))
-      .toEqual(["update_account"]);
+    // drive_folder_stop_sharing: Api\V1\Drive\FolderController::stopSharing
+    // refuses a mailbox-confined caller (no mailbox stops a share, as in
+    // webmail) and is a no-op on a folder that is not shared.
+    expect(TOOL_CATALOG.filter((entry) => entry.requiresAllMailboxes).map((entry) => entry.name).sort())
+      .toEqual(["drive_folder_stop_sharing", "update_account"]);
 
     const confined = { domainIds: [7], mailboxIds: null };
     const mailboxOnly = { domainIds: null, mailboxIds: [9] };
@@ -175,5 +179,28 @@ describe("tool catalog", () => {
     expect(fitsResourceConstraints("list_client_limits", confined)).toBe(true);
     expect(fitsResourceConstraints("update_account", mailboxOnly)).toBe(false);
     expect(fitsResourceConstraints("set_client_limit", mailboxOnly)).toBe(true);
+    // Stopping a share is refused to a mailbox-confined caller only; Account
+    // Drive has no domain, so a domain-confined one keeps it.
+    expect(fitsResourceConstraints("drive_folder_stop_sharing", mailboxOnly)).toBe(false);
+    expect(fitsResourceConstraints("drive_folder_stop_sharing", confined)).toBe(true);
+    expect(fitsResourceConstraints("drive_folder_stop_sharing", everything)).toBe(true);
+    // Each of these still has a use inside the connection's mailboxes.
+    for (const name of ["drive_trash_empty", "drive_folder_share_with_account", "drive_folder_create", "drive_upload_initiate"]) {
+      expect(fitsResourceConstraints(name, mailboxOnly), name).toBe(true);
+    }
+  });
+
+  it("asks drive:account:share as well as write to share a folder or stop sharing it", () => {
+    for (const name of ["drive_folder_share_with_account", "drive_folder_stop_sharing"]) {
+      expect(TOOL_CATALOG_BY_NAME.get(name), name).toMatchObject({
+        anyOfCapabilities: ["drive:account:write"],
+        allOfCapabilities: ["drive:account:share"],
+      });
+      expect(hasCapabilityForTool(name, ["drive:account:write"]), name).toBe(false);
+      expect(hasCapabilityForTool(name, ["drive:account:write", "drive:account:share"]), name).toBe(true);
+    }
+    // A plain create keeps the write-only contract (a shared create is
+    // refused by the API without the share scope).
+    expect(hasCapabilityForTool("drive_folder_create", ["drive:mailbox:write"])).toBe(true);
   });
 });

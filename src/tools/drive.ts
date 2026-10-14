@@ -416,7 +416,7 @@ export function registerDriveTools(
     {
       title: "Share Drive Folder with the Account",
       description:
-        "Make this folder visible to every mailbox in the account. If the folder lives in a mailbox-personal Drive, the entire subtree (folders + files) is migrated to account-drive in one transaction; quota counters move from mailbox to account. Restrictions: folder must be top-level (parent_id=null); subtree must contain ≤ 1000 files; account pool must have room for the migrated bytes. Idempotent — calling on an already-shared folder returns it unchanged.",
+        "Make this folder visible to every mailbox in the account. If the folder lives in a mailbox-personal Drive, the entire subtree (folders + files) is migrated to account-drive in one transaction; quota counters move from mailbox to account. Restrictions: folder must be top-level (parent_id=null); subtree must contain ≤ 1000 files; account pool must have room for the migrated bytes. Needs drive:account:write and drive:account:share. Idempotent — calling on an already-shared folder returns it unchanged.",
       inputSchema: { folder_id: z.number().int().positive() },
       annotations: { destructiveHint: true },
     },
@@ -432,7 +432,7 @@ export function registerDriveTools(
     {
       title: "Stop Sharing Drive Folder",
       description:
-        "Flip is_shared back to false on a shared folder. Folder stays in account-drive (no migration back to a specific mailbox); other mailboxes lose visibility, the dashboard owner keeps it as a private account-drive folder. Idempotent on already-private folders.",
+        "Flip is_shared back to false on a shared folder. Folder stays in account-drive (no migration back to a specific mailbox); other mailboxes lose visibility, the dashboard owner keeps it as a private account-drive folder. Needs drive:account:write and drive:account:share and a connection not limited to some mailboxes (none stops a share, as in webmail). Idempotent on already-private folders.",
       inputSchema: { folder_id: z.number().int().positive() },
       annotations: { destructiveHint: true },
     },
