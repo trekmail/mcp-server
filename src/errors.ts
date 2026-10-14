@@ -157,6 +157,8 @@ export class TrekMailApiError extends Error {
 
     const sharedMailboxAction = SHARED_MAILBOX_ACTIONS[this.code];
     if (sharedMailboxAction) text += `\nAction: ${sharedMailboxAction}`;
+    const storageAction = STORAGE_ACTIONS[this.code];
+    if (storageAction) text += `\nAction: ${storageAction}`;
     const details = this.extra["details"];
     if (
       this.code === "validation_error" &&
@@ -195,6 +197,35 @@ const SHARED_MAILBOX_ACTIONS: Readonly<Record<string, string>> = {
     "Call list_identities and use an id from it, or leave identity_id out. Team addresses from send-only access cannot be used through MCP.",
   identity_delegated:
     "Leave this identity unchanged. Its access follows the shared mailbox (update_shared_mailbox_member or remove_shared_mailbox_member); its signature is edited in webmail.",
+};
+
+/**
+ * Storage refusals, the account pool's and a White Label client storage
+ * limit's (ticket #482), say which call frees room instead of leaving an agent
+ * to retry the same size. The same code comes from several tools (create,
+ * invite, restore, set_mailbox_storage, and per row from the bulk tools), so
+ * every line holds for all of them. Details carries the numbers where the API
+ * sends them.
+ *
+ * The same line reaches the reseller's agent and the client's, and MCP cannot
+ * tell them apart, so none of it may say what only one of them should hear.
+ * The client is told what the dashboard and the API tell it (plan D18): ask
+ * the administrator. Never "upgrade the plan", never "the reseller", never
+ * "White Label": a client's agent repeats these words to the client.
+ */
+const STORAGE_ACTIONS: Readonly<Record<string, string>> = {
+  storage_pool_exceeded:
+    "Do not retry unchanged. Use a smaller fixed size, or shared storage, where this call takes a size; or free room first by moving another mailbox to shared storage or a smaller fixed size (set_mailbox_storage).",
+  client_storage_limit_exceeded:
+    "Do not retry with the same size. Choose at most available_mb from Details, or shared storage, or free room by reducing another fixed-size mailbox in these domains (set_mailbox_storage). Only a connection that reaches every domain can raise the limit (set_client_limit); any other connection asks the account administrator for more space.",
+  client_storage_below_usage:
+    "Choose a fixed size of at least used_mb from Details, or move the mailbox to shared storage (set_mailbox_storage with storage_allocation_mb=null), which is never refused for its size.",
+  client_storage_limit_too_low:
+    "Choose a limit of at least minimum_mb from Details: a limit cannot go below the fixed sizes and open dedicated invites in its domains (allocated_mb), or what they already store (used_mb).",
+  client_storage_domains_conflict:
+    "Do not retry unchanged: these domains are under different limits (client_limit_ids in Details), and one call cannot merge them. Change each limit on its own domains, or first take a domain out of its limit with set_client_limit (that client_limit_id and the domain_ids it keeps) or remove_client_limit.",
+  shared_folder_client_storage_limit:
+    "Do not retry. A mailbox in a domain under a client storage limit keeps its folders in its own Drive: create them without is_shared, and do not share them with the whole account.",
 };
 
 /**

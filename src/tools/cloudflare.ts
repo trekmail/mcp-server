@@ -69,7 +69,7 @@ export function registerCloudflareTools(
     {
       title: "Connect Cloudflare Domains",
       description:
-        "Connect one or more domains to Cloudflare. Creates new TrekMail domains if they don't exist yet, and links them to Cloudflare zones for automatic DNS setup.",
+        "Connect one or more domains to Cloudflare. Creates new TrekMail domains if they don't exist yet, and links them to Cloudflare zones for automatic DNS setup. Creating a domain (an entry without trekmail_domain_id) also needs the domains:create permission; linking existing domains needs only cloudflare:write.",
       inputSchema: {
         api_token: z
           .string()
@@ -85,7 +85,7 @@ export function registerCloudflareTools(
                 .int()
                 .nullable()
                 .optional()
-                .describe("TrekMail domain ID if it already exists; omit or use null to create new"),
+                .describe("TrekMail domain ID if it already exists; omit or use null to create new (needs domains:create)"),
             }),
           )
           .min(1)

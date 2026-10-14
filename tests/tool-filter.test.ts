@@ -61,8 +61,8 @@ describe("stdio toolset filtering", () => {
     expect(writable).toContain("remove_shared_mailbox_member");
     expect(namesFor(undefined, ["shared_mailboxes:write"])).not.toContain("update_shared_mailbox_member");
   });
-  it("preserves all 280 tools when TREKMAIL_TOOLSETS is omitted", () => {
-    expect(namesFor()).toHaveLength(280);
+  it("preserves all 284 tools when TREKMAIL_TOOLSETS is omitted", () => {
+    expect(namesFor()).toHaveLength(284);
   });
 
   it("exposes email tools plus minimal mailbox discovery", () => {
@@ -110,6 +110,37 @@ describe("stdio toolset filtering", () => {
     const activityOnly = namesFor(["white_label"], ["activity:read"]);
     expect(activityOnly).toContain("list_white_label_activity");
     expect(activityOnly).not.toContain("get_white_label_member_activity");
+  });
+
+  it("loads client storage limits by member scope and storage changes behind the destructive gate", () => {
+    const read = namesFor(["white_label"], ["members:read"]);
+    expect(read).toContain("list_client_limits");
+    expect(read).not.toContain("set_client_limit");
+    expect(read).not.toContain("remove_client_limit");
+
+    const write = namesFor(["white_label"], ["members:read", "members:write"]);
+    expect(write).toEqual(expect.arrayContaining([
+      "list_client_limits", "set_client_limit", "remove_client_limit",
+    ]));
+
+    expect(namesFor(["mail_admin"], ["mailboxes:write"])).toContain("set_mailbox_storage");
+    expect(namesFor(["mail_admin"], ["mailboxes:read"])).not.toContain("set_mailbox_storage");
+
+    const gated = namesFor(
+      ["white_label", "mail_admin"],
+      ["members:read", "members:write", "mailboxes:write"],
+      false,
+      { destructive: false, sending: true, migration: true },
+    );
+    expect(gated).toContain("list_client_limits");
+    expect(gated).not.toContain("set_client_limit");
+    expect(gated).not.toContain("remove_client_limit");
+    expect(gated).not.toContain("set_mailbox_storage");
+
+    const readOnly = namesFor(["white_label", "mail_admin"], ["members:read", "members:write", "mailboxes:write"], true);
+    expect(readOnly).toContain("list_client_limits");
+    expect(readOnly).not.toContain("set_client_limit");
+    expect(readOnly).not.toContain("set_mailbox_storage");
   });
 
   it("keeps message writes separate from permission to send", () => {

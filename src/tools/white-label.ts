@@ -42,6 +42,19 @@ const permissions = z
   .optional()
   .describe("Permissions for role=custom; read the access catalog first");
 const idem = z.string().max(255).optional().describe("Optional idempotency key");
+const clientLimitId = z.number().int().positive().describe("Client storage limit ID from list_client_limits");
+// client_limits.storage_limit_mb is a PostgreSQL integer; the API caps it there.
+const storageLimitMb = z
+  .number()
+  .int()
+  .min(1)
+  .max(2147483647)
+  .describe("The budget in MB for mail and Drive in these domains, e.g. 51200 for 50 GB");
+const limitDomainIds = z
+  .array(z.number().int().positive())
+  .min(1)
+  .max(500)
+  .describe("Domain IDs of this account");
 
 export function registerWhiteLabelTools(
   server: McpServer,
@@ -281,5 +294,88 @@ export function registerWhiteLabelTools(
     async ({ member_id, limit }) => callApi(
       () => client.getWhiteLabelMemberActivity(member_id, limit),
     ),
+  );
+
+  server.registerTool(
+    "list_client_limits",
+    {
+      title: "List Client Storage Limits",
+      description:
+        "List White Label client storage limits: each is one budget in MB for the mailboxes and Drive of a client's domains. Rows give id, storage_limit_mb, domain_ids, member_ids, allocated_mb (fixed mailbox sizes), pending_invites_mb (fixed sizes of open invites), pool_mb (left for shared storage) and used_bytes. A connection limited to some domains sees only their limits.",
+      inputSchema: {
+        page: z.number().int().positive().optional().describe("Page number"),
+        per_page: z.number().int().min(1).max(100).optional().describe("Results per page"),
+      },
+    },
+    async (args) => callApi(() => client.listClientLimits(args)),
+  );
+
+  server.registerTool(
+    "set_client_limit",
+    {
+      title: "Set Client Storage Limit",
+      description:
+        "Give a client's domains one storage budget for their mailboxes and Drive, or change it. Read list_client_limits first. Without client_limit_id, pass domain_ids and storage_limit_mb: domains without a limit get a new one, or join and change the one limit the other given domains share; domains under two limits are refused. With client_limit_id, change its storage_limit_mb, its domain_ids (the full new set; domains left out go back to the account's storage), or both. A limit cannot go below what its domains reserve or store. Needs a connection that reaches every domain. Returns the limit.",
+      inputSchema: {
+        client_limit_id: clientLimitId
+          .optional()
+          .describe("Change this limit. Omit to choose the limit by domain_ids"),
+        domain_ids: limitDomainIds
+          .optional()
+          .describe("Domain IDs the limit covers. With client_limit_id, the full new set"),
+        storage_limit_mb: storageLimitMb.optional(),
+        idempotency_key: idem,
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ client_limit_id, domain_ids, storage_limit_mb, idempotency_key }) => {
+      if (!config.allowDestructive) return destructiveDisabled("change a client storage limit");
+
+      if (client_limit_id === undefined) {
+        if (domain_ids === undefined || storage_limit_mb === undefined) {
+          return errorResult(
+            "Pass domain_ids and storage_limit_mb, or client_limit_id with the fields to change.",
+          );
+        }
+        const body = { domain_ids, storage_limit_mb };
+        const key = idempotencyKey("set_client_limit", body, idempotency_key);
+        return callApi(() => client.setClientLimit(body, key));
+      }
+
+      if (domain_ids === undefined && storage_limit_mb === undefined) {
+        return errorResult("No client storage limit changes were provided.");
+      }
+      const changes = {
+        ...(storage_limit_mb !== undefined ? { storage_limit_mb } : {}),
+        ...(domain_ids !== undefined ? { domain_ids } : {}),
+      };
+      const key = idempotencyKey(
+        "set_client_limit",
+        { client_limit_id, ...changes },
+        idempotency_key,
+      );
+      return callApi(() => client.updateClientLimit(client_limit_id, changes, key));
+    },
+  );
+
+  server.registerTool(
+    "remove_client_limit",
+    {
+      title: "Remove Client Storage Limit",
+      description:
+        "Remove a client storage limit. Its domains go back to the account's storage; mailboxes keep their sizes and nothing is deleted. Needs a connection that reaches every domain of the account. Returns the domain_ids that went back.",
+      inputSchema: {
+        client_limit_id: clientLimitId,
+        confirm_remove: z.boolean().describe("Must be true after reviewing the limit"),
+        idempotency_key: idem,
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ client_limit_id, confirm_remove, idempotency_key }) => {
+      if (!config.allowDestructive) return destructiveDisabled("remove a client storage limit");
+      if (!confirm_remove) return errorResult("Removal not confirmed. Set confirm_remove=true.");
+      const key = idempotencyKey("remove_client_limit", { client_limit_id }, idempotency_key);
+      return callApi(() => client.removeClientLimit(client_limit_id, key));
+    },
   );
 }

@@ -52,6 +52,7 @@ describe("SMTP and Cloudflare operation identities", () => {
     ["set_auto_reply", { mailbox_id: 9, enabled: true, subject: "Original", body: "Original reply" }, { subject: "Changed", body: "Changed reply" }],
     ["update_mail_rule", { mailbox_id: 9, rule_id: 3, conditions: [{ field: "subject", operator: "is", value: "Original" }], actions: [{ type: "addflag", value: "\\Flagged" }] }, { conditions: [{ field: "subject", operator: "is", value: "Changed" }] }],
     ["update_mailbox", { mailbox_id: 9, conversation_view: true }, { conversation_view: false }],
+    ["set_mailbox_storage", { mailbox_id: 9, storage_allocation_mb: 1024 }, { storage_allocation_mb: null }],
     ["pause_mailbox", { mailbox_id: 9 }, {}],
     ["restore_mailbox", { mailbox_id: 9 }, {}],
     ["create_delete_intent", { mailbox_id: 9 }, {}],

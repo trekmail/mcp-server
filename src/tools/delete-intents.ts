@@ -108,7 +108,7 @@ export function registerDeleteIntentTools(
     {
       title: "Restore Mailbox",
       description:
-        "Restore a mailbox from the recycle bin back to active. Use list_trashed_mailboxes to find trashed mailbox IDs. Fails (422) if the domain is now at its mailbox limit.",
+        "Restore a mailbox from the recycle bin back to active. Use list_trashed_mailboxes to find trashed mailbox IDs. Fails (422) with mailbox_limit_reached if the domain is now at its mailbox limit, or with storage_pool_exceeded if the mailbox's fixed size no longer fits in the account's free storage or, in a domain under a White Label client storage limit, in what that limit has left.",
       inputSchema: {
         mailbox_id: z
           .number()

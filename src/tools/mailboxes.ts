@@ -68,7 +68,7 @@ export function registerMailboxTools(
     {
       title: "Create Mailbox",
       description:
-        "Create a new mailbox with an auto-generated one-time password. The password is returned once and must be saved immediately — it cannot be retrieved later. Storage defaults to the shared account pool; pass storage_allocation_mb to carve out a dedicated allocation. Where app passwords are available the response carries client_auth_mode, which is authoritative: the mode you pass, otherwise the platform default for new mailboxes (password_or_app_password until the account-level default is switched on). When it is 'app_password_only', the generated password signs in to TrekMail webmail only: mail apps (Outlook, Apple Mail, phones, IMAP/SMTP, calendars and contacts, and classic webmail at /webmail-old/) need an app password, so pass create_app_password: true to get the first app password in this same response, or call create_mailbox_app_password for each app the user sets up. To reset an existing mailbox password, use change_mailbox_password: while app passwords are enabled on the platform, that reset automatically revokes all its app passwords (reason mailbox_password_reset).",
+        "Create a new mailbox with an auto-generated one-time password. The password is returned once and must be saved immediately — it cannot be retrieved later. Storage defaults to the shared account pool; pass storage_allocation_mb to carve out a dedicated allocation. In a domain under a White Label client storage limit (list_client_limits), that allocation must also fit in what the limit has left, or the call fails with client_storage_limit_exceeded. Where app passwords are available the response carries client_auth_mode, which is authoritative: the mode you pass, otherwise the platform default for new mailboxes (password_or_app_password until the account-level default is switched on). When it is 'app_password_only', the generated password signs in to TrekMail webmail only: mail apps (Outlook, Apple Mail, phones, IMAP/SMTP, calendars and contacts, and classic webmail at /webmail-old/) need an app password, so pass create_app_password: true to get the first app password in this same response, or call create_mailbox_app_password for each app the user sets up. To reset an existing mailbox password, use change_mailbox_password: while app passwords are enabled on the platform, that reset automatically revokes all its app passwords (reason mailbox_password_reset).",
       inputSchema: {
         domain_id: z
           .number()
@@ -198,7 +198,7 @@ export function registerMailboxTools(
     {
       title: "Update Mailbox",
       description:
-        "Update write-safe mailbox fields. display_name applies to regular and shared mailboxes. conversation_view controls webmail thread grouping for a regular mailbox and takes effect after page reload; shared mailboxes use the regular member mailbox's preference. drive_access controls whether this mailbox's user gets file storage in webmail. Does NOT touch identity (address/local_part), password, storage, or domain — use the dedicated endpoints for those.",
+        "Update write-safe mailbox fields. display_name applies to regular and shared mailboxes. conversation_view controls webmail thread grouping for a regular mailbox and takes effect after page reload; shared mailboxes use the regular member mailbox's preference. drive_access controls whether this mailbox's user gets file storage in webmail. Does NOT touch identity (address/local_part), password, storage, or domain — use the dedicated tools for those (storage: set_mailbox_storage).",
       inputSchema: {
         mailbox_id: z
           .number()
@@ -266,6 +266,52 @@ export function registerMailboxTools(
         idempotency_key,
       );
       return callApi(() => client.updateMailbox(mailbox_id, fields, idemKey));
+    },
+  );
+
+  server.registerTool(
+    "set_mailbox_storage",
+    {
+      title: "Set Mailbox Storage",
+      description:
+        "Set an active or paused mailbox's storage to a fixed size in MB or to shared storage (null), with the dashboard's Edit storage checks. A fixed size must fit in the account's free storage, its current fixed size counting as free; in a domain under a client storage limit, also in what the limit has left, and never below what the mailbox already stores. Shared storage is never refused for its size. Returns the updated mailbox.",
+      inputSchema: {
+        mailbox_id: z
+          .number()
+          .int()
+          .positive()
+          .describe("The mailbox ID"),
+        storage_allocation_mb: z
+          .number()
+          .int()
+          .positive()
+          .nullable()
+          .describe(
+            "A fixed size in MB (e.g. 5120 for 5 GB), or null for shared storage. Required: pass null explicitly to move the mailbox to shared storage.",
+          ),
+        // The API refuses a longer Idempotency-Key (ApiIdempotency).
+        idempotency_key: z
+          .string()
+          .max(255)
+          .optional()
+          .describe("Optional idempotency key"),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ mailbox_id, storage_allocation_mb, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to change mailbox storage.",
+        );
+      }
+      const idemKey = idempotencyKey(
+        "set_mailbox_storage",
+        { mailbox_id, storage_allocation_mb },
+        idempotency_key,
+      );
+      return callApi(() =>
+        client.setMailboxStorage(mailbox_id, storage_allocation_mb, idemKey),
+      );
     },
   );
 
@@ -639,7 +685,7 @@ export function registerMailboxTools(
     {
       title: "Bulk Create Mailboxes",
       description:
-        "Create multiple mailboxes at once (1-100). Each item specifies a domain and local part. password_mode='generated_one_time' lets the server generate one-time passwords (returned in each result row); 'user_supplied' requires items.*.password (default if omitted, for backward compat). Per-item storage_allocation_mb is optional — items without it use the shared account pool; the sum of all dedicated allocations across the batch is validated against the available pool. Returns per-item results with status codes (200 created, 207 partial success, 422 all failed). Pass create_app_password: true to also get each created mailbox's first app password in its result row (app_password, shown once).",
+        "Create multiple mailboxes at once (1-100). Each item specifies a domain and local part. password_mode='generated_one_time' lets the server generate one-time passwords (returned in each result row); 'user_supplied' requires items.*.password (default if omitted, for backward compat). Per-item storage_allocation_mb is optional — items without it use the shared account pool. Each dedicated allocation is checked as its row is created, against what the earlier rows left: a row that does not fit fails with storage_pool_exceeded, or with client_storage_limit_exceeded in a domain under a White Label client storage limit, and the other rows are still created. Returns per-item results with status codes (200 created, 207 partial success, 422 all failed). Pass create_app_password: true to also get each created mailbox's first app password in its result row (app_password, shown once).",
       inputSchema: {
         password_mode: z
           .enum(["user_supplied", "generated_one_time"])
@@ -676,7 +722,7 @@ export function registerMailboxTools(
                 .positive()
                 .optional()
                 .describe(
-                  "Optional dedicated storage allocation in MB (e.g. 5120 for 5 GB). Omit for shared pool. Sum across all items is validated against the available pool.",
+                  "Optional dedicated storage allocation in MB (e.g. 5120 for 5 GB). Omit for shared pool. Checked per row against what the earlier rows left.",
                 ),
             }),
           )

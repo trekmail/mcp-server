@@ -24,6 +24,8 @@ const REPEATABLE_OPERATIONS = new Set([
   "update_white_label_member", "suspend_white_label_member",
   "resume_white_label_member", "resend_white_label_invitation",
   "restore_white_label_member", "remove_white_label_member",
+  // A size or a limit set A → B → A must apply the second A, not replay the first.
+  "set_mailbox_storage", "set_client_limit", "remove_client_limit",
 ]);
 
 function canonicalize(value: unknown): unknown {

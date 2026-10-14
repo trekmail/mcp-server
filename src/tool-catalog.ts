@@ -241,6 +241,9 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
     "restore_white_label_member",
     "list_white_label_activity",
     "get_white_label_member_activity",
+    "list_client_limits",
+    "set_client_limit",
+    "remove_client_limit",
   ],
 
   mail_admin: [
@@ -250,6 +253,7 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
     "create_mailbox_generated_password",
     "change_mailbox_password",
     "update_mailbox",
+    "set_mailbox_storage",
     "set_mailboxes_drive_access",
     "suspend_mailbox_login",
     "resume_mailbox_login",
@@ -477,6 +481,10 @@ const POLICY_RULES: readonly PolicyRule[] = [
     "validate_cloudflare_token", "list_cloudflare_zones", "preview_cloudflare_dns",
     "list_cloudflare_tokens",
   ]),
+  // connect_cloudflare_domains stays reachable with cloudflare:write alone,
+  // which is all that linking existing domains takes. An entry that ADDS a
+  // domain also needs domains:create, checked by Laravel per request (ticket
+  // #482); requiring it here would hide the tool from tokens that only link.
   rule("cloudflare:write", "write", ["connect_cloudflare_domains", "apply_cloudflare_dns"]),
   rule("cloudflare:delete", "destructive", ["delete_cloudflare_token"]),
 
@@ -486,15 +494,19 @@ const POLICY_RULES: readonly PolicyRule[] = [
     "create_branding_preview", "remove_domain_brand_logo", "remove_domain_branding",
   ]),
   rule("branding:read", "read", ["get_white_label"]),
+  // Client storage limits (ticket #482) ride on the member scopes, as their
+  // REST routes do. Changing one also needs a caller that reaches every
+  // domain; Laravel refuses a domain-confined one whatever its scopes.
   rule("members:read", "read", [
     "get_white_label_access_catalog", "list_white_label_members", "get_white_label_member",
+    "list_client_limits",
   ]),
   rule("members:write", "write", [
     "invite_white_label_member", "update_white_label_member", "resume_white_label_member",
-    "resend_white_label_invitation", "restore_white_label_member",
+    "resend_white_label_invitation", "restore_white_label_member", "set_client_limit",
   ]),
   rule("members:write", "destructive", [
-    "suspend_white_label_member", "remove_white_label_member",
+    "suspend_white_label_member", "remove_white_label_member", "remove_client_limit",
   ]),
   rule("activity:read", "read", ["list_white_label_activity"]),
   rule("activity:read", "read", ["get_white_label_member_activity"], ["members:read"]),
@@ -509,7 +521,7 @@ const POLICY_RULES: readonly PolicyRule[] = [
   ]),
   rule("mailboxes:write", "write", [
     "update_account",
-    "change_mailbox_password", "update_mailbox", "set_mailboxes_drive_access",
+    "change_mailbox_password", "update_mailbox", "set_mailbox_storage", "set_mailboxes_drive_access",
     "suspend_mailbox_login", "resume_mailbox_login", "set_mailboxes_login_access",
     "update_mailbox_note", "pause_mailbox",
     "resume_mailbox", "enable_imap", "create_alias", "update_alias",
@@ -687,7 +699,7 @@ for (const name of policyByName.keys()) {
 export const TOOL_CATALOG: readonly ToolCatalogEntry[] = Object.freeze(entries);
 
 /** Bump whenever grouping/capability/safety semantics change. */
-export const TOOL_CATALOG_VERSION = "2026-10-09.2";
+export const TOOL_CATALOG_VERSION = "2026-10-14.1";
 
 function fnv1a(value: string): string {
   let hash = 0x811c9dc5;

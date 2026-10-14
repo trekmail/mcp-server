@@ -60,6 +60,12 @@ export interface InviteWhiteLabelMemberParams extends WhiteLabelMemberAccessPara
   all_domains: boolean;
 }
 
+/** A White Label client storage limit: one budget in MB for these domains. */
+export interface ClientLimitBody {
+  domain_ids: number[];
+  storage_limit_mb: number;
+}
+
 export interface CreateMailboxParams {
   domain_id: number;
   local_part: string;
@@ -330,6 +336,35 @@ export class TrekMailClient {
     return this.request("GET", `white-label/members/${memberId}/activity`, {
       query: limit ? { limit } : undefined,
     });
+  }
+
+  // --- White Label client storage limits (ticket #482) ---
+
+  async listClientLimits(params?: { page?: number; per_page?: number }): Promise<unknown> {
+    return this.request("GET", "white-label/client-limits", {
+      query: params ? { ...params } : undefined,
+    });
+  }
+
+  /** New limit for domains without one, or a change to the one they already share. */
+  async setClientLimit(body: ClientLimitBody, idempotencyKey: string): Promise<unknown> {
+    return this.request("POST", "white-label/client-limits", { body: { ...body }, idempotencyKey });
+  }
+
+  /** domain_ids, when given, replaces the limit's whole domain set. */
+  async updateClientLimit(
+    clientLimitId: number,
+    body: Partial<ClientLimitBody>,
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("PATCH", `white-label/client-limits/${clientLimitId}`, {
+      body: { ...body },
+      idempotencyKey,
+    });
+  }
+
+  async removeClientLimit(clientLimitId: number, idempotencyKey: string): Promise<unknown> {
+    return this.request("DELETE", `white-label/client-limits/${clientLimitId}`, { idempotencyKey });
   }
 
   // --- Machine payments (MPP) ---
@@ -770,6 +805,18 @@ export class TrekMailClient {
   ): Promise<unknown> {
     return this.request("PATCH", `mailboxes/${mailboxId}`, {
       body: fields,
+      idempotencyKey,
+    });
+  }
+
+  /** A fixed size in MB, or null for shared storage (sent as an explicit null). */
+  async setMailboxStorage(
+    mailboxId: number,
+    storageAllocationMb: number | null,
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("PATCH", `mailboxes/${mailboxId}/storage`, {
+      body: { storage_allocation_mb: storageAllocationMb },
       idempotencyKey,
     });
   }

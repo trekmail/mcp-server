@@ -33,6 +33,9 @@ const WHITE_LABEL_TOOLS = [
   "create_branding_preview",
   "remove_domain_brand_logo",
   "remove_domain_branding",
+  "list_client_limits",
+  "set_client_limit",
+  "remove_client_limit",
 ] as const;
 
 const MUTATING_TOOLS = [
@@ -49,6 +52,8 @@ const MUTATING_TOOLS = [
   "create_branding_preview",
   "remove_domain_brand_logo",
   "remove_domain_branding",
+  "set_client_limit",
+  "remove_client_limit",
 ] as const;
 
 const PNG_1X1 =
@@ -151,7 +156,7 @@ async function runRestMatrix(): Promise<Record<string, unknown>> {
     name: string,
     method: string,
     path: string,
-    options: { body?: Json; idempotencyKey?: string; expected?: number } = {},
+    options: { body?: Json; idempotencyKey?: string; expected?: number | number[] } = {},
   ): Promise<{ body: Json; response: Response }> => {
     const result = await api(restToken, method, path, {
       ...options,
@@ -308,7 +313,36 @@ async function runRestMatrix(): Promise<Record<string, unknown>> {
     idempotencyKey: `rest-brand-remove-${stamp}`,
   });
 
-  assert(new Set(successes).size === WHITE_LABEL_TOOLS.length, `REST success matrix covered ${new Set(successes).size}/20`);
+  // Client storage limits (ticket #482): give the domain a limit, change it by
+  // id, read it back, then remove it so the domain ends as it began. A rerun
+  // after a failed one finds the old limit, which POST changes (200).
+  const clientLimit = await success("set_client_limit", "POST", "/white-label/client-limits", {
+    body: { domain_ids: [restDomainId], storage_limit_mb: 10240 },
+    idempotencyKey: `rest-client-limit-set-${stamp}`,
+    expected: [200, 201],
+  });
+  const limitId = Number(clientLimit.body.id);
+  assert(Number.isInteger(limitId) && limitId > 0, "REST client limit returned no id");
+  const resized = await success("set_client_limit", "PATCH", `/white-label/client-limits/${limitId}`, {
+    body: { storage_limit_mb: 20480 },
+    idempotencyKey: `rest-client-limit-resize-${stamp}`,
+  });
+  assert(resized.body.storage_limit_mb === 20480, "REST client limit change was not applied");
+  const limits = await success("list_client_limits", "GET", "/white-label/client-limits");
+  assert(
+    ((limits.body.data ?? []) as Json[]).some((row) => row.id === limitId),
+    "REST client limit missing from the list",
+  );
+  const unlimited = await success("remove_client_limit", "DELETE", `/white-label/client-limits/${limitId}`, {
+    body: {},
+    idempotencyKey: `rest-client-limit-remove-${stamp}`,
+  });
+  assert(unlimited.body.removed === true, "REST client limit was not removed");
+
+  assert(
+    new Set(successes).size === WHITE_LABEL_TOOLS.length,
+    `REST success matrix covered ${new Set(successes).size}/${WHITE_LABEL_TOOLS.length}`,
+  );
   for (const operation of WHITE_LABEL_TOOLS) {
     assert(successes.includes(operation), `REST success matrix missed ${operation}`);
   }
@@ -334,6 +368,9 @@ async function runRestMatrix(): Promise<Record<string, unknown>> {
     { name: "create_branding_preview", method: "POST", path: `/domains/${restDomainId}/branding/preview`, body: {} },
     { name: "remove_domain_brand_logo", method: "DELETE", path: `/domains/${restDomainId}/branding/logo/light`, body: {} },
     { name: "remove_domain_branding", method: "DELETE", path: `/domains/${restDomainId}/branding`, body: {} },
+    { name: "list_client_limits", method: "GET", path: "/white-label/client-limits" },
+    { name: "set_client_limit", method: "POST", path: "/white-label/client-limits", body: { domain_ids: [restDomainId], storage_limit_mb: 1024 } },
+    { name: "remove_client_limit", method: "DELETE", path: "/white-label/client-limits/999999999", body: {} },
   ];
   for (const [index, spec] of failureSpecs.entries()) {
     const denied = await api(noScopeToken, spec.method, spec.path, {
@@ -508,7 +545,10 @@ async function runMcpSuccessMatrix(
 ): Promise<Record<string, unknown>> {
   const { client } = connected;
   const listed = await listedNamesOrNone(client);
-  assert(listed.length === 20, `${transportName}: expected 20 tools, received ${listed.length}`);
+  assert(
+    listed.length === WHITE_LABEL_TOOLS.length,
+    `${transportName}: expected ${WHITE_LABEL_TOOLS.length} tools, received ${listed.length}`,
+  );
   assert(WHITE_LABEL_TOOLS.every((name) => listed.includes(name)), `${transportName}: White Label catalog mismatch`);
 
   const successes = new Set<string>();
@@ -588,6 +628,19 @@ async function runMcpSuccessMatrix(
   await ok("remove_white_label_member", { member_id: memberId, confirm_remove: true });
   await ok("restore_white_label_member", { member_id: memberId });
   await ok("remove_domain_branding", { domain_id: domainId, scope: "domain" });
+
+  const clientLimit = await ok("set_client_limit", { domain_ids: [domainId], storage_limit_mb: 10240 }) as Json;
+  const limitId = Number(clientLimit.id);
+  assert(Number.isInteger(limitId) && limitId > 0, `${transportName}: client limit returned no id`);
+  const resized = await ok("set_client_limit", { client_limit_id: limitId, storage_limit_mb: 20480 }) as Json;
+  assert(resized.storage_limit_mb === 20480, `${transportName}: client limit change failed`);
+  const limits = await ok("list_client_limits") as Json;
+  assert(
+    ((limits.data ?? []) as Json[]).some((row) => row.id === limitId),
+    `${transportName}: client limit missing from the list`,
+  );
+  const unlimited = await ok("remove_client_limit", { client_limit_id: limitId, confirm_remove: true }) as Json;
+  assert(unlimited.removed === true, `${transportName}: client limit was not removed`);
 
   for (const name of WHITE_LABEL_TOOLS) {
     assert(successes.has(name), `${transportName}: success matrix missed ${name}`);

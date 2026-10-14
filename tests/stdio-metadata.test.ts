@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import packageMetadata from "../package.json" with { type: "json" };
 
 describe("stdio release metadata", () => {
-  it("advertises the installed package version and all 280 tools", async () => {
+  it("advertises the installed package version and all 284 tools", async () => {
     const transport = new StdioClientTransport({
       command: process.execPath,
       args: [
@@ -27,7 +27,7 @@ describe("stdio release metadata", () => {
     try {
       await client.connect(transport);
       expect(client.getServerVersion()?.version).toBe(packageMetadata.version);
-      expect((await client.listTools()).tools).toHaveLength(280);
+      expect((await client.listTools()).tools).toHaveLength(284);
     } finally {
       await client.close();
     }

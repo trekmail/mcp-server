@@ -27,17 +27,17 @@ function registeredToolNames(): Set<string> {
 
 describe("tool catalog", () => {
   it("has an explicit version and deterministic parity hash", () => {
-    expect(TOOL_CATALOG_VERSION).toBe("2026-10-09.2");
-    expect(TOOL_CATALOG_HASH).toBe("c4b7bbbb");
+    expect(TOOL_CATALOG_VERSION).toBe("2026-10-14.1");
+    expect(TOOL_CATALOG_HASH).toBe("c4cf3243");
   });
 
-  it("covers all 280 registered tools exactly once", () => {
+  it("covers all 284 registered tools exactly once", () => {
     const registered = registeredToolNames();
     const catalogued = new Set(TOOL_CATALOG.map((entry) => entry.name));
 
-    expect(registered.size).toBe(280);
-    expect(TOOL_CATALOG).toHaveLength(280);
-    expect(TOOL_CATALOG_BY_NAME.size).toBe(280);
+    expect(registered.size).toBe(284);
+    expect(TOOL_CATALOG).toHaveLength(284);
+    expect(TOOL_CATALOG_BY_NAME.size).toBe(284);
     expect([...registered].filter((name) => !catalogued.has(name))).toEqual([]);
     expect([...catalogued].filter((name) => !registered.has(name))).toEqual([]);
   });
@@ -104,5 +104,49 @@ describe("tool catalog", () => {
       .toBe("migration");
     expect(TOOL_CATALOG_BY_NAME.get("cancel_migration")?.safetyGate)
       .toBeUndefined();
+  });
+
+  it("puts client storage limits on the member scopes and mailbox storage on mailboxes:write", () => {
+    // Same scopes as their REST routes (ticket #482). Reading a limit is safe;
+    // changing one or a mailbox's size is behind the destructive gate, and
+    // removing a limit is the destructive one.
+    expect(TOOL_CATALOG_BY_NAME.get("list_client_limits")).toEqual({
+      name: "list_client_limits",
+      toolset: "white_label",
+      transports: ["stdio", "http"],
+      anyOfCapabilities: ["members:read"],
+      allOfCapabilities: [],
+      access: "read",
+      safetyGate: undefined,
+    });
+    expect(TOOL_CATALOG_BY_NAME.get("set_client_limit")).toMatchObject({
+      toolset: "white_label",
+      anyOfCapabilities: ["members:write"],
+      allOfCapabilities: [],
+      access: "write",
+      safetyGate: "destructive",
+    });
+    expect(TOOL_CATALOG_BY_NAME.get("remove_client_limit")).toMatchObject({
+      toolset: "white_label",
+      anyOfCapabilities: ["members:write"],
+      allOfCapabilities: [],
+      access: "destructive",
+      safetyGate: "destructive",
+    });
+    expect(TOOL_CATALOG_BY_NAME.get("set_mailbox_storage")).toMatchObject({
+      toolset: "mail_admin",
+      anyOfCapabilities: ["mailboxes:write"],
+      allOfCapabilities: [],
+      access: "write",
+      safetyGate: "destructive",
+    });
+    expect(toolsForToolsets(["white_label"]).size).toBe(23);
+
+    // Linking existing Cloudflare domains takes cloudflare:write alone; Laravel
+    // asks for domains:create only when an entry adds a domain.
+    expect(TOOL_CATALOG_BY_NAME.get("connect_cloudflare_domains")).toMatchObject({
+      anyOfCapabilities: ["cloudflare:write"],
+      allOfCapabilities: [],
+    });
   });
 });

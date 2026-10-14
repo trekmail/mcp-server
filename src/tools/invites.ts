@@ -14,7 +14,7 @@ export function registerInviteTools(
     {
       title: "Create Invite",
       description:
-        "Create a setup invite for a mailbox. Sends an email to the recipient with a link to set their own password and complete mailbox setup. Storage defaults to the shared account pool; pass storage_allocation_mb to pre-allocate dedicated storage that the recipient inherits at redeem.",
+        "Create a setup invite for a mailbox. Sends an email to the recipient with a link to set their own password and complete mailbox setup. Storage defaults to the shared account pool; pass storage_allocation_mb to pre-allocate dedicated storage that the recipient inherits at redeem. In a domain under a White Label client storage limit (list_client_limits), that allocation must also fit in what the limit has left, or the call fails with client_storage_limit_exceeded.",
       inputSchema: {
         domain_id: z
           .number()
@@ -91,7 +91,7 @@ export function registerInviteTools(
     {
       title: "Create Invites (Bulk)",
       description:
-        "Create multiple setup invites in a single request. Each item specifies a local_part and recipient_email, and may optionally override the target domain via domain_id (otherwise the batch domain_id is used) — so one call can invite people onto several of your domains. Returns results for each item.",
+        "Create multiple setup invites in a single request. Each item specifies a local_part and recipient_email, and may optionally override the target domain via domain_id (otherwise the batch domain_id is used) — so one call can invite people onto several of your domains. A dedicated storage_allocation_mb is checked per item, against what the earlier items left: an item that does not fit fails with storage_pool_exceeded, or with client_storage_limit_exceeded in a domain under a White Label client storage limit, and the other items still go out. Returns results for each item.",
       inputSchema: {
         domain_id: z
           .number()
@@ -125,7 +125,7 @@ export function registerInviteTools(
                 .positive()
                 .optional()
                 .describe(
-                  "Optional dedicated storage allocation in MB (e.g. 5120 for 5 GB). Omit for shared pool. Sum across all items is validated against the available pool.",
+                  "Optional dedicated storage allocation in MB (e.g. 5120 for 5 GB). Omit for shared pool. Checked per item against what the earlier items left.",
                 ),
             }),
           )

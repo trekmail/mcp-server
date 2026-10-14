@@ -15,7 +15,7 @@ export function registerSharedMailboxLifecycleTools(
     {
       title: "Create Shared Mailbox",
       description:
-        "Create a new shared (team) mailbox. The mailbox has no direct login; members use their own regular mailbox credentials in Webmail and, when enabled, delegated native IMAP/SMTP access. All members can read and can send as the shared address by default. Optionally use shared account storage or supply storage_mb for a dedicated allocation.",
+        "Create a new shared (team) mailbox. The mailbox has no direct login; members use their own regular mailbox credentials in Webmail and, when enabled, delegated native IMAP/SMTP access. All members can read and can send as the shared address by default. Optionally use shared account storage or supply storage_mb for a dedicated allocation. In a domain under a White Label client storage limit (list_client_limits), that allocation must also fit in what the limit has left, or the call fails with client_storage_limit_exceeded.",
       inputSchema: {
         domain_id: z
           .number()

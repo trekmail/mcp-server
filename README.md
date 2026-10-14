@@ -1,8 +1,8 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 280 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 284 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
-Current release: package **1.13.1**, catalogue **2026-10-09.2**.
+Current release: package **1.14.0**, catalogue **2026-10-14.1**.
 
 ## Connect in Claude
 
@@ -46,7 +46,7 @@ The MCP server supports two independent token types. At least one is required:
 
 | Token | Env Var | Prefix | Unlocks |
 |-------|---------|--------|---------|
-| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 216 infrastructure tools (White Label branding, clients, team access and activity; domains; DNS; mailboxes; Drive; migrations; SMTP; tickets; account; billing; verifier; Cloudflare; and related administration) |
+| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 220 infrastructure tools (White Label branding, clients, team access, client storage limits and activity; domains; DNS; mailboxes; Drive; migrations; SMTP; tickets; account; billing; verifier; Cloudflare; and related administration) |
 | **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 64 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, connected accounts, identities, templates, blocked senders) |
 
 Tools are registered conditionally — only token types you provide get their tools. You can supply one or both:
@@ -72,8 +72,8 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.13.1` | User-Agent header |
-| `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable high-impact changes (White Label access/branding, delete intents, domain deletion, forwarding, password changes, SMTP, credential revocation, Drive trash/purge, and message deletion) |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.14.0` | User-Agent header |
+| `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable high-impact changes (White Label access/branding, mailbox storage sizes and client storage limits, delete intents, domain deletion, forwarding, password changes, SMTP, credential revocation, Drive trash/purge, and message deletion) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable external sends, including `send_message` and White Label invitations |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
 | `TREKMAIL_TOOLSETS` | No | all | Comma-separated product sets to register, for example `email` or `email,contacts,calendar` |
@@ -102,12 +102,12 @@ TREKMAIL_SCOPE_AWARE_REGISTRATION=true \
 npm start
 ```
 
-## Tools (280)
+## Tools (284)
 
-> The full catalog is **280** tools over stdio. On the hosted **HTTP** transport
+> The full catalog is **284** tools over stdio. On the hosted **HTTP** transport
 > `drive_file_upload` is intentionally not registered (its `local_path` would read
 > files on our server — see the note in `src/tools/drive.ts`), so the HTTP MCP
-> exposes 279. Tools also split by token type: **64** need a message token
+> exposes 283. Tools also split by token type: **64** need a message token
 > (`tm_msg_`), the rest an ops token (`tm_live_`).
 > These are full catalog totals. A directory profile or a restricted grant can
 > expose a smaller set, including browser handoffs for sensitive setup.
@@ -148,7 +148,7 @@ npm start
 
 ### White Label (ops token)
 
-These 20 tools are omitted unless White Label entitlement and the token's live
+These 23 tools are omitted unless White Label entitlement and the token's live
 scopes allow them. During cancellation grace, only the owner keeps read tools;
 writes and delegated access are removed.
 
@@ -172,6 +172,9 @@ writes and delegated access are removed.
 - **restore_white_label_member** — Restore membership without restoring old keys (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **list_white_label_activity** — Read White Label account activity
 - **get_white_label_member_activity** — Read one member's actions and sign-in history
+- **list_client_limits** — List client storage limits: one budget in MB shared by the mailboxes and Drive in a client's domains, with what is reserved, shared and used
+- **set_client_limit** — Give a client's domains a storage limit, change it, or replace its domain set; needs a token that reaches every domain (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **remove_client_limit** — Remove a client storage limit after `confirm_remove: true`; its domains go back to the account's storage and mailboxes keep their sizes (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 
 ### Mailboxes (ops token)
 - **list_mailboxes** — List mailboxes with optional domain/search filters
@@ -181,6 +184,7 @@ writes and delegated access are removed.
 - **create_mailbox_generated_password** — Create mailbox with auto-generated one-time password (optional `storage_allocation_mb` carves out dedicated storage from the account pool; omit for shared). Optional `client_auth_mode`; on an `app_password_only` mailbox the generated password opens TrekMail webmail only, so mail apps (classic webmail included) need **create_mailbox_app_password** next
 - **change_mailbox_password** — Change the password for a mailbox; while app passwords are enabled, resetting the mailbox password automatically revokes all its app passwords (`mailbox_password_reset`) (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **update_mailbox** — Update a mailbox display name, a regular mailbox's webmail `conversation_view` preference, or its `drive_access` level (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **set_mailbox_storage** — Move a mailbox between shared storage (`null`) and a fixed size in MB, checked against the account pool and, in a domain under a client storage limit, that limit (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **set_mailboxes_drive_access** — Set `drive_access` on many mailboxes at once, chosen by explicit `mailbox_ids`, by `domain_id`, or `all`; shared mailboxes are skipped and counted (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **suspend_mailbox_login** — Stop someone signing in to a mailbox while its mail keeps arriving: webmail/IMAP/SMTP and device passwords refused, open sessions ended, reset links dead, delivery untouched (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **resume_mailbox_login** — Lift a sign-in suspension; device passwords revoked by it are not restored (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
@@ -194,11 +198,11 @@ writes and delegated access are removed.
 - **pause_mailbox** — Disable a mailbox entirely, delivery included — unlike `suspend_mailbox_login` (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **resume_mailbox** — Re-enable a paused mailbox
 - **enable_imap** — Enable IMAP access for a mailbox (required for Message API)
-- **bulk_create_mailboxes** — Create 1-100 mailboxes at once with per-item `storage_allocation_mb` (sum across the batch is validated against the available pool)
+- **bulk_create_mailboxes** — Create 1-100 mailboxes at once with per-item `storage_allocation_mb`, each checked as its row is created; a row that does not fit fails on its own (`storage_pool_exceeded` or `client_storage_limit_exceeded`)
 
 ### Invites (ops token)
 - **create_invite** — Send a setup invite to a recipient (optional `storage_allocation_mb` pre-allocates dedicated storage; the recipient inherits it at redeem)
-- **create_invites_bulk** — Send up to 100 setup invites in one call (per-item `storage_allocation_mb` supported)
+- **create_invites_bulk** — Send up to 100 setup invites in one call (per-item `storage_allocation_mb` supported, each checked against what the earlier items left)
 
 ### Aliases (ops token)
 - **list_aliases** — List all aliases for a mailbox (includes primary address and plan limits)
@@ -240,8 +244,10 @@ Shared mailboxes never authenticate directly. Call **get_mail_client_setup** wit
 - **upload_sieve_script** — Upload a raw Sieve script for a mailbox
 
 ### Delete Intents (ops token, two-step)
-- **create_delete_intent** — Step 1: create a time-limited delete intent
-- **confirm_delete_intent** — Step 2: confirm and execute deletion (irreversible)
+- **create_delete_intent**: Step 1, create a delete intent that expires in 10 minutes (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **confirm_delete_intent**: Step 2, confirm it with `confirm: true`; the mailbox moves to the recycle bin and can be restored within the retention window (default 7 days), after which it is purged for good (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **list_trashed_mailboxes**: List the mailboxes in the recycle bin, optionally only on one `domain_id`
+- **restore_mailbox**: Bring a mailbox back from the recycle bin; fails with `mailbox_limit_reached` when the domain is at its mailbox limit, or `storage_pool_exceeded` when its fixed size no longer fits the account's free storage or, in a domain under a White Label client storage limit, what that limit has left (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 
 ### Messages (message token)
 
@@ -381,6 +387,14 @@ Connect and manage external mailboxes (Gmail/Outlook/IMAP) the mailbox reads and
 - **get_billing_status** — Get billing and subscription info
 - **list_invoices** — List invoice history
 
+### Agent Purchases (ops token)
+For an agent buying without a human in the loop. These need the `billing:autopay` scope and `TREKMAIL_ALLOW_DESTRUCTIVE`. Each purchase takes two calls: without `credential` the answer is a 402 with the exact amount to authorise, then the same call with a credential minted for that amount.
+- **agent_buy_verifier_credits**: Top up email verification credits with a shared payment token (`spt_...`); `quantity` must be a published tier
+- **agent_subscribe_mail_plan**: Start a `pro` or `agency` mail plan, monthly or yearly, with a Stripe PaymentMethod (`pm_...`) at full price; call `agent_reissue_key` afterwards
+- **agent_subscribe_drive_addon**: Start a Drive storage add-on with a Stripe PaymentMethod; no mail plan needed, and `size_gb` must be a published step
+- **agent_subscribe_white_label**: Start a White Label subscription with a Stripe PaymentMethod; no mail plan needed
+- **agent_reissue_key**: Exchange a key issued through agent signup for one scoped to the plan the account now holds; the new key is returned once and the old one is revoked at once
+
 ### Message Token Management (ops token)
 - **create_message_token** — Create a message API token for a mailbox (returns plaintext once)
 - **list_message_tokens** — List all message tokens for a mailbox
@@ -411,6 +425,11 @@ Connect and manage external mailboxes (Gmail/Outlook/IMAP) the mailbox reads and
 - **get_spam_metrics** — Get daily spam protection metrics for a domain
 - **get_spam_summary** — Get aggregated spam protection summary for a domain
 
+### Deliverability and Bounces (ops token)
+- **get_domain_deliverability**: Outbound rollup for a domain over the last 1 to 90 days (default 30): sent, delivered, soft and hard bounces, delivery and bounce rates, and a health status of good, warning or poor
+- **list_domain_bounces**: Recent hard and soft bounces per recipient for mail sent from a domain, each with the SMTP status code and the receiving server's response; filter by `type` or `recipient`
+- **list_mailbox_bounces**: The same per-recipient bounces, for mail sent from one mailbox
+
 ### Email Verifier (ops token)
 - **verify_email** — Verify a single email address
 - **verify_email_bulk** — Submit a bulk verification job
@@ -424,7 +443,7 @@ Connect and manage external mailboxes (Gmail/Outlook/IMAP) the mailbox reads and
 ### Cloudflare (ops token)
 - **validate_cloudflare_token** — Validate a Cloudflare API token
 - **list_cloudflare_zones** — List DNS zones accessible by a Cloudflare token
-- **connect_cloudflare_domains** — Connect domains to a Cloudflare account (creates new domains if needed)
+- **connect_cloudflare_domains** — Connect domains to a Cloudflare account (creates new domains if needed; creating one also needs `domains:create`)
 - **preview_cloudflare_dns** — Preview DNS changes that would be applied via Cloudflare. Optional `included_records` (`{ domain_id: [record_ids] }`) previews only selected records
 - **apply_cloudflare_dns** — Apply DNS changes to Cloudflare-managed zones. Use `included_records` to write only chosen records and skip the rest (e.g. MX now, DKIM later); omit it to apply all. `confirmed_conflicts` authorises replacing records flagged as conflicting
 - **list_cloudflare_tokens** — List stored Cloudflare tokens
@@ -453,7 +472,7 @@ pending or was delivered still gets the original response.
 ### Two-Step Delete
 Mailbox deletion requires two separate tool calls:
 1. `create_delete_intent` → returns intent with 10-minute expiry
-2. `confirm_delete_intent` → executes deletion (irreversible)
+2. `confirm_delete_intent` → moves the mailbox to the recycle bin; `restore_mailbox` brings it back within the retention window (default 7 days), after which it is purged for good
 
 ### Destructive Operations Gate
 Both delete tools require `TREKMAIL_ALLOW_DESTRUCTIVE=true`. Without it, they return an error message explaining how to enable.
@@ -572,9 +591,10 @@ Additionally, each write tool requires a per-call confirmation parameter (`confi
 
 ### Bulk Create with Mixed Storage Modes
 ```
-# Mix shared and dedicated in one call. The sum of all storage_allocation_mb
-# across the batch is checked against the available pool — if it would
-# over-commit, the entire batch is rejected with 422 storage_pool_exceeded.
+# Mix shared and dedicated in one call. Each dedicated row is checked against
+# the pool left when that row is created: rows that fit are created, and a row
+# that no longer fits fails on its own with storage_pool_exceeded (207, or 422
+# when every row fails).
 1. bulk_create_mailboxes(items: [
      { domain_id: 5, local_part: "support" },                                  # shared
      { domain_id: 5, local_part: "founder",  storage_allocation_mb: 10240 },  # 10 GB dedicated
@@ -657,7 +677,7 @@ REST reference.
 | `drive_file_download_url` | Short-lived download URL (forced attachment) |
 | `drive_file_rename` / `_move` / `_trash` / `_restore` / `_purge` | File CRUD |
 | `drive_folder_create` / `_update` / `_move` / `_trash` / `_restore` / `_purge` | Folder CRUD; `_update` accepts `name` and/or `color` (#RRGGBB); `_create` accepts `is_shared` to publish to the whole account immediately |
-| `drive_folder_share_with_account` / `_stop_sharing` | Toggle whether a folder is visible to every mailbox in the account (Phase H — moves the folder + subtree from mailbox-personal Drive to account-drive when needed) |
+| `drive_folder_share_with_account` / `_stop_sharing` | Toggle whether a folder is visible to every mailbox in the account (Phase H — moves the folder + subtree from mailbox-personal Drive to account-drive when needed). A mailbox under a client storage limit cannot share out and does not see shared folders (`shared_folder_client_storage_limit`) |
 | `drive_trash_list` / `_empty` | Trash listing + nuke |
 | `drive_bulk_trash` / `_restore` / `_move` / `_purge` | One call, N items (cap 5000) |
 | `drive_share_create` / `_list` / `_revoke` | Public share-links (raw token returned ONCE) |
