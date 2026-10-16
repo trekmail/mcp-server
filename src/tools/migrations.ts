@@ -97,7 +97,7 @@ export function registerMigrationTools(
         // and MigrationOrchestrationService hard-codes target_password=null.
         // Removed entirely so agents don't ask the user for credentials
         // they shouldn't be touching.
-        selected_folders: z.array(z.string().max(255)).optional().describe("Folders to migrate (empty = all folders)"),
+        selected_folders: z.array(z.string().max(255)).optional().describe("Folders to migrate (empty = all folders except Gmail All Mail)"),
         import_since: z.string().optional().describe("Only import messages from this date (YYYY-MM-DD)"),
         skip_duplicates: z.boolean().optional().describe("Skip messages already in target (default: true)"),
         confirm_start: z.boolean().describe("Must be true to start migration. Safety gate."),
