@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 284 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
-Current release: package **1.14.0**, catalogue **2026-10-14.3**.
+Current release: package **1.14.1**, catalogue **2026-10-14.3**.
 
 ## Connect in Claude
 
@@ -72,7 +72,7 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.14.0` | User-Agent header |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.14.1` | User-Agent header |
 | `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable high-impact changes (White Label access/branding, mailbox storage sizes and client storage limits, delete intents, domain deletion, forwarding, password changes, SMTP, credential revocation, Drive trash/purge, and message deletion) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable external sends, including `send_message` and White Label invitations |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
@@ -638,8 +638,10 @@ Additionally, each write tool requires a per-call confirmation parameter (`confi
 ### Monitor Inbox
 ```
 1. list_messages(folder: "INBOX", limit: 10, unread_only: true)
-   → { messages: [...], pagination: { has_more: true, next_before_uid: 45 } }
-2. read_message(uid: 50) → { from, subject, body_text, body_html, attachments: [...] }
+   → { messages: [...], pagination: { has_more: true, next_before_uid: 45, next_before_date: 1760000000 } }
+2. list_messages(folder: "INBOX", limit: 10, unread_only: true, before_uid: 45, before_date: 1760000000)
+   → the next page: send both cursor halves (messages are ordered by date, not UID)
+3. read_message(uid: 50) → { from, subject, body_text, body_html, attachments: [...] }
 ```
 
 ### Email Migration

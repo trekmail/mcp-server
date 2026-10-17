@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TOOLSETS, type Toolset } from "./tool-catalog.js";
 
-export const PACKAGE_VERSION = "1.14.0";
+export const PACKAGE_VERSION = "1.14.1";
 
 const toolsetSchema = z
   .string()

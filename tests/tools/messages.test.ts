@@ -3,6 +3,8 @@ import { TrekMailClient, type ClientConfig } from "../../src/client.js";
 import type { Config } from "../../src/config.js";
 import { createMockFetch, getLastFetchCall, getLastFetchHeaders, mockFetchResponse } from "../helpers/mock-fetch.js";
 import { callApi, errorResult } from "../../src/tools/util.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerMessageToolHandlers } from "../../src/tools/messages.js";
 
 describe("message tools", () => {
   const msgToken = "tm_msg_test_message_token";
@@ -72,6 +74,32 @@ describe("message tools", () => {
     expect(parsed.searchParams.get("since")).toBe("2026-01-01");
     expect(parsed.searchParams.get("unread_only")).toBe("true");
     expect(parsed.searchParams.get("search")).toBe("invoice");
+  });
+
+  it("the list_messages tool forwards both cursor halves and says how to page", async () => {
+    // Messages are ordered by date: before_uid alone can skip or repeat mail
+    // whose UIDs are out of date order (imports), and a literal search's
+    // budget-cut page needs the date half to resume.
+    const server = new McpServer({ name: "test", version: "0.0.0" });
+    const handlers = new Map<string, (a: Record<string, unknown>) => Promise<unknown>>();
+    const definitions = new Map<string, { description?: string; inputSchema?: Record<string, unknown> }>();
+    const orig = server.registerTool.bind(server);
+    server.registerTool = ((name: string, def: never, handler: never) => {
+      handlers.set(name, handler);
+      definitions.set(name, def);
+      return orig(name, def, handler);
+    }) as typeof server.registerTool;
+
+    registerMessageToolHandlers(server, client, baseConfig);
+
+    const definition = definitions.get("list_messages")!;
+    expect(Object.keys(definition.inputSchema ?? {})).toContain("before_date");
+    expect(definition.description).toContain("next_before_date");
+    await handlers.get("list_messages")!({ folder: "INBOX", before_uid: 812, before_date: 1760000000, search: "rep.co" });
+    const parsed = new URL(getLastFetchCall(mockFetch).url);
+    expect(parsed.searchParams.get("before_uid")).toBe("812");
+    expect(parsed.searchParams.get("before_date")).toBe("1760000000");
+    expect(parsed.searchParams.get("search")).toBe("rep.co");
   });
 
   // --- read_message ---

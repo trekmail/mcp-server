@@ -15,7 +15,7 @@ export function registerMessageToolHandlers(
     {
       title: "List Messages",
       description:
-        "List messages in an authorized mailbox IMAP folder, sorted newest-first with cursor-based pagination. By default reads the TrekMail mailbox; external_account_id reads a previously connected external provider's IMAP inbox belonging to that mailbox. Requires messages:read scope; does not accept arbitrary server addresses or credentials.",
+        "List messages in an authorized mailbox IMAP folder, newest first (by date), with cursor-based pagination: while pagination.has_more is true, call again with before_uid = pagination.next_before_uid and before_date = pagination.next_before_date. A search page can come back short or empty while has_more is true — the search continues on the next page, so keep paging before concluding nothing matched. By default reads the TrekMail mailbox; external_account_id reads a previously connected external provider's IMAP inbox belonging to that mailbox. Requires messages:read scope; does not accept arbitrary server addresses or credentials.",
       inputSchema: {
         folder: z
           .string()
@@ -34,7 +34,13 @@ export function registerMessageToolHandlers(
           .int()
           .positive()
           .optional()
-          .describe("Cursor: only return messages with UID < this value"),
+          .describe("Cursor from the previous page: pagination.next_before_uid. Messages are ordered by date, not UID, so send before_date with it"),
+        before_date: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe("Cursor from the previous page: pagination.next_before_date (Unix seconds). Send it together with before_uid"),
         since: z
           .string()
           .optional()
@@ -47,7 +53,7 @@ export function registerMessageToolHandlers(
           .string()
           .max(200)
           .optional()
-          .describe("Filter by subject keyword (max 200 chars)"),
+          .describe("Text to find anywhere in the message, headers and body (max 200 chars)"),
         external_account_id: z
           .number()
           .int()
@@ -56,9 +62,9 @@ export function registerMessageToolHandlers(
           .describe("Read from a connected external account instead of the mailbox"),
       },
     },
-    async ({ folder, limit, before_uid, since, unread_only, search, external_account_id }) => {
+    async ({ folder, limit, before_uid, before_date, since, unread_only, search, external_account_id }) => {
       return callApi(() =>
-        client.listMessages({ folder, limit, before_uid, since, unread_only, search, external_account_id }),
+        client.listMessages({ folder, limit, before_uid, before_date, since, unread_only, search, external_account_id }),
       );
     },
   );

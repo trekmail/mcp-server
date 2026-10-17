@@ -121,6 +121,7 @@ export interface ListMessagesParams {
   folder?: string;
   limit?: number;
   before_uid?: number;
+  before_date?: number;
   since?: string;
   unread_only?: boolean;
   search?: string;
