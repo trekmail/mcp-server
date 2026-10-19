@@ -27,8 +27,9 @@ const OPEN_WORLD = new Set([
   "resume_bulk_migration", "test_external_account", "test_saved_external_account",
   "detect_external_account", "verify_email", "verify_email_bulk",
   "create_ticket", "reply_to_ticket", "drive_share_create",
-  // Private Notes can send a future receipt to the verified actor.
-  "create_private_note_encrypted", "update_private_note",
+  // Private Notes can send a future receipt to the verified actor. Policy
+  // updates can also expose the branded creation page to public visitors.
+  "create_private_note_encrypted", "update_private_note", "update_private_note_settings",
   // These settings can forward future mail or send vacation responses to
   // external recipients even though this call does not send immediately.
   "set_forwarding", "create_forwarding_address", "update_forwarding_address",

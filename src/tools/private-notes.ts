@@ -57,8 +57,8 @@ export function registerPrivateNoteTools(server: McpServer, client: TrekMailClie
   },async args=>callApi(()=>client.getPrivateNoteSettings(args)));
 
   server.registerTool("update_private_note_settings", {
-    title:"Update Private Notes Policy",description:"Configure enabled state, maximum expiry, verified receipts and optional branded public creation tool. Omitted fields are unchanged. Requires private-notes:settings:write in the reachable domain. Enabling the reader does not automatically publish a White Label creation landing.",
+    title:"Update Private Notes Policy",description:"Change Private Notes availability, maximum expiry, verified self-receipt availability and the branded public creation page for the authorized account or domain. Setting public_tool_enabled=true makes the creation page available to public visitors on an active White Label host; false hides it. Receipts allow verified creators to request future email notifications; this call does not send an email. Confirm changes to public access or receipt availability. Omitted fields are unchanged. Requires private-notes:settings:write. Enabling Private Notes alone does not publish the creation page.",
     inputSchema:{domain_id,enabled:z.boolean().optional(),receipts_enabled:z.boolean().optional(),max_expiry:expiry.optional(),public_tool_enabled:z.boolean().optional()},
-    annotations:{readOnlyHint:false,destructiveHint:true,openWorldHint:false,idempotentHint:true},
+    annotations:{readOnlyHint:false,destructiveHint:true,openWorldHint:true,idempotentHint:true},
   },async args=>callApi(()=>client.updatePrivateNoteSettings(args)));
 }

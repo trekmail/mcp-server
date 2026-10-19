@@ -52,7 +52,8 @@ describe("tool effect annotations", () => {
     expect(hints("update_private_note")).toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
     expect(hints("consume_private_note_encrypted")).toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: false });
     expect(hints("revoke_private_note").destructiveHint).toBe(true);
-    expect(hints("update_private_note_settings").destructiveHint).toBe(true);
+    expect(hints("get_private_note_settings")).toMatchObject({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
+    expect(hints("update_private_note_settings")).toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
   });
 
   it("always supplies all three booleans for the complete catalog", () => {
