@@ -53,7 +53,7 @@ export function registerAliasTools(
           .int()
           .positive()
           .describe(
-            "The domain ID for the alias. Can be any active domain on the account.",
+            "The domain ID for the alias. Can be any active domain on the account, or one still waiting for DNS: the alias is saved now and starts receiving when the domain becomes active.",
           ),
         can_receive: z
           .boolean()

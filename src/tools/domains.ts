@@ -293,7 +293,7 @@ export function registerDomainTools(
     {
       title: "Create Forwarding Address",
       description:
-        "Create a forwarding address on a domain: mail to it is handed straight on to the recipients and nothing is stored. No mailbox is created. Delivery requires Pro or Agency; on Nano and Starter the rule is saved and starts working after an upgrade.",
+        "Create a forwarding address on a domain: mail to it is handed straight on to the recipients, and the address itself stores nothing. No mailbox is created. Recipients can be addresses on other domains or mailboxes on this same domain, so a team address such as info@ can reach two people's mailboxes; any other address on this domain is refused. Delivery requires Pro or Agency; on Nano and Starter the rule is saved and starts working after an upgrade.",
       inputSchema: {
         domain_id: z.number().int().positive().describe("The domain ID"),
         local_part: z
@@ -304,7 +304,7 @@ export function registerDomainTools(
         recipients: z
           .array(z.string().email())
           .min(1)
-          .describe("Where mail to this address is delivered"),
+          .describe("Where mail to this address is delivered: addresses on other domains, or mailboxes (and their aliases) on this domain"),
         is_active: z
           .boolean()
           .optional()
@@ -347,7 +347,7 @@ export function registerDomainTools(
           .array(z.string().email())
           .min(1)
           .optional()
-          .describe("Replaces the existing recipients entirely"),
+          .describe("Replaces the existing recipients entirely: addresses on other domains, or mailboxes (and their aliases) on this domain"),
         is_active: z
           .boolean()
           .optional()
