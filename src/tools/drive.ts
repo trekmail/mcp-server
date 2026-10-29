@@ -1,7 +1,8 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { randomUUID } from "node:crypto";
-import { createReadStream, realpathSync, statSync } from "node:fs";
+import { constants as fsConstants, readlinkSync, realpathSync, statSync } from "node:fs";
+import { open, type FileHandle } from "node:fs/promises";
 import { resolve as resolvePath, sep } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { Readable } from "node:stream";
@@ -26,8 +27,11 @@ import { callApi, errorResult } from "./util.js";
  *
  * Not registered on HTTP transport at all (see `httpTransport` flag) —
  * "local file" semantics are meaningless server-side.
+ *
+ * Returns the canonical path it checked; `openUploadFile` binds it to the
+ * file that is actually read.
  */
-function assertUploadPathAllowed(localPath: string): void {
+function assertUploadPathAllowed(localPath: string): string {
   let real: string;
   try {
     real = realpathSync(resolvePath(localPath));
@@ -74,6 +78,76 @@ function assertUploadPathAllowed(localPath: string): void {
       `Path is outside the upload allowlist. Set TREKMAIL_UPLOAD_DIR (colon-separated) to an allowed directory, or move the file under one of: ${allowed.join(", ")}`,
     );
   }
+
+  return real;
+}
+
+/**
+ * Open the checked file once and prove the open handle is that file (ticket
+ * #517, 2026-10-29). The upload used to check a path, then reopen it by name
+ * after the initiate round trip, so a link swapped in meanwhile uploaded a
+ * denied file. Every byte is now read from this handle.
+ *
+ *   - A hard link is a second name that realpath cannot see through, so a
+ *     file with more than one link is refused.
+ *   - The canonical path is opened with O_NOFOLLOW, and the handle must be
+ *     the same file (dev + ino) that path named when it was checked.
+ *   - On Linux the kernel names the open file (/proc/self/fd), which must be
+ *     the checked path; elsewhere the path is canonicalised again instead.
+ */
+async function openUploadFile(localPath: string): Promise<{ handle: FileHandle; sizeBytes: number }> {
+  const real = assertUploadPathAllowed(localPath);
+  const checked = statSync(real, { bigint: true });
+  // Checked before open: opening a FIFO for reading blocks until a writer appears.
+  if (!checked.isFile()) {
+    throw new Error(`Path is not a regular file: ${localPath}`);
+  }
+
+  // O_NOFOLLOW / O_NONBLOCK do not exist on Windows; there the identity check stands alone.
+  const flags = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0);
+  let handle: FileHandle;
+  try {
+    handle = await open(real, flags);
+  } catch (err) {
+    // ELOOP: O_NOFOLLOW met a symlink swapped in after the check; ENOENT: the file went away.
+    const code = (err as NodeJS.ErrnoException).code;
+    throw new Error(code === "ELOOP" || code === "ENOENT"
+      ? `File changed while it was being checked: ${localPath}`
+      : `Path does not exist or is unreadable: ${localPath}`);
+  }
+
+  try {
+    const opened = await handle.stat({ bigint: true });
+    if (!opened.isFile()) {
+      throw new Error(`Path is not a regular file: ${localPath}`);
+    }
+    if (opened.nlink > 1n) {
+      throw new Error(
+        `Refusing to upload a file with ${opened.nlink} hard links: ${localPath}. Copy it to a new file and upload the copy.`,
+      );
+    }
+    if (opened.dev !== checked.dev || opened.ino !== checked.ino || openedPath(handle, real) !== real) {
+      throw new Error(`File changed while it was being checked: ${localPath}`);
+    }
+
+    return { handle, sizeBytes: Number(opened.size) };
+  } catch (err) {
+    await handle.close();
+    throw err;
+  }
+}
+
+/** Where the open file lives: exact on Linux, otherwise the checked path canonicalised again. */
+function openedPath(handle: FileHandle, real: string): string {
+  if (process.platform === "linux") {
+    try {
+      return readlinkSync(`/proc/self/fd/${handle.fd}`);
+    } catch {
+      // No /proc (unusual container): fall through to the portable check.
+    }
+  }
+
+  return realpathSync(real);
 }
 
 /**
@@ -758,8 +832,9 @@ export function registerDriveTools(
       async ({ space, local_path, name, folder_id, client_mime }) => {
         const blocked = requireDestructive("file upload");
         if (blocked) return blocked;
+        let file: { handle: FileHandle; sizeBytes: number };
         try {
-          assertUploadPathAllowed(local_path);
+          file = await openUploadFile(local_path);
         } catch (err) {
           return errorResult(err instanceof Error ? err.message : String(err));
         }
@@ -767,6 +842,8 @@ export function registerDriveTools(
           const result = await uploadFileFromPath(client, {
             space,
             localPath: local_path,
+            handle: file.handle,
+            sizeBytes: file.sizeBytes,
             name,
             folderId: folder_id ?? null,
             clientMime: client_mime,
@@ -778,6 +855,8 @@ export function registerDriveTools(
           return errorResult(
             `Upload failed: ${err instanceof Error ? err.message : String(err)}`,
           );
+        } finally {
+          await file.handle.close().catch(() => {});
         }
       },
     );
@@ -796,16 +875,15 @@ async function uploadFileFromPath(
   params: {
     space: string;
     localPath: string;
+    /** The file `openUploadFile` checked; nothing reopens `localPath`. */
+    handle: FileHandle;
+    sizeBytes: number;
     name?: string;
     folderId: number | null;
     clientMime?: string;
   },
 ): Promise<unknown> {
-  const stats = statSync(params.localPath);
-  if (!stats.isFile()) {
-    throw new Error(`Path is not a regular file: ${params.localPath}`);
-  }
-  const sizeBytes = stats.size;
+  const sizeBytes = params.sizeBytes;
   const displayName = params.name ?? params.localPath.split("/").pop() ?? "upload";
 
   const initiateRaw = (await client.initiateDriveUpload(
@@ -824,7 +902,7 @@ async function uploadFileFromPath(
     if (!initiateRaw.upload_url) {
       throw new Error("initiate response missing upload_url for small upload");
     }
-    await singlePut(initiateRaw.upload_url, initiateRaw.headers ?? {}, params.localPath, sizeBytes, async () => {
+    await singlePut(initiateRaw.upload_url, initiateRaw.headers ?? {}, params.handle, sizeBytes, async () => {
       await safeAbort(client, fileId);
     });
     return client.completeDriveUpload(fileId);
@@ -841,10 +919,10 @@ async function uploadFileFromPath(
   try {
     for (const part of initiateRaw.parts) {
       const startByte = (part.part_number - 1) * partSize;
-      // end is INCLUSIVE for fs.createReadStream.
+      // end is INCLUSIVE for createReadStream.
       const endByte = Math.min(startByte + partSize - 1, sizeBytes - 1);
       let url = part.upload_url;
-      let etag = await putPart(url, params.localPath, startByte, endByte);
+      let etag = await putPart(url, params.handle, startByte, endByte);
       // 403 is B2's "URL expired" — refresh and retry once.
       if (etag === null) {
         const refreshed = (await client.refreshDriveUploadParts(fileId, [part.part_number])) as RefreshResponse;
@@ -853,7 +931,7 @@ async function uploadFileFromPath(
           throw new Error(`Failed to refresh part ${part.part_number} URL`);
         }
         url = fresh.upload_url;
-        etag = await putPart(url, params.localPath, startByte, endByte);
+        etag = await putPart(url, params.handle, startByte, endByte);
         if (etag === null) {
           throw new Error(`B2 PUT for part ${part.part_number} still failed after refresh`);
         }
@@ -886,11 +964,12 @@ interface RefreshResponse {
 async function singlePut(
   url: string,
   headers: Record<string, string>,
-  localPath: string,
+  handle: FileHandle,
   sizeBytes: number,
   onError: () => Promise<void>,
 ): Promise<void> {
-  const stream = createReadStream(localPath);
+  // autoClose: false: the tool handler closes the handle once the whole upload is done.
+  const stream = handle.createReadStream({ start: 0, autoClose: false });
   // Cast Node Readable → Web ReadableStream for the global fetch.
   // Node 18+ supports this via Readable.toWeb(); fall back to the raw
   // stream in older runtimes (the API server requires Node 22 anyway).
@@ -926,11 +1005,11 @@ async function singlePut(
  */
 async function putPart(
   url: string,
-  localPath: string,
+  handle: FileHandle,
   startByte: number,
   endByte: number,
 ): Promise<string | null> {
-  const stream = createReadStream(localPath, { start: startByte, end: endByte });
+  const stream = handle.createReadStream({ start: startByte, end: endByte, autoClose: false });
   const body = "toWeb" in Readable
     ? (Readable as unknown as { toWeb: (s: NodeJS.ReadableStream) => ReadableStream }).toWeb(stream)
     : (stream as unknown as ReadableStream);

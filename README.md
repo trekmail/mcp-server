@@ -744,6 +744,13 @@ The wrapper:
    the quota reservation. (The reservation is also reclaimed by the
    server-side cleanup — abort is a fast path, not a guarantee.)
 
+Before anything is reserved, the wrapper checks the local file: a regular
+file under `$HOME` or the temp directory (or under `TREKMAIL_UPLOAD_DIR`,
+colon-separated), outside sensitive locations (`~/.ssh`, `~/.aws`, `/etc`, …),
+not named `.env*`, and with no second hard link. It opens the file once and
+reads every byte from that handle, so replacing the path mid-upload changes
+nothing.
+
 **Low-level primitives** (`drive_upload_initiate` etc.) stay available
 for agents that want to drive the PUT phase themselves — e.g. uploads
 from a remote source instead of the MCP host's filesystem.
