@@ -7,9 +7,24 @@ const decoder = new TextDecoder('utf-8', { fatal: true });
 const AAD = encoder.encode('TrekMail Private Notes v1');
 const WRAP_AAD = encoder.encode('TrekMail Private Notes v1 key');
 export const PASSWORD_ITERATIONS = 600000;
+/** The visible limit in Unicode code points. The server mirrors it in config('private_notes.max_characters'). */
+export const MAX_NOTE_CHARACTERS = 20000;
+/** UTF-8 takes at most 4 bytes per code point, so this cap can never refuse a note the character limit allows. */
+export const MAX_NOTE_BYTES = 4 * MAX_NOTE_CHARACTERS;
+/** The plaintext plus its 16-byte AES-GCM tag: the largest ciphertext this module creates or opens. */
+export const MAX_CIPHERTEXT_BYTES = MAX_NOTE_BYTES + 16;
+/** Unpadded base64url length of the largest ciphertext, as the envelope carries it. */
+export const MAX_CIPHERTEXT_LENGTH = Math.ceil(MAX_CIPHERTEXT_BYTES * 4 / 3);
+/** Bytes per String.fromCharCode call: spreading a large array overflows the call stack in Safari. */
+export const BASE64_CHUNK_BYTES = 8192;
 
 export function base64url(bytes) {
-    return btoa(String.fromCharCode(...bytes)).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+    const view = bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes);
+    let binary = '';
+    for (let offset = 0; offset < view.length; offset += BASE64_CHUNK_BYTES) {
+        binary += String.fromCharCode(...view.subarray(offset, offset + BASE64_CHUNK_BYTES));
+    }
+    return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
 }
 export function unbase64url(text, max = 24000) {
     if (typeof text !== 'string' || text.length > max || !/^[A-Za-z0-9_-]+$/.test(text)) throw new Error('Invalid note format');
@@ -29,7 +44,9 @@ async function wrappingKey(seed, password, salt) {
     return crypto.subtle.deriveKey({name:'HKDF',hash:'SHA-256',salt,info:WRAP_AAD}, material, {name:'AES-GCM',length:256}, false, ['encrypt','decrypt']);
 }
 export async function encryptNote(text, password = '') {
-    if (typeof text !== 'string' || !text.trim() || Array.from(text).length > 4000 || encoder.encode(text).length > 16384) throw new Error('Note must contain 1–4,000 characters');
+    if (typeof text !== 'string' || !text.trim() || Array.from(text).length > MAX_NOTE_CHARACTERS || encoder.encode(text).length > MAX_NOTE_BYTES) {
+        throw new Error(`Note must contain 1–${MAX_NOTE_CHARACTERS.toLocaleString('en-US')} characters`);
+    }
     const bytes = random(32), seed = random(32), salt = random(16), iv = random(12), wrapIv = random(12);
     const key = await aes(bytes);
     const ciphertext = new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:AAD,tagLength:128}, key, encoder.encode(text)));
@@ -55,6 +72,6 @@ export async function unlockNote(fragment, password = '') {
 }
 export async function decryptNote(envelope, key) {
     if (envelope.version !== 1 || unbase64url(envelope.iv).length !== 12) throw new Error('Invalid note format');
-    const bytes = await crypto.subtle.decrypt({name:'AES-GCM',iv:unbase64url(envelope.iv),additionalData:AAD,tagLength:128}, key, unbase64url(envelope.ciphertext));
+    const bytes = await crypto.subtle.decrypt({name:'AES-GCM',iv:unbase64url(envelope.iv),additionalData:AAD,tagLength:128}, key, unbase64url(envelope.ciphertext, MAX_CIPHERTEXT_LENGTH));
     return decoder.decode(bytes);
 }

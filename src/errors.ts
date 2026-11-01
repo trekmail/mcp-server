@@ -1,3 +1,5 @@
+import { PRIVATE_NOTE_MAX_CIPHERTEXT_BYTES } from "./private-note-limits.js";
+
 /**
  * Error thrown when the TrekMail API returns a structured error response.
  * Matches the API error envelope: { error: { code, message, hint, request_id, retryable } }
@@ -159,6 +161,8 @@ export class TrekMailApiError extends Error {
     if (sharedMailboxAction) text += `\nAction: ${sharedMailboxAction}`;
     const storageAction = STORAGE_ACTIONS[this.code];
     if (storageAction) text += `\nAction: ${storageAction}`;
+    const privateNoteAction = PRIVATE_NOTE_ACTIONS[this.code];
+    if (privateNoteAction) text += `\nAction: ${privateNoteAction}`;
     const details = this.extra["details"];
     if (
       this.code === "validation_error" &&
@@ -197,6 +201,15 @@ const SHARED_MAILBOX_ACTIONS: Readonly<Record<string, string>> = {
     "Call list_identities and use an id from it, or leave identity_id out. Team addresses from send-only access cannot be used through MCP.",
   identity_delegated:
     "Leave this identity unchanged. Its access follows the shared mailbox (update_shared_mailbox_member or remove_shared_mailbox_member); its signature is edited in webmail.",
+};
+
+/**
+ * A Private Notes refusal that consumed nothing. The server's own message speaks to people ("update your app"); an
+ * agent on the hosted server usually only left out what its decrypting module can open.
+ */
+const PRIVATE_NOTE_ACTIONS: Readonly<Record<string, string>> = {
+  private_note_client_outdated:
+    `Nothing was consumed, so calling consume_private_note_encrypted again is safe. Pass max_ciphertext_bytes set to the MAX_CIPHERTEXT_BYTES export of the Private Notes module that will decrypt the note (${PRIVATE_NOTE_MAX_CIPHERTEXT_BYTES} in @trekmail/mcp-server/private-notes 1.15.0 and later). A module without that export cannot open this note: update it first.`,
 };
 
 /**

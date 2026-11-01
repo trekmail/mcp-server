@@ -1,5 +1,5 @@
 /** Explicit local-agent workflow. Plaintext/password stay in this process. */
-import { encryptNote } from '../build/private-note-crypto.js';
+import { encryptNote, MAX_NOTE_CHARACTERS } from '../build/private-note-crypto.js';
 import { pathToFileURL } from 'node:url';
 
 export async function createAndSendPrivateNote(input, transport = fetch) {
@@ -29,7 +29,8 @@ export async function createAndSendPrivateNote(input, transport = fetch) {
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) {
     let input='';
     try {
-        for await(const chunk of process.stdin) {input+=chunk;if(Buffer.byteLength(input)>32768)throw new Error('Input exceeds the limit.');}
+        // A full-size note even when every code point is JSON-escaped as a surrogate pair, plus recipients and settings.
+        for await(const chunk of process.stdin) {input+=chunk;if(Buffer.byteLength(input)>12*MAX_NOTE_CHARACTERS+16384)throw new Error('Input exceeds the limit.');}
         const data=JSON.parse(input);input='';
         const result=await createAndSendPrivateNote({...data,origin:process.env.TREKMAIL_API_ORIGIN,noteToken:process.env.TREKMAIL_NOTE_TOKEN,sendToken:process.env.TREKMAIL_SEND_TOKEN});
         process.stdout.write(JSON.stringify(result)+'\n');

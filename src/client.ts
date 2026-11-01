@@ -2433,7 +2433,8 @@ export class TrekMailClient {
     return this.request("POST", `private-notes/${encodeURIComponent(id)}/revoke`, {body});
   }
   async consumePrivateNote(id: string, body: Record<string, unknown>): Promise<unknown> {
-    // No idempotency key: consumption must never retry or replay ciphertext.
+    // No idempotency key: consumption must never retry or replay ciphertext. The caller decides max_ciphertext_bytes
+    // (what the decrypting module opens); without it the server assumes a pre-1.15.0 module.
     return this.request("POST", `private-notes/${encodeURIComponent(id)}/consume`, {body});
   }
   async getPrivateNoteSettings(query: Record<string, unknown> = {}): Promise<unknown> {

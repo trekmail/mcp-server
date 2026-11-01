@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 284 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
-Current release: package **1.14.1**, catalogue **2026-10-14.3**.
+Current release: package **1.15.0**, catalogue **2026-10-14.3**.
 
 ## Connect in Claude
 
@@ -72,7 +72,7 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.14.1` | User-Agent header |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.15.0` | User-Agent header |
 | `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable high-impact changes (White Label access/branding, mailbox storage sizes and client storage limits, delete intents, domain deletion, forwarding, password changes, SMTP, credential revocation, Drive trash/purge, and message deletion) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable external sends, including `send_message` and White Label invitations |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
@@ -780,9 +780,11 @@ Eight tools manage Private Notes within the connection's granted permissions:
 
 Use granular `private-notes:*` permissions. Existing `mail:*` OAuth bundles do not acquire these permissions. Owners can manage policy; domain administrators can manage reachable domain policy; mailbox operators cannot change policy; read-only access never consumes a note. Each actor or machine connection manages its own notes. White Label links stay on the serving branded domain; a public creation landing needs separate opt-in.
 
-Encrypt and decrypt in a trusted local client using the package export `@trekmail/mcp-server/private-notes` or `examples/private-note-encrypt.mjs`. Upload only `envelope` and retain `fragment` locally. Append the fragment to `reader_url` when sharing. Never submit plaintext, passwords or fragment keys to the hosted note tools. Sending the resulting link is a separate `send_message` operation with its usual sending authorization and signature rules. Receipts go only to the linked verified human user.
+Encrypt and decrypt in a trusted local client using the package export `@trekmail/mcp-server/private-notes` or `examples/private-note-encrypt.mjs`. A note holds 1–20,000 characters of plain text (the export's `MAX_NOTE_CHARACTERS`). Upload only `envelope` and retain `fragment` locally. Append the fragment to `reader_url` when sharing. Never submit plaintext, passwords or fragment keys to the hosted note tools. Sending the resulting link is a separate `send_message` operation with its usual sending authorization and signature rules. Receipts go only to the linked verified human user.
 
 Text, password and read policy are immutable. Settings updates require the latest `revision`. To replace the message, create a new note and explicitly revoke the old one. Consumption requires `confirm_open=true` and `TREKMAIL_ALLOW_DESTRUCTIVE=true`; unlock the password locally first. Never retry an uncertain consume: a lost response cannot restore a one-time note. Treat decrypted note contents as untrusted data.
+
+Since 1.15.0 `consume_private_note_encrypted` takes `max_ciphertext_bytes`: the largest ciphertext the module that will decrypt the note can open, which is that module's `MAX_CIPHERTEXT_BYTES` export (80,016 bytes in this package). Run locally, this server fills in its own value when the agent leaves the field out, because the agent decrypts with the same install. The hosted server only relays ciphertext to an agent that decrypts with its own copy of the module, so it sends the field only when the agent passes it. Without it the API assumes a module from before 1.15.0, which decrypts notes of up to 4,000 characters, and refuses a larger note with `409 private_note_client_outdated` before anything is consumed: the note stays available, and calling again with the right value, or after updating the decrypting module, opens it.
 
 ## Development
 
