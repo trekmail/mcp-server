@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 284 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
-Current release: package **1.15.0**, catalogue **2026-10-14.3**.
+Current release: package **1.16.0**, catalogue **2026-10-14.3**.
 
 ## Connect in Claude
 
@@ -72,7 +72,7 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.15.0` | User-Agent header |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.16.0` | User-Agent header |
 | `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable high-impact changes (White Label access/branding, mailbox storage sizes and client storage limits, delete intents, domain deletion, forwarding, password changes, SMTP, credential revocation, Drive trash/purge, and message deletion) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable external sends, including `send_message` and White Label invitations |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
@@ -278,8 +278,8 @@ Shared mailboxes never authenticate directly. Call **get_mail_client_setup** wit
 - **move_message** — Move a message to a different IMAP folder
 - **list_folders** — List all IMAP folders for the mailbox
 - **update_message_flags** — Update flags (read/unread, starred/unstarred) on a message
-- **download_attachment** — Download a single attachment by index from a message
-- **download_all_attachments** — Download all attachments as a ZIP archive
+- **download_attachment** — Download a single attachment by index from a message: base64 up to 25 MB; a bigger file, or `link_only: true`, returns a short-lived `download_url` (any size, a plain HTTP GET with no auth header, before `expires_at`) — since 1.16.0
+- **download_all_attachments** — Download all attachments as a ZIP archive: base64 up to 25 MB; a bigger archive, or `link_only: true`, returns a short-lived `download_url` the same way — since 1.16.0
 - **get_raw_message** — Get the full RFC 822 raw source of a message
 - **save_draft** — Save a new draft via IMAP APPEND; returns its `uid` and `uidvalidity` for later updates
 - **update_draft** — Replace a draft using its required `uid` and `uidvalidity`; returns the replacement pair because the old UID stops working

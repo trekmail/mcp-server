@@ -1528,6 +1528,27 @@ export class TrekMailClient {
     });
   }
 
+  /** A short-lived link to one attachment, any size: GET it with no auth header. */
+  async getAttachmentDownloadUrl(
+    uid: number,
+    index: number,
+    params?: { folder?: string; external_account_id?: number },
+  ): Promise<unknown> {
+    return this.request("GET", `messages/${uid}/attachments/${index}/download-url`, {
+      query: params ? { ...params } : undefined,
+    });
+  }
+
+  /** A short-lived link to all attachments as one ZIP, any total size. */
+  async getAttachmentsDownloadUrl(
+    uid: number,
+    params?: { folder?: string; external_account_id?: number },
+  ): Promise<unknown> {
+    return this.request("GET", `messages/${uid}/attachments/download-url`, {
+      query: params ? { ...params } : undefined,
+    });
+  }
+
   async getRawMessage(
     uid: number,
     params?: { folder?: string; external_account_id?: number },

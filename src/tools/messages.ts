@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
 import type { Config } from "../config.js";
 import { idempotencyKey } from "../idempotency.js";
+import { TrekMailApiError } from "../errors.js";
 import { callApi, errorResult } from "./util.js";
 
 export function registerMessageToolHandlers(
@@ -470,12 +471,17 @@ export function registerMessageToolHandlers(
 
   // --- Attachments ---
 
+  // Over 25 MB the base64 endpoints answer 413: hand back a download link instead,
+  // the way drive_file_download_url does — any size, a plain HTTP GET, no auth header.
+  const TOO_LARGE_NOTE =
+    "Too large to return inline (over 25 MB). Download it from download_url with a plain HTTP GET (no Authorization header) before expires_at.";
+
   server.registerTool(
     "download_attachment",
     {
       title: "Download Attachment",
       description:
-        "Download a single attachment from a message by its index. Returns base64-encoded content. Warning: large attachments (up to 25 MB) may produce very long responses.",
+        "Download a single attachment from a message by its index. Returns base64-encoded content for files up to 25 MB. For a bigger file, or with link_only=true, returns instead a short-lived download_url (any size; fetch it with a plain HTTP GET, no auth header, before expires_at) with filename, content_type and size_bytes. Prefer link_only=true to save files without putting their bytes in the conversation.",
       inputSchema: {
         uid: z
           .number()
@@ -498,12 +504,28 @@ export function registerMessageToolHandlers(
           .positive()
           .optional()
           .describe("Download from a connected external account (Gmail/Outlook/IMAP) instead of the mailbox"),
+        link_only: z
+          .boolean()
+          .optional()
+          .describe("Return a short-lived download_url instead of the base64 content (any size)"),
       },
     },
-    async ({ uid, index, folder, external_account_id }) => {
-      return callApi(() =>
-        client.downloadAttachment(uid, index, { folder, external_account_id }),
-      );
+    async ({ uid, index, folder, external_account_id, link_only }) => {
+      return callApi(async () => {
+        const params = { folder, external_account_id };
+        if (link_only) {
+          return client.getAttachmentDownloadUrl(uid, index, params);
+        }
+        try {
+          return await client.downloadAttachment(uid, index, params);
+        } catch (error) {
+          if (error instanceof TrekMailApiError && error.statusCode === 413) {
+            const link = (await client.getAttachmentDownloadUrl(uid, index, params)) as Record<string, unknown>;
+            return { ...link, note: TOO_LARGE_NOTE };
+          }
+          throw error;
+        }
+      });
     },
   );
 
@@ -512,7 +534,7 @@ export function registerMessageToolHandlers(
     {
       title: "Download All Attachments",
       description:
-        "Download all attachments from a message as a base64-encoded ZIP file. Warning: may produce very long responses for messages with large attachments (up to 25 MB total).",
+        "Download all attachments from a message as one ZIP. Returns the ZIP base64-encoded when it is up to 25 MB. For a bigger one, or with link_only=true, returns instead a short-lived download_url (any total size; fetch it with a plain HTTP GET, no auth header, before expires_at) with size_bytes and count.",
       inputSchema: {
         uid: z
           .number()
@@ -530,12 +552,28 @@ export function registerMessageToolHandlers(
           .positive()
           .optional()
           .describe("Download from a connected external account (Gmail/Outlook/IMAP) instead of the mailbox"),
+        link_only: z
+          .boolean()
+          .optional()
+          .describe("Return a short-lived download_url for the ZIP instead of its base64 content (any size)"),
       },
     },
-    async ({ uid, folder, external_account_id }) => {
-      return callApi(() =>
-        client.downloadAllAttachments(uid, { folder, external_account_id }),
-      );
+    async ({ uid, folder, external_account_id, link_only }) => {
+      return callApi(async () => {
+        const params = { folder, external_account_id };
+        if (link_only) {
+          return client.getAttachmentsDownloadUrl(uid, params);
+        }
+        try {
+          return await client.downloadAllAttachments(uid, params);
+        } catch (error) {
+          if (error instanceof TrekMailApiError && error.statusCode === 413) {
+            const link = (await client.getAttachmentsDownloadUrl(uid, params)) as Record<string, unknown>;
+            return { ...link, note: TOO_LARGE_NOTE };
+          }
+          throw error;
+        }
+      });
     },
   );
 
