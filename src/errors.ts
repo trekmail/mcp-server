@@ -225,18 +225,31 @@ const PRIVATE_NOTE_ACTIONS: Readonly<Record<string, string>> = {
  * The client is told what the dashboard and the API tell it (plan D18): ask
  * the administrator. Never "upgrade the plan", never "the reseller", never
  * "White Label": a client's agent repeats these words to the client.
+ *
+ * Ticket #547 adds the client's mailbox caps: a maximum number of mailboxes
+ * (pending invitations count) and a mailbox size, which also takes shared
+ * storage away in those domains. The older lines say "shared storage" only
+ * where the client has no mailbox size, since there it would be refused.
  */
 const STORAGE_ACTIONS: Readonly<Record<string, string>> = {
   storage_pool_exceeded:
-    "Do not retry unchanged. Use a smaller fixed size, or shared storage, where this call takes a size; or free room first by moving another mailbox to shared storage or a smaller fixed size (set_mailbox_storage).",
+    "Do not retry unchanged. Where this call takes a size, use a smaller fixed size or, where the client has no mailbox size, shared storage; or free room first by moving another mailbox to shared storage or a smaller fixed size (set_mailbox_storage).",
   client_storage_limit_exceeded:
-    "Do not retry with the same size. Choose at most available_mb from Details, or shared storage, or free room by reducing another fixed-size mailbox in these domains (set_mailbox_storage). Only a connection that reaches every domain can raise the limit (set_client_limit); any other connection asks the account administrator for more space.",
+    "Do not retry with the same size. Choose at most available_mb from Details, or shared storage where the client has no mailbox size, or free room by reducing another fixed-size mailbox in these domains (set_mailbox_storage). Only a connection that reaches every domain can raise the limit (set_client_limit); any other connection asks the account administrator for more space.",
   client_storage_below_usage:
-    "Choose a fixed size of at least used_mb from Details, or move the mailbox to shared storage (set_mailbox_storage with storage_allocation_mb=null), which is never refused for its size.",
+    "Choose a fixed size of at least used_mb from Details or, where the client has no mailbox size, move the mailbox to shared storage (set_mailbox_storage with storage_allocation_mb=null), which is never refused for its size.",
   client_storage_limit_too_low:
     "Choose a limit of at least minimum_mb from Details: a limit cannot go below the fixed sizes and open dedicated invites in its domains (allocated_mb), or what they already store (used_mb).",
   client_storage_domains_conflict:
     "Do not retry unchanged: these domains are under different limits (client_limit_ids in Details), and one call cannot merge them. Change each limit on its own domains, or first take a domain out of its limit with set_client_limit (that client_limit_id and the domain_ids it keeps) or remove_client_limit.",
+  client_mailbox_limit_reached:
+    "Do not retry unchanged: the client already has its most mailboxes, pending invitations included (max_mailboxes, mailboxes and pending_invites in Details when they are sent). Free one first: delete a mailbox in these domains (create_delete_intent). A pending invitation frees its place only when it expires or a person cancels it in the dashboard; no tool cancels one. Only a connection that reaches every domain can raise max_mailboxes (set_client_limit); any other connection asks the account administrator for more mailboxes.",
+  client_mailbox_size_exceeded:
+    "Do not retry with the same size. Choose at most max_mailbox_size_mb from Details; when creating or inviting, leaving the size out gives exactly that size. Only a connection that reaches every domain can raise mailbox_size_mb (set_client_limit); any other connection asks the account administrator for larger mailboxes.",
+  client_mailbox_size_required:
+    "Do not retry with shared storage: these domains have none. Choose a fixed size of at most max_mailbox_size_mb from Details (set_mailbox_storage). Only a connection that reaches every domain can remove mailbox_size_mb (set_client_limit with mailbox_size_mb=null); any other connection asks the account administrator.",
+  client_mailbox_size_above_limit:
+    "Do not retry unchanged: mailbox_size_mb may not be more than storage_limit_mb (both in Details). In the same set_client_limit call, choose a smaller mailbox_size_mb, a larger storage_limit_mb, or mailbox_size_mb=null.",
   shared_folder_client_storage_limit:
     "Do not retry. A mailbox in a domain under a client storage limit keeps its folders in its own Drive: create them without is_shared, and do not share them with the whole account.",
 };

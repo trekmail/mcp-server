@@ -55,6 +55,26 @@ const limitDomainIds = z
   .min(1)
   .max(500)
   .describe("Domain IDs of this account");
+// Ticket #547: the client's mailbox caps. null removes one, leaving it out keeps it;
+// the bounds are the API's (client_limits CHECKs, mailbox_size_mb a PostgreSQL integer).
+const maxMailboxes = z
+  .number()
+  .int()
+  .min(1)
+  .max(100000)
+  .nullable()
+  .optional()
+  .describe("Most mailboxes, pending invitations included, the client may have. null removes it");
+const mailboxSizeMb = z
+  .number()
+  .int()
+  .min(1)
+  .max(2147483647)
+  .nullable()
+  .optional()
+  .describe(
+    "Size every new mailbox gets and the most one may have, in MB; mailboxes can't use shared storage then. At most storage_limit_mb. null removes it",
+  );
 
 export function registerWhiteLabelTools(
   server: McpServer,
@@ -301,7 +321,7 @@ export function registerWhiteLabelTools(
     {
       title: "List Client Storage Limits",
       description:
-        "List White Label client storage limits: each is one budget in MB for the mailboxes and Drive of a client's domains. Rows give id, storage_limit_mb, domain_ids, member_ids, allocated_mb (fixed mailbox sizes), pending_invites_mb (fixed sizes of open invites), pool_mb (left for shared storage) and used_bytes. A connection limited to some domains sees only their limits.",
+        "List White Label client storage limits: each is one budget in MB for the mailboxes and Drive of a client's domains. Rows give id, storage_limit_mb, domain_ids, member_ids, allocated_mb (fixed mailbox sizes), pending_invites_mb (fixed sizes of open invites), pool_mb (left for shared storage) and used_bytes, with max_mailboxes, mailbox_size_mb (null = no cap), mailboxes and pending_invites (what counts against max_mailboxes). A connection limited to some domains sees only their limits.",
       inputSchema: {
         page: z.number().int().positive().optional().describe("Page number"),
         per_page: z.number().int().min(1).max(100).optional().describe("Results per page"),
@@ -315,7 +335,7 @@ export function registerWhiteLabelTools(
     {
       title: "Set Client Storage Limit",
       description:
-        "Give a client's domains one storage budget for their mailboxes and Drive, or change it. Read list_client_limits first. Without client_limit_id, pass domain_ids and storage_limit_mb: domains without a limit get a new one, or join and change the one limit the other given domains share; domains under two limits are refused. With client_limit_id, change its storage_limit_mb, its domain_ids (the full new set; domains left out go back to the account's storage), or both. A limit cannot go below what its domains reserve or store. Needs a connection that reaches every domain. Returns the limit.",
+        "Give a client's domains one storage budget for their mailboxes and Drive, or change it. Read list_client_limits first. Without client_limit_id, pass domain_ids and storage_limit_mb: domains without a limit get a new one, or join and change the one limit the other given domains share; domains under two limits are refused. With client_limit_id, change any of its storage_limit_mb, its domain_ids (the full new set; domains left out go back to the account's storage), max_mailboxes and mailbox_size_mb. A limit cannot go below what its domains reserve or store. Optionally cap the client's number of mailboxes (max_mailboxes) and mailbox size (mailbox_size_mb); existing mailboxes keep working when they are above a new cap. Needs a connection that reaches every domain. Returns the limit.",
       inputSchema: {
         client_limit_id: clientLimitId
           .optional()
@@ -324,12 +344,24 @@ export function registerWhiteLabelTools(
           .optional()
           .describe("Domain IDs the limit covers. With client_limit_id, the full new set"),
         storage_limit_mb: storageLimitMb.optional(),
+        max_mailboxes: maxMailboxes,
+        mailbox_size_mb: mailboxSizeMb,
         idempotency_key: idem,
       },
       annotations: { destructiveHint: true },
     },
-    async ({ client_limit_id, domain_ids, storage_limit_mb, idempotency_key }) => {
+    async ({
+      client_limit_id, domain_ids, storage_limit_mb, max_mailboxes, mailbox_size_mb, idempotency_key,
+    }) => {
       if (!config.allowDestructive) return destructiveDisabled("change a client storage limit");
+
+      // Only the caps given reach the API: null removes one, a cap left out
+      // keeps its value. Checked against undefined, never truthiness, so
+      // {max_mailboxes: null} alone is a change.
+      const caps = {
+        ...(max_mailboxes !== undefined ? { max_mailboxes } : {}),
+        ...(mailbox_size_mb !== undefined ? { mailbox_size_mb } : {}),
+      };
 
       if (client_limit_id === undefined) {
         if (domain_ids === undefined || storage_limit_mb === undefined) {
@@ -337,17 +369,23 @@ export function registerWhiteLabelTools(
             "Pass domain_ids and storage_limit_mb, or client_limit_id with the fields to change.",
           );
         }
-        const body = { domain_ids, storage_limit_mb };
+        const body = { domain_ids, storage_limit_mb, ...caps };
         const key = idempotencyKey("set_client_limit", body, idempotency_key);
         return callApi(() => client.setClientLimit(body, key));
       }
 
-      if (domain_ids === undefined && storage_limit_mb === undefined) {
+      if (
+        domain_ids === undefined
+        && storage_limit_mb === undefined
+        && max_mailboxes === undefined
+        && mailbox_size_mb === undefined
+      ) {
         return errorResult("No client storage limit changes were provided.");
       }
       const changes = {
         ...(storage_limit_mb !== undefined ? { storage_limit_mb } : {}),
         ...(domain_ids !== undefined ? { domain_ids } : {}),
+        ...caps,
       };
       const key = idempotencyKey(
         "set_client_limit",

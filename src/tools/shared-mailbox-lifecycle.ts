@@ -41,7 +41,7 @@ export function registerSharedMailboxLifecycleTools(
           .boolean()
           .optional()
           .describe(
-            "Whether to use the account's shared storage pool (default: true). Set to false and provide storage_mb for a dedicated allocation.",
+            "Whether to use the account's shared storage pool (default: true). Set to false and provide storage_mb for a dedicated allocation. Where the client has a mailbox size there is no shared storage: true (the default) gives the mailbox that size, and false needs a storage_mb of at most that size (larger: client_mailbox_size_exceeded).",
           ),
         storage_mb: z
           .number()
@@ -49,7 +49,7 @@ export function registerSharedMailboxLifecycleTools(
           .positive()
           .optional()
           .describe(
-            "Dedicated storage allocation in MB. Required when storage_shared is false.",
+            "Dedicated storage allocation in MB. Required when storage_shared is false; where the client has a mailbox size, at most that size.",
           ),
         idempotency_key: z
           .string()

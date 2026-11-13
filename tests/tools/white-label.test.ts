@@ -2,7 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Config } from "../../src/config.js";
 import { TrekMailClient } from "../../src/client.js";
+import { idempotencyKey } from "../../src/idempotency.js";
 import { registerWhiteLabelTools } from "../../src/tools/white-label.js";
+
+// The real key function, watched: set_client_limit gets a fresh key per call
+// (a repeatable operation), so what it was computed from is only visible here.
+vi.mock("../../src/idempotency.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/idempotency.js")>();
+  return { ...actual, idempotencyKey: vi.fn(actual.idempotencyKey) };
+});
 
 const config = (changes: Partial<Config> = {}): Config => ({
   baseUrl: "https://test.invalid",
@@ -289,6 +297,108 @@ describe("White Label client storage limit tools", () => {
       { method: "POST", url: "https://trekmail.test/api/v1/white-label/client-limits", body: '{"domain_ids":[7],"storage_limit_mb":1024}', key: "k1" },
       { method: "PATCH", url: "https://trekmail.test/api/v1/white-label/client-limits/4", body: '{"domain_ids":[7,9]}', key: "k2" },
       { method: "DELETE", url: "https://trekmail.test/api/v1/white-label/client-limits/4", body: undefined, key: "k3" },
+    ]);
+  });
+});
+
+/** Ticket #547, plan §8: the client's mailbox maximum and mailbox size on set_client_limit. */
+describe("White Label client mailbox caps", () => {
+  let h: ReturnType<typeof harness>;
+
+  beforeEach(() => {
+    h = harness(config());
+    vi.mocked(idempotencyKey).mockClear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("sends the caps with a new limit, and leaves out the ones not given", async () => {
+    await h.handlers.get("set_client_limit")!({
+      domain_ids: [7], storage_limit_mb: 5120, max_mailboxes: 5, mailbox_size_mb: 1024, idempotency_key: "k-caps",
+    });
+    await h.handlers.get("set_client_limit")!({ domain_ids: [8], storage_limit_mb: 5120, mailbox_size_mb: null });
+
+    expect(h.client.setClientLimit).toHaveBeenNthCalledWith(
+      1, { domain_ids: [7], storage_limit_mb: 5120, max_mailboxes: 5, mailbox_size_mb: 1024 }, "k-caps",
+    );
+    expect(h.client.setClientLimit).toHaveBeenNthCalledWith(
+      2, { domain_ids: [8], storage_limit_mb: 5120, mailbox_size_mb: null }, expect.stringMatching(/^mcp_set_client_limit_/),
+    );
+  });
+
+  it("changes a limit with only a cap, null included, and nothing else", async () => {
+    const removed = await h.handlers.get("set_client_limit")!({ client_limit_id: 4, max_mailboxes: null });
+    await h.handlers.get("set_client_limit")!({ client_limit_id: 4, mailbox_size_mb: 2048 });
+    await h.handlers.get("set_client_limit")!({ client_limit_id: 4, storage_limit_mb: 10240, max_mailboxes: 3, mailbox_size_mb: null });
+
+    expect(removed.isError).toBeUndefined();
+    expect(h.client.updateClientLimit).toHaveBeenNthCalledWith(
+      1, 4, { max_mailboxes: null }, expect.stringMatching(/^mcp_set_client_limit_/),
+    );
+    expect(h.client.updateClientLimit).toHaveBeenNthCalledWith(
+      2, 4, { mailbox_size_mb: 2048 }, expect.stringMatching(/^mcp_set_client_limit_/),
+    );
+    expect(h.client.updateClientLimit).toHaveBeenNthCalledWith(
+      3, 4, { storage_limit_mb: 10240, max_mailboxes: 3, mailbox_size_mb: null }, expect.stringMatching(/^mcp_set_client_limit_/),
+    );
+
+    // A caps value never makes an incomplete new limit complete.
+    const capsOnly = await h.handlers.get("set_client_limit")!({ domain_ids: [7], max_mailboxes: 5 });
+    expect(capsOnly.isError).toBe(true);
+    expect(h.client.setClientLimit).not.toHaveBeenCalled();
+  });
+
+  it("computes the idempotency key from the caps too", async () => {
+    await h.handlers.get("set_client_limit")!({ domain_ids: [7], storage_limit_mb: 5120, max_mailboxes: 5 });
+    await h.handlers.get("set_client_limit")!({ client_limit_id: 4, max_mailboxes: null, mailbox_size_mb: 1024 });
+
+    const keyed = vi.mocked(idempotencyKey).mock.calls.filter(([tool]) => tool === "set_client_limit");
+    expect(keyed.map(([, params]) => params)).toEqual([
+      { domain_ids: [7], storage_limit_mb: 5120, max_mailboxes: 5 },
+      { client_limit_id: 4, max_mailboxes: null, mailbox_size_mb: 1024 },
+    ]);
+  });
+
+  it("validates the caps in the schema: optional, nullable, within the API's bounds", () => {
+    const shape = schemaOf(h.server, "set_client_limit");
+    for (const [value, ok] of [[undefined, true], [null, true], [1, true], [100000, true], [0, false], [100001, false], [2.5, false], ["5", false]] as const) {
+      expect(shape.max_mailboxes.safeParse(value).success, `max_mailboxes ${String(value)}`).toBe(ok);
+    }
+    for (const [value, ok] of [[undefined, true], [null, true], [1, true], [2147483647, true], [0, false], [2147483648, false], [1.5, false]] as const) {
+      expect(shape.mailbox_size_mb.safeParse(value).success, `mailbox_size_mb ${String(value)}`).toBe(ok);
+    }
+  });
+
+  it("describes the caps where an agent reads set_client_limit and list_client_limits", () => {
+    const tools = (h.server as unknown as {
+      _registeredTools: Record<string, { description: string }>;
+    })._registeredTools;
+
+    expect(tools.set_client_limit.description).toContain("max_mailboxes");
+    expect(tools.set_client_limit.description).toContain("mailbox_size_mb");
+    expect(tools.set_client_limit.description).toContain("existing mailboxes keep working");
+    expect(tools.list_client_limits.description).toContain("max_mailboxes, mailbox_size_mb");
+    expect(tools.list_client_limits.description).toContain("pending_invites");
+  });
+
+  it("sends null as JSON null to the REST route", async () => {
+    const calls: Array<{ method: string; url: string; body: string | undefined }> = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ method: String(init.method), url: String(url), body: init.body === undefined ? undefined : String(init.body) });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }));
+    const { handlers } = harness(config(), new TrekMailClient({
+      baseUrl: "https://trekmail.test", token: "tm_live_test", timeoutMs: 30_000, userAgent: "test",
+    }));
+
+    await handlers.get("set_client_limit")!({ domain_ids: [7], storage_limit_mb: 5120, max_mailboxes: 5, mailbox_size_mb: 1024, idempotency_key: "c1" });
+    await handlers.get("set_client_limit")!({ client_limit_id: 4, max_mailboxes: null, idempotency_key: "c2" });
+
+    expect(calls).toEqual([
+      { method: "POST", url: "https://trekmail.test/api/v1/white-label/client-limits", body: '{"domain_ids":[7],"storage_limit_mb":5120,"max_mailboxes":5,"mailbox_size_mb":1024}' },
+      { method: "PATCH", url: "https://trekmail.test/api/v1/white-label/client-limits/4", body: '{"max_mailboxes":null}' },
     ]);
   });
 });

@@ -60,10 +60,18 @@ export interface InviteWhiteLabelMemberParams extends WhiteLabelMemberAccessPara
   all_domains: boolean;
 }
 
-/** A White Label client storage limit: one budget in MB for these domains. */
+/**
+ * A White Label client storage limit: one budget in MB for these domains, and
+ * optionally the client's mailbox caps (ticket #547). A cap left out keeps its
+ * value (none on a new limit); null removes it.
+ */
 export interface ClientLimitBody {
   domain_ids: number[];
   storage_limit_mb: number;
+  /** Most mailboxes, pending invitations included, the client may have. */
+  max_mailboxes?: number | null;
+  /** Size in MB every new mailbox gets and none may exceed; no shared storage then. */
+  mailbox_size_mb?: number | null;
 }
 
 export interface CreateMailboxParams {

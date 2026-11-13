@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 284 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
-Current release: package **1.16.0**, catalogue **2026-10-14.3**.
+Current release: package **1.17.0**, catalogue **2026-10-14.3**.
 
 ## Connect in Claude
 
@@ -72,7 +72,7 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.16.0` | User-Agent header |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.17.0` | User-Agent header |
 | `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable high-impact changes (White Label access/branding, mailbox storage sizes and client storage limits, delete intents, domain deletion, forwarding, password changes, SMTP, credential revocation, Drive trash/purge, and message deletion) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable external sends, including `send_message` and White Label invitations |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
@@ -178,8 +178,8 @@ writes and delegated access are removed.
 - **restore_white_label_member** — Restore membership without restoring old keys (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **list_white_label_activity** — Read White Label account activity
 - **get_white_label_member_activity** — Read one member's actions and sign-in history
-- **list_client_limits** — List client storage limits: one budget in MB shared by the mailboxes and Drive in a client's domains, with what is reserved, shared and used
-- **set_client_limit** — Give a client's domains a storage limit, change it, or replace its domain set; needs a token that reaches every domain (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **list_client_limits** — List client storage limits: one budget in MB shared by the mailboxes and Drive in a client's domains, with what is reserved, shared and used, and the client's mailbox caps (`max_mailboxes`, `mailbox_size_mb`) with the `mailboxes` and `pending_invites` counted against them
+- **set_client_limit** — Give a client's domains a storage limit, change it, or replace its domain set; optionally cap the client's number of mailboxes (`max_mailboxes`, pending invitations included) and mailbox size (`mailbox_size_mb`: new mailboxes get it, none may be larger, no shared storage), `null` removes a cap; needs a token that reaches every domain (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **remove_client_limit** — Remove a client storage limit after `confirm_remove: true`; its domains go back to the account's storage and mailboxes keep their sizes (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 
 ### Mailboxes (ops token)
@@ -187,10 +187,10 @@ writes and delegated access are removed.
 - **get_mailbox** — Get details for a specific mailbox, including `client_auth_mode` (what mail apps may sign in with) where app passwords are available
 - **get_mail_client_setup** — Get password-free IMAP/SMTP settings, actual sending readiness, localized guides for five app families, and delegated shared-mailbox folders for a regular member mailbox; `authentication.password_source` and `accepted_passwords` say whether the mail app takes the mailbox password or an app password
 - **get_apple_mail_profile** — Generate a password-free Apple Mail `.mobileconfig` file as Base64 (13 locales)
-- **create_mailbox_generated_password** — Create mailbox with auto-generated one-time password (optional `storage_allocation_mb` carves out dedicated storage from the account pool; omit for shared). Optional `client_auth_mode`; on an `app_password_only` mailbox the generated password opens TrekMail webmail only, so mail apps (classic webmail included) need **create_mailbox_app_password** next
+- **create_mailbox_generated_password** — Create mailbox with auto-generated one-time password (optional `storage_allocation_mb` carves out dedicated storage from the account pool; omit for shared, or for the client's `mailbox_size_mb` where a client storage limit sets one). Optional `client_auth_mode`; on an `app_password_only` mailbox the generated password opens TrekMail webmail only, so mail apps (classic webmail included) need **create_mailbox_app_password** next
 - **change_mailbox_password** — Change the password for a mailbox; while app passwords are enabled, resetting the mailbox password automatically revokes all its app passwords (`mailbox_password_reset`) (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **update_mailbox** — Update a mailbox display name, a regular mailbox's webmail `conversation_view` preference, or its `drive_access` level (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
-- **set_mailbox_storage** — Move a mailbox between shared storage (`null`) and a fixed size in MB, checked against the account pool and, in a domain under a client storage limit, that limit (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **set_mailbox_storage** — Move a mailbox between shared storage (`null`) and a fixed size in MB, checked against the account pool and, in a domain under a client storage limit, that limit and its `mailbox_size_mb` (no shared storage there) (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **set_mailboxes_drive_access** — Set `drive_access` on many mailboxes at once, chosen by explicit `mailbox_ids`, by `domain_id`, or `all`; shared mailboxes are skipped and counted (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **suspend_mailbox_login** — Stop someone signing in to a mailbox while its mail keeps arriving: webmail/IMAP/SMTP and device passwords refused, open sessions ended, reset links dead, delivery untouched (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **resume_mailbox_login** — Lift a sign-in suspension; device passwords revoked by it are not restored (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
@@ -204,7 +204,7 @@ writes and delegated access are removed.
 - **pause_mailbox** — Disable a mailbox entirely, delivery included — unlike `suspend_mailbox_login` (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **resume_mailbox** — Re-enable a paused mailbox
 - **enable_imap** — Enable IMAP access for a mailbox (required for Message API)
-- **bulk_create_mailboxes** — Create 1-100 mailboxes at once with per-item `storage_allocation_mb`, each checked as its row is created; a row that does not fit fails on its own (`storage_pool_exceeded` or `client_storage_limit_exceeded`)
+- **bulk_create_mailboxes** — Create 1-100 mailboxes at once with per-item `storage_allocation_mb`, each checked as its row is created; a row that does not fit fails on its own (`storage_pool_exceeded` or `client_storage_limit_exceeded`), as does a row over the client's mailbox caps (`client_mailbox_size_exceeded` or `client_mailbox_limit_reached`)
 
 ### Invites (ops token)
 - **create_invite** — Send a setup invite to a recipient (optional `storage_allocation_mb` pre-allocates dedicated storage; the recipient inherits it at redeem)
@@ -253,7 +253,7 @@ Shared mailboxes never authenticate directly. Call **get_mail_client_setup** wit
 - **create_delete_intent**: Step 1, create a delete intent that expires in 10 minutes (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **confirm_delete_intent**: Step 2, confirm it with `confirm: true`; the mailbox moves to the recycle bin and can be restored within the retention window (default 7 days), after which it is purged for good (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 - **list_trashed_mailboxes**: List the mailboxes in the recycle bin, optionally only on one `domain_id`
-- **restore_mailbox**: Bring a mailbox back from the recycle bin; fails with `mailbox_limit_reached` when the domain is at its mailbox limit, or `storage_pool_exceeded` when its fixed size no longer fits the account's free storage or, in a domain under a White Label client storage limit, what that limit has left (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
+- **restore_mailbox**: Bring a mailbox back from the recycle bin; fails with `mailbox_limit_reached` when the domain is at its mailbox limit, `client_mailbox_limit_reached` when the client already has its `max_mailboxes`, or `storage_pool_exceeded` when its fixed size no longer fits the account's free storage or, in a domain under a White Label client storage limit, what that limit has left (gated: `TREKMAIL_ALLOW_DESTRUCTIVE`)
 
 ### Messages (message token)
 
@@ -606,6 +606,17 @@ Additionally, each write tool requires a per-call confirmation parameter (`confi
      { domain_id: 5, local_part: "founder",  storage_allocation_mb: 10240 },  # 10 GB dedicated
      { domain_id: 5, local_part: "team-lead", storage_allocation_mb: 5120 },  # 5 GB dedicated
    ])
+```
+
+### Cap a Client's Mailboxes
+```
+# Five mailboxes of 1 GB each for the client on domains 7 and 8, inside a 5 GB budget.
+1. set_client_limit(domain_ids: [7, 8], storage_limit_mb: 5120, max_mailboxes: 5, mailbox_size_mb: 1024)
+   → { id: 3, storage_limit_mb: 5120, max_mailboxes: 5, mailbox_size_mb: 1024, mailboxes: 0, pending_invites: 0, ... }
+# New mailboxes and invitations there get 1024 MB when no size is given; a larger size fails with
+# client_mailbox_size_exceeded, a sixth mailbox or invitation with client_mailbox_limit_reached.
+# Existing mailboxes above a new cap keep working.
+2. set_client_limit(client_limit_id: 3, max_mailboxes: null)   # remove the maximum, keep the size
 ```
 
 ### Invite Flow

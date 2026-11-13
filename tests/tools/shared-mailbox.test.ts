@@ -285,6 +285,24 @@ describe("shared mailbox lifecycle tools", () => {
     expect(schema.safeParse({ ...base, display_name: "Support Team" }).success).toBe(true);
   });
 
+  it("tells an agent what storage_shared does where the client has a mailbox size", () => {
+    // Ticket #547: storage_shared is not ignored there. true gives the size,
+    // false needs a storage_mb of at most it (the REST controller requires it).
+    const server = new McpServer({ name: "test", version: "0.0.0" });
+    registerSharedMailboxLifecycleTools(server, client, allowedConfig);
+    const tools = (server as unknown as {
+      _registeredTools: Record<string, {
+        inputSchema: { shape: Record<string, { description?: string }> };
+      }>;
+    })._registeredTools;
+    const shape = tools.create_shared_mailbox.inputSchema.shape;
+
+    expect(shape.storage_shared.description).not.toContain("Ignored");
+    expect(shape.storage_shared.description).toContain("true (the default) gives the mailbox that size");
+    expect(shape.storage_shared.description).toContain("false needs a storage_mb of at most that size (larger: client_mailbox_size_exceeded)");
+    expect(shape.storage_mb.description).toContain("where the client has a mailbox size, at most that size");
+  });
+
   // --- create_shared_mailbox: client method ---
 
   it("createSharedMailbox forwards required fields", async () => {
