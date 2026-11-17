@@ -16,7 +16,7 @@ export function registerMessageToolHandlers(
     {
       title: "List Messages",
       description:
-        "List messages in an authorized mailbox IMAP folder, newest first (by date), with cursor-based pagination: while pagination.has_more is true, call again with before_uid = pagination.next_before_uid and before_date = pagination.next_before_date. A search page can come back short or empty while has_more is true — the search continues on the next page, so keep paging before concluding nothing matched. By default reads the TrekMail mailbox; external_account_id reads a previously connected external provider's IMAP inbox belonging to that mailbox. Requires messages:read scope; does not accept arbitrary server addresses or credentials.",
+        "List messages in an authorized mailbox IMAP folder, newest first (by date), with cursor-based pagination: while pagination.has_more is true, call again with before_uid = pagination.next_before_uid and before_date = pagination.next_before_date. A search page can come back short or empty while has_more is true — the search continues on the next page, so keep paging before concluding nothing matched. Filter with query (webmail operators). scope=subtree|all searches more folders: needs a filter, returns at most 20 newest matches with their folder, no paging. By default reads the TrekMail mailbox; external_account_id reads a previously connected external provider's IMAP inbox belonging to that mailbox. Requires messages:read scope; does not accept arbitrary server addresses or credentials.",
       inputSchema: {
         folder: z
           .string()
@@ -54,7 +54,16 @@ export function registerMessageToolHandlers(
           .string()
           .max(200)
           .optional()
-          .describe("Text to find anywhere in the message, headers and body (max 200 chars)"),
+          .describe("Text to find anywhere in the message, headers and body (max 200 chars). Do not combine with query"),
+        query: z
+          .string()
+          .max(200)
+          .optional()
+          .describe("Webmail operators and words, e.g. \"from:anna has:attachment after:2026-10-01 contract\". Also to:, subject:, is:unread, is:starred, before:, larger:5M, smaller:"),
+        scope: z
+          .enum(["folder", "subtree", "all"])
+          .optional()
+          .describe("folder (default), subtree (with subfolders) or all"),
         external_account_id: z
           .number()
           .int()
@@ -63,9 +72,9 @@ export function registerMessageToolHandlers(
           .describe("Read from a connected external account instead of the mailbox"),
       },
     },
-    async ({ folder, limit, before_uid, before_date, since, unread_only, search, external_account_id }) => {
+    async ({ folder, limit, before_uid, before_date, since, unread_only, search, query, scope, external_account_id }) => {
       return callApi(() =>
-        client.listMessages({ folder, limit, before_uid, before_date, since, unread_only, search, external_account_id }),
+        client.listMessages({ folder, limit, before_uid, before_date, since, unread_only, search, query, scope, external_account_id }),
       );
     },
   );
@@ -849,7 +858,7 @@ export function registerMessageToolHandlers(
     {
       title: "Bulk Message Action",
       description:
-        "Perform an action on up to 50 messages at once. Actions: read, unread, star, unstar, delete, move, spam, notspam. The 'destination' parameter is required for 'move'.",
+        "Perform an action on up to 50 messages at once, or on every message in the folder that a search matches. Actions: read, unread, star, unstar, delete, move, spam, notspam. The 'destination' parameter is required for 'move'. Or act on every match of a search in one folder: select='matching' with query instead of uids; dry_run=true first to count. Not spam/notspam; at most 2,000 per call (above that nothing changes, narrow by dates).",
       inputSchema: {
         folder: z
           .string()
@@ -859,7 +868,25 @@ export function registerMessageToolHandlers(
           .array(z.number().int().positive())
           .min(1)
           .max(50)
-          .describe("Array of IMAP UIDs (max 50)"),
+          .optional()
+          .describe("IMAP UIDs (max 50), unless select='matching'"),
+        select: z
+          .enum(["uids", "matching"])
+          .optional()
+          .describe("uids (default) or matching"),
+        query: z
+          .string()
+          .max(200)
+          .optional()
+          .describe("With matching: webmail search operators"),
+        all_in_folder: z
+          .boolean()
+          .optional()
+          .describe("With matching and no query: the whole folder"),
+        dry_run: z
+          .boolean()
+          .optional()
+          .describe("With matching: count only, change nothing"),
         action: z
           .enum(["read", "unread", "star", "unstar", "delete", "move", "spam", "notspam"])
           .describe("Action to perform on all messages"),
@@ -877,11 +904,27 @@ export function registerMessageToolHandlers(
       },
       annotations: { destructiveHint: true },
     },
-    async ({ folder, uids, action, destination, external_account_id }) => {
-      if (action === "delete" && !config.allowDestructive) {
+    async ({ folder, uids, select, query, all_in_folder, dry_run, action, destination, external_account_id }) => {
+      if (action === "delete" && !dry_run && !config.allowDestructive) {
         return errorResult(
           "Bulk delete is disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to enable.",
         );
+      }
+      if (select === "matching") {
+        if (uids !== undefined) {
+          return errorResult("select='matching' acts on what query matches: leave uids out.");
+        }
+        if (action === "spam" || action === "notspam") {
+          return errorResult(
+            "spam and notspam train the filter on every message, so they work on listed uids only (up to 50), not on a whole search result.",
+          );
+        }
+        return callApi(() =>
+          client.bulkAction({ folder, select, query, all_in_folder, dry_run, action, destination, external_account_id }),
+        );
+      }
+      if (uids === undefined) {
+        return errorResult("Send uids (up to 50), or select='matching' with a query.");
       }
       return callApi(() =>
         client.bulkAction({ folder, uids, action, destination, external_account_id }),

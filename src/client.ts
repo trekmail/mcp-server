@@ -133,6 +133,8 @@ export interface ListMessagesParams {
   since?: string;
   unread_only?: boolean;
   search?: string;
+  query?: string;
+  scope?: "folder" | "subtree" | "all";
   external_account_id?: number;
 }
 
@@ -1635,7 +1637,11 @@ export class TrekMailClient {
 
   async bulkAction(params: {
     folder: string;
-    uids: number[];
+    uids?: number[];
+    select?: "uids" | "matching";
+    query?: string;
+    all_in_folder?: boolean;
+    dry_run?: boolean;
     action: string;
     destination?: string;
     external_account_id?: number;
@@ -1885,6 +1891,14 @@ export class TrekMailClient {
     return this.request("GET", "messages/calendar/events", {
       query: { ...params },
     });
+  }
+
+  async respondToInvitation(
+    uid: number,
+    body: { folder?: string; attachment_index: number; response: "accepted" | "tentative" | "declined" },
+    idempotencyKey: string,
+  ): Promise<unknown> {
+    return this.request("POST", `messages/${uid}:respond`, { body, idempotencyKey });
   }
 
   async createCalendarEvent(body: Record<string, unknown>): Promise<unknown> {
@@ -2158,7 +2172,7 @@ export class TrekMailClient {
   async listDriveFolder(
     space: string,
     folderId?: number | null,
-    params?: { sort?: string; dir?: string; per_page?: number; cursor?: string },
+    params?: { sort?: string; dir?: string; per_page?: number; cursor?: string; q?: string; limit?: number },
   ): Promise<unknown> {
     const path = folderId
       ? `drive/spaces/${encodeURIComponent(space)}/folders/${folderId}`

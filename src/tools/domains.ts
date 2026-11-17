@@ -203,7 +203,7 @@ export function registerDomainTools(
     {
       title: "Delete Domain",
       description:
-        "Permanently delete a domain and all its mailboxes. This action is irreversible. Requires TREKMAIL_ALLOW_DESTRUCTIVE=true.",
+        "Permanently delete a domain that has no active mailboxes left. While any mailbox remains, the call is refused with domain_has_mailboxes: delete the mailboxes first (they go to Recently deleted and no longer count). This action is irreversible. Requires TREKMAIL_ALLOW_DESTRUCTIVE=true.",
       inputSchema: {
         domain_id: z
           .number()

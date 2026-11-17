@@ -29,17 +29,17 @@ function registeredToolNames(): Set<string> {
 
 describe("tool catalog", () => {
   it("has an explicit version and deterministic parity hash", () => {
-    expect(TOOL_CATALOG_VERSION).toBe("2026-10-14.3");
-    expect(TOOL_CATALOG_HASH).toBe("7547bd70");
+    expect(TOOL_CATALOG_VERSION).toBe("2026-11-15.1");
+    expect(TOOL_CATALOG_HASH).toBe("4cc73901");
   });
 
-  it("covers all 284 registered tools exactly once", () => {
+  it("covers all 285 registered tools exactly once", () => {
     const registered = registeredToolNames();
     const catalogued = new Set(TOOL_CATALOG.map((entry) => entry.name));
 
-    expect(registered.size).toBe(284);
-    expect(TOOL_CATALOG).toHaveLength(284);
-    expect(TOOL_CATALOG_BY_NAME.size).toBe(284);
+    expect(registered.size).toBe(285);
+    expect(TOOL_CATALOG).toHaveLength(285);
+    expect(TOOL_CATALOG_BY_NAME.size).toBe(285);
     expect([...registered].filter((name) => !catalogued.has(name))).toEqual([]);
     expect([...catalogued].filter((name) => !registered.has(name))).toEqual([]);
   });
@@ -70,7 +70,8 @@ describe("tool catalog", () => {
     expect(toolsForToolsets(["email"]).size).toBe(21);
     expect(toolsForToolsets(["email_settings"]).size).toBe(36);
     expect(toolsForToolsets(["contacts"]).size).toBe(14);
-    expect(toolsForToolsets(["calendar"]).size).toBe(5);
+    // 6 since respond_to_invitation (2026-11-15).
+    expect(toolsForToolsets(["calendar"]).size).toBe(6);
   });
 
   it("marks only local-path upload as stdio-only", () => {

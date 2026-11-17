@@ -226,7 +226,7 @@ export function registerDriveTools(
     {
       title: "Browse Drive Folder",
       description:
-        "List folders + files in one Drive folder (or root when folder_id is omitted). Cursor-paginated with an opaque next_cursor; default per_page=50, max 200. If the response has has_more=true, request the next page with the returned next_cursor — do not crank per_page.",
+        "List folders + files in one Drive folder (or root when folder_id is omitted). Cursor-paginated with an opaque next_cursor; default per_page=50, max 200. If the response has has_more=true, request the next page with the returned next_cursor — do not crank per_page. To find an item by name anywhere in the space, pass query instead of walking folders (no paging; if meta.*_truncated, use a longer part of the name).",
       inputSchema: {
         space: z.string().describe("'account' | 'mailbox:N' | numeric space id"),
         folder_id: z.number().int().positive().nullable().optional(),
@@ -234,11 +234,20 @@ export function registerDriveTools(
         dir: z.enum(["asc", "desc"]).optional(),
         per_page: z.number().int().min(1).max(200).optional(),
         cursor: z.string().optional().describe("Opaque pagination token returned by the previous response"),
+        query: z
+          .string()
+          .min(3)
+          .max(200)
+          .optional()
+          .describe("3+ characters of a file or folder name; whole space, no folder_id"),
+        limit: z.number().int().min(1).max(50).optional().describe("With query: max results per kind, default 20"),
       },
     },
-    async ({ space, folder_id, sort, dir, per_page, cursor }) =>
+    async ({ space, folder_id, sort, dir, per_page, cursor, query, limit }) =>
       callApi(() =>
-        client.listDriveFolder(space, folder_id ?? null, { sort, dir, per_page, cursor }),
+        query !== undefined
+          ? client.listDriveFolder(space, folder_id ?? null, { q: query, limit })
+          : client.listDriveFolder(space, folder_id ?? null, { sort, dir, per_page, cursor }),
       ),
   );
 

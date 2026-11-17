@@ -324,3 +324,90 @@ describe("message tools", () => {
     expect("text" in text && text.text).toContain("Try again shortly");
   });
 });
+
+describe("message search and actions on matches", () => {
+  const originalFetch = globalThis.fetch;
+  const baseConfig: Config = {
+    baseUrl: "https://trekmail.test",
+    messageToken: "tm_msg_test_message_token",
+    timeoutMs: 30_000,
+    userAgent: "trekmail-mcp/1.0.0",
+    allowDestructive: false,
+    allowSending: false,
+  };
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  function setup(config: Config = baseConfig) {
+    const mockFetch = createMockFetch({ status: 200, body: { messages: [], affected: 0 } });
+    globalThis.fetch = mockFetch;
+    const client = new TrekMailClient({
+      baseUrl: "https://trekmail.test",
+      token: "tm_msg_test_message_token",
+      timeoutMs: 30_000,
+      userAgent: "trekmail-mcp/1.0.0",
+    });
+    const server = new McpServer({ name: "test", version: "1" });
+    const handlers: Record<string, (args: Record<string, unknown>) => Promise<unknown>> = {};
+    const original = server.registerTool.bind(server);
+    server.registerTool = ((name: string, definition: unknown, callback: never) => {
+      handlers[name] = callback;
+      return original(name, definition as Parameters<typeof original>[1], callback);
+    }) as typeof server.registerTool;
+    registerMessageToolHandlers(server, client, config);
+    return { mockFetch, handlers };
+  }
+
+  it("list_messages forwards query and scope", async () => {
+    const { mockFetch, handlers } = setup();
+
+    await handlers.list_messages({ query: "from:anna has:attachment", scope: "all" });
+
+    const url = new URL(getLastFetchCall(mockFetch).url);
+    expect(url.searchParams.get("query")).toBe("from:anna has:attachment");
+    expect(url.searchParams.get("scope")).toBe("all");
+  });
+
+  it("bulk_action with select=matching sends the query, not uids", async () => {
+    const { mockFetch, handlers } = setup();
+
+    await handlers.bulk_action({ folder: "INBOX", select: "matching", query: "is:unread", action: "read", dry_run: true });
+
+    const { url, init } = getLastFetchCall(mockFetch);
+    expect(new URL(url).pathname).toBe("/api/v1/messages/bulk");
+    expect(JSON.parse(String(init.body))).toEqual({
+      folder: "INBOX",
+      select: "matching",
+      query: "is:unread",
+      dry_run: true,
+      action: "read",
+    });
+  });
+
+  it("refuses uids together with select=matching, and spam on a whole result, without calling the API", async () => {
+    const { mockFetch, handlers } = setup();
+
+    const both = await handlers.bulk_action({ folder: "INBOX", select: "matching", uids: [1], query: "x", action: "read" });
+    const spam = await handlers.bulk_action({ folder: "INBOX", select: "matching", query: "from:a", action: "spam" });
+    const none = await handlers.bulk_action({ folder: "INBOX", action: "read" });
+
+    expect(JSON.stringify(both)).toContain("leave uids out");
+    expect(JSON.stringify(spam)).toContain("listed uids only");
+    expect(JSON.stringify(none)).toContain("Send uids");
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps delete behind the destructive gate, but lets a delete dry run count", async () => {
+    const { mockFetch, handlers } = setup();
+
+    const blocked = await handlers.bulk_action({ folder: "INBOX", select: "matching", query: "from:a", action: "delete" });
+    expect(JSON.stringify(blocked)).toContain("TREKMAIL_ALLOW_DESTRUCTIVE");
+    expect(mockFetch).not.toHaveBeenCalled();
+
+    await handlers.bulk_action({ folder: "INBOX", select: "matching", query: "from:a", action: "delete", dry_run: true });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+});
+

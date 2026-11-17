@@ -157,6 +157,7 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
     "create_calendar_event",
     "update_calendar_event",
     "delete_calendar_event",
+    "respond_to_invitation",
   ],
 
   drive: [
@@ -453,7 +454,7 @@ const POLICY_RULES: readonly PolicyRule[] = [
     "list_contact_groups", "list_contact_group_members", "list_calendar_events",
   ]),
   rule("messages:send", "write", [
-    "send_message", "schedule_message", "reschedule_message",
+    "send_message", "schedule_message", "reschedule_message", "respond_to_invitation",
   ]),
   rule("messages:send", "destructive", ["cancel_scheduled"]),
   rule("messages:write", "write", [
@@ -650,6 +651,7 @@ for (const policy of POLICY_RULES) {
 
 const SENDING_GATED = new Set([
   "send_message",
+  "respond_to_invitation",
   "schedule_message",
   "reschedule_message",
   "create_invite",
@@ -760,7 +762,7 @@ for (const name of [...REQUIRES_ALL_DOMAINS, ...REQUIRES_ALL_MAILBOXES]) {
 export const TOOL_CATALOG: readonly ToolCatalogEntry[] = Object.freeze(entries);
 
 /** Bump whenever grouping/capability/safety semantics change. */
-export const TOOL_CATALOG_VERSION = "2026-10-14.3";
+export const TOOL_CATALOG_VERSION = "2026-11-15.1";
 
 function fnv1a(value: string): string {
   let hash = 0x811c9dc5;

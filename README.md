@@ -1,8 +1,8 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 284 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 285 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
-Current release: package **1.17.0**, catalogue **2026-10-14.3**.
+Current release: package **1.18.0**, catalogue **2026-11-15.1**.
 
 ## Connect in Claude
 
@@ -47,7 +47,7 @@ The MCP server supports two independent token types. At least one is required:
 | Token | Env Var | Prefix | Unlocks |
 |-------|---------|--------|---------|
 | **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 220 infrastructure tools (White Label branding, clients, team access, client storage limits and activity; domains; DNS; mailboxes; Drive; migrations; SMTP; tickets; account; billing; verifier; Cloudflare; and related administration) |
-| **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 64 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, connected accounts, identities, templates, blocked senders) |
+| **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 65 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, connected accounts, identities, templates, blocked senders) |
 
 Tools are registered conditionally — only token types you provide get their tools. You can supply one or both:
 
@@ -72,7 +72,7 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.17.0` | User-Agent header |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.18.0` | User-Agent header |
 | `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable high-impact changes (White Label access/branding, mailbox storage sizes and client storage limits, delete intents, domain deletion, forwarding, password changes, SMTP, credential revocation, Drive trash/purge, and message deletion) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable external sends, including `send_message` and White Label invitations |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
@@ -108,12 +108,12 @@ TREKMAIL_SCOPE_AWARE_REGISTRATION=true \
 npm start
 ```
 
-## Tools (284)
+## Tools (285)
 
-> The full catalog is **284** tools over stdio. On the hosted **HTTP** transport
+> The full catalog is **285** tools over stdio. On the hosted **HTTP** transport
 > `drive_file_upload` is intentionally not registered (its `local_path` would read
 > files on our server — see the note in `src/tools/drive.ts`), so the HTTP MCP
-> exposes 283. Tools also split by token type: **64** need a message token
+> exposes 284. Tools also split by token type: **65** need a message token
 > (`tm_msg_`), the rest an ops token (`tm_live_`).
 > These are full catalog totals. A directory profile or a restricted grant can
 > expose a smaller set, including browser handoffs for sensitive setup.
@@ -269,7 +269,7 @@ Shared mailboxes never authenticate directly. Call **get_mail_client_setup** wit
 > spam filter, which doesn't apply to a remote provider, so they reject
 > `external_account_id` — move to the provider's Junk folder instead.
 
-- **list_messages** — List messages in a mailbox folder with cursor pagination (optional `external_account_id`)
+- **list_messages** — List messages in a mailbox folder with cursor pagination (optional `external_account_id`); `query` takes the webmail search operators, `scope` searches subfolders or every folder (at most 20 newest matches, no pagination)
 - **read_message** — Get a single message by IMAP UID with full body (optional `external_account_id`)
 - **send_message**: Send an email from the mailbox: or, with `external_account_id`, from a connected account via its own SMTP, or, with `shared_mailbox_id`, as a shared team mailbox where the acting member has both Read and Send as (dual safety gates, validates total recipients ≤ 10, requires body). The mailbox's Default CC/BCC apply exactly as they do in the web app; pass `apply_default_recipients: false` to skip them for one message. Delegated team identities for send-only members are excluded; use webmail or a mail app for those addresses. Returns once the message is accepted, not sent: confirm with `get_message_delivery`. A used-up sending allowance fails at once with `sending_limit_exceeded`, naming the allowance and when it renews (`resets_at`); it is never worth retrying before then
 - **get_message_delivery** — What happened to a message `send_message` accepted (pending, sending, sent, failed, delivery_uncertain), looked up by the `request_id` it returned; a message refused by a sending allowance reports which one and when it renews. Works with any message token for the same mailbox, not only the one that sent the message, so a later hosted session or a renewed token can check an earlier send; an unknown `request_id` is a 404
@@ -285,7 +285,7 @@ Shared mailboxes never authenticate directly. Call **get_mail_client_setup** wit
 - **update_draft** — Replace a draft using its required `uid` and `uidvalidity`; returns the replacement pair because the old UID stops working
 - **report_spam** — Report a message as spam (trains Rspamd Bayesian filter)
 - **report_ham** — Mark a message as not spam (trains Rspamd Bayesian filter)
-- **bulk_action** — Perform a bulk action on up to 50 messages (read, unread, star, unstar, delete, move, spam, notspam)
+- **bulk_action** — Perform a bulk action on up to 50 messages (read, unread, star, unstar, delete, move, spam, notspam), or with `select: "matching"` on every message a `query` matches in one folder (read, unread, star, unstar, move, delete; `dry_run` counts first; at most 2,000 per call)
 
 ### Connected accounts (message token)
 Connect and manage external mailboxes (Gmail/Outlook/IMAP) the mailbox reads and sends through. Credentials are never returned by any tool.
@@ -331,6 +331,7 @@ Connect and manage external mailboxes (Gmail/Outlook/IMAP) the mailbox reads and
 - **create_calendar_event** — Create a new calendar event
 - **update_calendar_event** — Update an existing calendar event
 - **delete_calendar_event** — Delete a calendar event (requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)
+- **respond_to_invitation** — Accept, tentatively accept or decline a meeting invitation in a message: the reply goes to the organizer and an accepted event is saved in the calendar (sends email: requires `TREKMAIL_ALLOW_SENDING=true` and `confirm_send: true`)
 
 ### Compose Helpers (message token)
 - **prepare_reply** — Get pre-filled reply data (quoted body, headers) for a message
@@ -689,7 +690,7 @@ REST reference.
 | `drive_spaces_list` | List Drive spaces this token can enumerate (account_drive + per-mailbox) |
 | `drive_storage_summary` | Account-wide pool snapshot (used / limit / addon flags) |
 | `drive_space_usage` | Per-space quota snapshot |
-| `drive_browse_folder` | Cursor-paginated listing of one folder's files + subfolders |
+| `drive_browse_folder` | Cursor-paginated listing of one folder's files + subfolders; with `query`, a name search across the whole space (3+ characters, up to 50 results per kind) |
 | `drive_folder_tree` | Flat tree of every folder in a space |
 | `drive_select_all_ids` | Bulk-select helper (capped at 5000 ids) |
 | `drive_file_get` | File metadata |

@@ -1,5 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { TrekMailClient } from "../../src/client.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerDriveTools } from "../../src/tools/drive.js";
+import { createMockFetch, getLastFetchCall } from "../helpers/mock-fetch.js";
 
 /**
  * Drive API + MCP rollout, PR #8.
@@ -539,3 +542,55 @@ describe("drive_file_upload — HTTP transport (ticket #170)", () => {
     expect(names.has("drive_file_upload")).toBe(true);
   });
 });
+
+describe("drive_browse_folder search", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  function setup() {
+    const mockFetch = createMockFetch({ status: 200, body: { folders: [], files: [], meta: {} } });
+    globalThis.fetch = mockFetch;
+    const client = new TrekMailClient({
+      baseUrl: "https://trekmail.test",
+      token: "tm_live_testtoken",
+      timeoutMs: 30_000,
+      userAgent: "trekmail-mcp/1.0.0",
+    });
+    const server = new McpServer({ name: "test", version: "1" });
+    let handler: ((args: Record<string, unknown>) => Promise<unknown>) | undefined;
+    const original = server.registerTool.bind(server);
+    server.registerTool = ((name: string, definition: unknown, callback: never) => {
+      if (name === "drive_browse_folder") handler = callback;
+      return original(name, definition as Parameters<typeof original>[1], callback);
+    }) as typeof server.registerTool;
+    registerDriveTools(server, client, {});
+    return { mockFetch, handler: handler! };
+  }
+
+  it("sends query as q to the root listing and leaves the paging params out", async () => {
+    const { mockFetch, handler } = setup();
+
+    await handler({ space: "account", query: "invoice", limit: 10, per_page: 100 });
+
+    const url = new URL(getLastFetchCall(mockFetch).url);
+    expect(url.pathname).toBe("/api/v1/drive/spaces/account/folders");
+    expect(url.searchParams.get("q")).toBe("invoice");
+    expect(url.searchParams.get("limit")).toBe("10");
+    expect(url.searchParams.has("per_page")).toBe(false);
+  });
+
+  it("keeps the ordinary listing unchanged without query", async () => {
+    const { mockFetch, handler } = setup();
+
+    await handler({ space: "mailbox:4", folder_id: 9, per_page: 25 });
+
+    const url = new URL(getLastFetchCall(mockFetch).url);
+    expect(url.pathname).toBe("/api/v1/drive/spaces/mailbox%3A4/folders/9");
+    expect(url.searchParams.get("per_page")).toBe("25");
+    expect(url.searchParams.has("q")).toBe(false);
+  });
+});
+

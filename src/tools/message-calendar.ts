@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TrekMailClient } from "../client.js";
 import type { Config } from "../config.js";
+import { idempotencyKey } from "../idempotency.js";
 import { callApi, errorResult } from "./util.js";
 
 export function registerMessageCalendarTools(
@@ -94,6 +95,47 @@ export function registerMessageCalendarTools(
         return errorResult("Event deletion is disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true.");
       }
       return callApi(() => client.deleteCalendarEvent(id));
+    },
+  );
+
+  server.registerTool(
+    "respond_to_invitation",
+    {
+      title: "Answer Meeting Invitation",
+      description:
+        "Accept, tentatively accept or decline a meeting invitation in the mailbox. The reply is a real email to the organizer from the invited address; on accept the event is saved in the calendar. Get uid, folder and the invitation attachment's index (ics_event with method REQUEST) from read_message. Needs confirm_send=true; counts against sending limits.",
+      inputSchema: {
+        uid: z.number().int().positive().describe("UID of the message that carries the invitation"),
+        folder: z.string().max(255).optional().describe("Folder of that message (default INBOX)"),
+        attachment_index: z
+          .number()
+          .int()
+          .min(0)
+          .describe("attachments[].index of the invitation from read_message"),
+        response: z.enum(["accepted", "tentative", "declined"]).describe("The answer to send"),
+        confirm_send: z.boolean().describe("Must be true: sends a real email"),
+        idempotency_key: z.string().optional().describe("Optional; derived from the arguments if omitted"),
+      },
+    },
+    async ({ uid, folder, attachment_index, response, confirm_send, idempotency_key }) => {
+      if (!config.allowSending) {
+        return errorResult(
+          "Sending is disabled. Set TREKMAIL_ALLOW_SENDING=true to answer invitations: the answer is an email to the organizer.",
+        );
+      }
+      if (!confirm_send) {
+        return errorResult(
+          "Answer not confirmed. Set confirm_send=true: this sends a real email to the organizer.",
+        );
+      }
+      const key = idempotencyKey(
+        "respond_to_invitation",
+        { uid, folder: folder ?? "INBOX", attachment_index, response },
+        idempotency_key,
+      );
+      return callApi(() =>
+        client.respondToInvitation(uid, { folder, attachment_index, response }, key),
+      );
     },
   );
 }

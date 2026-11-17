@@ -8,7 +8,7 @@ import lockMetadata from "../package-lock.json" with { type: "json" };
 import { PACKAGE_VERSION } from "../src/config.js";
 
 describe("stdio release metadata", () => {
-  it("advertises the installed package version and all 284 tools", async () => {
+  it("advertises the installed package version and all 285 tools", async () => {
     const transport = new StdioClientTransport({
       command: process.execPath,
       args: [
@@ -30,15 +30,15 @@ describe("stdio release metadata", () => {
     try {
       await client.connect(transport);
       expect(client.getServerVersion()?.version).toBe(packageMetadata.version);
-      expect((await client.listTools()).tools).toHaveLength(284);
+      expect((await client.listTools()).tools).toHaveLength(285);
     } finally {
       await client.close();
     }
   }, 15000);
 
   /**
-   * A release bumps the version in four places (1.17.0, ticket #547: the
-   * set_client_limit schema changed). The server advertises config.ts; the
+   * A release bumps the version in four places (1.18.0: respond_to_invitation,
+   * search operators, select=matching and the Drive name search). The server advertises config.ts; the
    * lockfile's own entries and the README's release line must say the same.
    */
   it("keeps config.ts, the lockfile and the README on the package version", () => {
