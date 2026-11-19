@@ -1,0 +1,67 @@
+name: Publish TrekMail registry icon once
+'on':
+  push:
+    branches: [codex/registry-icon-1.0.1]
+    paths: [.github/workflows/trekmail-registry-icon-1.0.1.yml]
+permissions: {}
+concurrency: trekmail-mcp-registry
+jobs:
+  check:
+    if: github.repository == 'trekmail/mcp-server' && github.actor == 'loyderhy2' && github.run_number == 1 && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    outputs:
+      ready: ${{ steps.registry.outputs.ready }}
+    steps:
+      - name: Confirm current entry and public icon
+        id: registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact=https://registry.modelcontextprotocol.io/v0.1/servers/io.github.trekmail%2Fmcp-server/versions/latest
+          curl -fsSL --max-time 20 "$exact" -o exact.json
+          if jq -e '.server | .name == "io.github.trekmail/mcp-server" and .websiteUrl == "https://trekmail.net/" and .repository.url == "https://github.com/trekmail/mcp-server" and any(.remotes[]; .type == "streamable-http" and .url == "https://trekmail.net/mcp") and .version == "1.0.1" and any(.icons[]; .src == "https://trekmail.net/favicon-192.png" and .mimeType == "image/png" and .sizes == ["192x192"])' exact.json >/dev/null; then
+            echo 'Icon already published and verified; no write.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          jq -e '.server | .name == "io.github.trekmail/mcp-server" and .websiteUrl == "https://trekmail.net/" and .repository.url == "https://github.com/trekmail/mcp-server" and any(.remotes[]; .type == "streamable-http" and .url == "https://trekmail.net/mcp") and .version == "1.0.0"' exact.json >/dev/null
+          curl -fsSL --max-time 20 https://trekmail.net/favicon-192.png -o logo.png
+          file --brief --mime-type logo.png | grep -qx image/png
+          file --brief logo.png | grep -Fq '192 x 192'
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+  publish:
+    needs: check
+    if: needs.check.outputs.ready == 'true' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+    env:
+      PUBLISHER_VERSION: v1.8.1
+    steps:
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6
+      - name: Publish only the approved TrekMail metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d)
+          cd "$work"
+          archive=mcp-publisher_linux_amd64.tar.gz
+          release="https://github.com/modelcontextprotocol/registry/releases/download/$PUBLISHER_VERSION"
+          curl -fsSL --max-time 30 "$release/$archive" -o "$archive"
+          curl -fsSL --max-time 30 "$release/$archive.sigstore.json" -o "$archive.sigstore.json"
+          cosign verify-blob --bundle "$archive.sigstore.json" --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/$PUBLISHER_VERSION" --certificate-oidc-issuer https://token.actions.githubusercontent.com "$archive"
+          tar -xzf "$archive" mcp-publisher
+          cat > server.json <<'EOF'
+          {"$schema":"https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json","name":"io.github.trekmail/mcp-server","title":"TrekMail MCP Server","description":"Business email hosting: manage custom domains, mailboxes, calendars, contacts, and Drive.","websiteUrl":"https://trekmail.net/","repository":{"url":"https://github.com/trekmail/mcp-server","source":"github"},"version":"1.0.1","remotes":[{"type":"streamable-http","url":"https://trekmail.net/mcp"}],"icons":[{"src":"https://trekmail.net/favicon-192.png","mimeType":"image/png","sizes":["192x192"]}]}
+          EOF
+          exact=https://registry.modelcontextprotocol.io/v0.1/servers/io.github.trekmail%2Fmcp-server/versions/latest
+          curl -fsSL --max-time 20 "$exact" -o exact.json
+          jq -e '.server | .name == "io.github.trekmail/mcp-server" and .websiteUrl == "https://trekmail.net/" and .repository.url == "https://github.com/trekmail/mcp-server" and any(.remotes[]; .type == "streamable-http" and .url == "https://trekmail.net/mcp") and .version == "1.0.0"' exact.json >/dev/null
+          ./mcp-publisher validate
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
+          curl -fsSL --max-time 20 --retry 2 --retry-all-errors "$exact" -o published.json
+          jq -e '.server | .name == "io.github.trekmail/mcp-server" and .websiteUrl == "https://trekmail.net/" and .repository.url == "https://github.com/trekmail/mcp-server" and any(.remotes[]; .type == "streamable-http" and .url == "https://trekmail.net/mcp") and .version == "1.0.1" and any(.icons[]; .src == "https://trekmail.net/favicon-192.png" and .mimeType == "image/png" and .sizes == ["192x192"])' published.json >/dev/null
+          echo "Published and verified: $exact" >> "$GITHUB_STEP_SUMMARY"
