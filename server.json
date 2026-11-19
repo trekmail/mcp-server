@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.trekmail/mcp-server",
+  "title": "TrekMail MCP Server",
+  "description": "Business email hosting: manage custom domains, mailboxes, calendars, contacts, and Drive.",
+  "websiteUrl": "https://trekmail.net/",
+  "repository": {
+    "url": "https://github.com/trekmail/mcp-server",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://trekmail.net/mcp"
+    }
+  ]
+}
