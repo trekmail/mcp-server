@@ -1,0 +1,81 @@
+name: Publish TrekMail registry entry once
+'on':
+  push:
+    branches: [codex/trekmail-mcp-registry-once-20261119]
+    paths: [.github/workflows/trekmail-mcp-registry-once.yml]
+permissions: {}
+concurrency: trekmail-mcp-registry-initial-listing
+jobs:
+  check:
+    if: github.repository == 'trekmail/mcp-server' && github.actor == 'loyderhy2' && github.run_number == 1 && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    outputs:
+      missing: ${{ steps.registry.outputs.missing }}
+    steps:
+      - name: Check for existing TrekMail listing
+        id: registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=https://registry.modelcontextprotocol.io/v0.1/servers
+          exact="$base/io.github.trekmail%2Fmcp-server/versions/latest"
+          code=$(curl --silent --show-error --max-time 20 --output exact.json --write-out '%{http_code}' "$exact")
+          if [[ "$code" == 200 ]]; then
+            jq -e '.server.name | ascii_downcase == "io.github.trekmail/mcp-server"' exact.json >/dev/null
+            echo 'Existing listing verified; no publication attempted.' >> "$GITHUB_STEP_SUMMARY"
+            jq -r '.server | [.name, .version, .websiteUrl] | @tsv' exact.json
+            exit 0
+          fi
+          [[ "$code" == 404 ]] || { echo "Unexpected Registry response: HTTP $code"; exit 1; }
+          jq -e '.status == 404' exact.json >/dev/null
+          curl --fail --silent --show-error --max-time 20 "$base?search=trekmail&version=latest" -o search.json
+          jq -e '(.servers | type == "array") and (.metadata | type == "object")' search.json >/dev/null
+          if ! jq -e '(.servers | length == 0) and ((.metadata.nextCursor // "") == "")' search.json >/dev/null; then
+            echo 'A possible TrekMail listing exists; no publication attempted.' >> "$GITHUB_STEP_SUMMARY"
+            jq -r '.servers[].server | [.name, .version, .websiteUrl] | @tsv' search.json
+            exit 0
+          fi
+          echo 'missing=true' >> "$GITHUB_OUTPUT"
+  publish:
+    needs: check
+    if: needs.check.outputs.missing == 'true' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+    env:
+      PUBLISHER_VERSION: v1.8.1
+    steps:
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6
+      - name: Publish only the approved TrekMail metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d)
+          cd "$work"
+          archive=mcp-publisher_linux_amd64.tar.gz
+          release="https://github.com/modelcontextprotocol/registry/releases/download/$PUBLISHER_VERSION"
+          curl -fsSL --max-time 30 "$release/$archive" -o "$archive"
+          curl -fsSL --max-time 30 "$release/$archive.sigstore.json" -o "$archive.sigstore.json"
+          cosign verify-blob --bundle "$archive.sigstore.json" --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/$PUBLISHER_VERSION" --certificate-oidc-issuer https://token.actions.githubusercontent.com "$archive"
+          tar -xzf "$archive" mcp-publisher
+          cat > server.json <<'EOF'
+          {"$schema":"https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json","name":"io.github.trekmail/mcp-server","title":"TrekMail MCP Server","description":"Business email hosting: manage custom domains, mailboxes, calendars, contacts, and Drive.","websiteUrl":"https://trekmail.net/","repository":{"url":"https://github.com/trekmail/mcp-server","source":"github"},"version":"1.0.0","remotes":[{"type":"streamable-http","url":"https://trekmail.net/mcp"}]}
+          EOF
+          exact=https://registry.modelcontextprotocol.io/v0.1/servers/io.github.trekmail%2Fmcp-server/versions/latest
+          code=$(curl --silent --show-error --max-time 20 --output exact.json --write-out '%{http_code}' "$exact")
+          if [[ "$code" == 200 ]]; then
+            jq -e '.server.name | ascii_downcase == "io.github.trekmail/mcp-server"' exact.json >/dev/null
+            echo 'Existing listing verified immediately before publication; no changes made.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          [[ "$code" == 404 ]] || { echo "Unexpected Registry response: HTTP $code"; exit 1; }
+          jq -e '.status == 404' exact.json >/dev/null
+          ./mcp-publisher validate
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
+          curl --fail --silent --show-error --max-time 20 --retry 2 --retry-all-errors "$exact" -o published.json
+          jq -e '.server | .name == "io.github.trekmail/mcp-server" and .version == "1.0.0" and .websiteUrl == "https://trekmail.net/" and any(.remotes[]; .url == "https://trekmail.net/mcp")' published.json >/dev/null
+          echo "Published and verified: $exact" >> "$GITHUB_STEP_SUMMARY"
