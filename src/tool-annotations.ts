@@ -18,7 +18,7 @@ const OPEN_WORLD = new Set([
   "agent_buy_verifier_credits", "agent_subscribe_mail_plan",
   "agent_subscribe_drive_addon", "agent_subscribe_white_label",
   "send_message", "schedule_message", "reschedule_message", "respond_to_invitation", "create_invite",
-  "create_invites_bulk", "invite_white_label_member", "resend_white_label_invitation",
+  "create_invites_bulk", "resend_invite", "invite_white_label_member", "resend_white_label_invitation",
   "validate_cloudflare_token", "list_cloudflare_zones", "connect_cloudflare_domains",
   "preview_cloudflare_dns", "apply_cloudflare_dns", "dns_recheck",
   "verify_domain_branding_dns", "test_smtp", "test_domain_smtp",

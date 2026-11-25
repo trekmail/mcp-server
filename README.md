@@ -1,8 +1,8 @@
 # TrekMail MCP Server
 
-A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 285 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
+A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 289 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
-Current release: package **1.18.0**, catalogue **2026-11-15.1**.
+Current release: package **1.19.0**, catalogue **2026-11-25.1**.
 
 ## Connect in Claude
 
@@ -46,7 +46,7 @@ The MCP server supports two independent token types. At least one is required:
 
 | Token | Env Var | Prefix | Unlocks |
 |-------|---------|--------|---------|
-| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 220 infrastructure tools (White Label branding, clients, team access, client storage limits and activity; domains; DNS; mailboxes; Drive; migrations; SMTP; tickets; account; billing; verifier; Cloudflare; and related administration) |
+| **Ops token** | `TREKMAIL_API_TOKEN` | `tm_live_` | 224 infrastructure tools (White Label branding, clients, team access, client storage limits and activity; domains; DNS; mailboxes; Drive; migrations; SMTP; tickets; account; billing; verifier; Cloudflare; and related administration) |
 | **Message token** | `TREKMAIL_MESSAGE_TOKEN` | `tm_msg_` | 65 message tools (messages, attachments, drafts, bulk actions, folders, scheduled send, contacts, contact groups, calendar, compose helpers, connected accounts, identities, templates, blocked senders) |
 
 Tools are registered conditionally — only token types you provide get their tools. You can supply one or both:
@@ -72,7 +72,7 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.18.0` | User-Agent header |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.19.0` | User-Agent header |
 | `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable high-impact changes (White Label access/branding, mailbox storage sizes and client storage limits, delete intents, domain deletion, forwarding, password changes, SMTP, credential revocation, Drive trash/purge, and message deletion) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable external sends, including `send_message` and White Label invitations |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
@@ -108,12 +108,12 @@ TREKMAIL_SCOPE_AWARE_REGISTRATION=true \
 npm start
 ```
 
-## Tools (285)
+## Tools (289)
 
-> The full catalog is **285** tools over stdio. On the hosted **HTTP** transport
+> The full catalog is **289** tools over stdio. On the hosted **HTTP** transport
 > `drive_file_upload` is intentionally not registered (its `local_path` would read
 > files on our server — see the note in `src/tools/drive.ts`), so the HTTP MCP
-> exposes 284. Tools also split by token type: **65** need a message token
+> exposes 288. Tools also split by token type: **65** need a message token
 > (`tm_msg_`), the rest an ops token (`tm_live_`).
 > These are full catalog totals. A directory profile or a restricted grant can
 > expose a smaller set, including browser handoffs for sensitive setup.
@@ -209,6 +209,10 @@ writes and delegated access are removed.
 ### Invites (ops token)
 - **create_invite** — Send a setup invite to a recipient (optional `storage_allocation_mb` pre-allocates dedicated storage; the recipient inherits it at redeem)
 - **create_invites_bulk** — Send up to 100 setup invites in one call (per-item `storage_allocation_mb` supported, each checked against what the earlier items left)
+- **list_invites** — List open invites (pending and expired) with their status and email delivery status; no setup links
+- **get_invite** — Read one invite: status (`pending`, `expired`, `used`, `canceled`), delivery status, expiry
+- **resend_invite** — Email an invite again with a new setup link (the old link stops working; an expired invite is revived when the domain has room)
+- **cancel_invite** — Cancel a pending invite (requires `confirm_cancel=true`); the mailbox name is free for a new invite at once
 
 ### Aliases (ops token)
 - **list_aliases** — List all aliases for a mailbox (includes primary address and plan limits)

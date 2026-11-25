@@ -63,8 +63,8 @@ describe("stdio toolset filtering", () => {
     expect(writable).toContain("remove_shared_mailbox_member");
     expect(namesFor(undefined, ["shared_mailboxes:write"])).not.toContain("update_shared_mailbox_member");
   });
-  it("preserves all 285 tools when TREKMAIL_TOOLSETS is omitted", () => {
-    expect(namesFor()).toHaveLength(285);
+  it("preserves all 289 tools when TREKMAIL_TOOLSETS is omitted", () => {
+    expect(namesFor()).toHaveLength(289);
   });
 
   it("exposes email tools plus minimal mailbox discovery", () => {
@@ -165,7 +165,7 @@ describe("stdio toolset filtering", () => {
     // Nothing else in the catalogue depends on confinement, except stopping
     // a folder share, which a mailbox-confined key never gets to do.
     expect(namesFor(undefined, undefined, false, undefined, { domainIds: [7], mailboxIds: [9] }))
-      .toHaveLength(285 - accountWide.length - 1);
+      .toHaveLength(289 - accountWide.length - 1);
     expect(namesFor(undefined, undefined, false, undefined, { domainIds: [7], mailboxIds: [9] }))
       .not.toContain("drive_folder_stop_sharing");
     expect(namesFor(undefined, undefined, false, undefined, { domainIds: [7], mailboxIds: null }))

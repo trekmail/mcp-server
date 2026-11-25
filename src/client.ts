@@ -98,6 +98,14 @@ export interface CreateInviteParams {
   storage_allocation_mb?: number;
 }
 
+export interface ListInvitesParams {
+  domain_id?: number;
+  /** Omit for both pending and expired. */
+  status?: "pending" | "expired";
+  page?: number;
+  per_page?: number;
+}
+
 export interface AppleMailProfileFile {
   file_name: string;
   media_type: string;
@@ -964,6 +972,24 @@ export class TrekMailClient {
       body: { ...params },
       idempotencyKey,
     });
+  }
+
+  async listInvites(params?: ListInvitesParams): Promise<unknown> {
+    return this.request("GET", "mailboxes/invites", {
+      query: params ? { ...params } : undefined,
+    });
+  }
+
+  async getInvite(inviteId: number): Promise<unknown> {
+    return this.request("GET", `mailboxes/invites/${inviteId}`);
+  }
+
+  async resendInvite(inviteId: number, idempotencyKey: string): Promise<unknown> {
+    return this.request("POST", `mailboxes/invites/${inviteId}:resend`, { idempotencyKey });
+  }
+
+  async cancelInvite(inviteId: number, idempotencyKey: string): Promise<unknown> {
+    return this.request("DELETE", `mailboxes/invites/${inviteId}`, { idempotencyKey });
   }
 
   // --- Forwarding ---

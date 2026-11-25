@@ -7,7 +7,7 @@ import { callApi, errorResult, LOCAL_PART_PATTERN, LOCAL_PART_RULE } from "./uti
 export function registerInviteTools(
   server: McpServer,
   client: TrekMailClient,
-  config?: { allowSending?: boolean },
+  config?: { allowSending?: boolean; allowDestructive?: boolean },
 ): void {
   server.registerTool(
     "create_invite",
@@ -39,7 +39,7 @@ export function registerInviteTools(
           .min(1)
           .max(720)
           .optional()
-          .describe("Hours until the invite expires (1-720, default: 72)"),
+          .describe("Hours until the invite expires (1-720, default: 168, i.e. 7 days)"),
         storage_allocation_mb: z
           .number()
           .int()
@@ -138,7 +138,7 @@ export function registerInviteTools(
           .min(1)
           .max(720)
           .optional()
-          .describe("Hours until the invites expire (1-720, default: 72)"),
+          .describe("Hours until the invites expire (1-720, default: 168, i.e. 7 days)"),
         idempotency_key: z
           .string()
           .optional()
@@ -165,6 +165,98 @@ export function registerInviteTools(
           idemKey,
         ),
       );
+    },
+  );
+
+  const inviteId = z
+    .number()
+    .int()
+    .positive()
+    .describe("The invite_id returned by create_invite, create_invites_bulk or list_invites");
+
+  server.registerTool(
+    "list_invites",
+    {
+      title: "List Invites",
+      description:
+        "List open mailbox setup invites (pending and expired) on the domains this connection can reach, newest first. Each has status (pending, expired), delivery_status of the invitation email and expires_at. Setup links are never listed. Use it to find an invite_id for resend_invite or cancel_invite.",
+      inputSchema: {
+        domain_id: z.number().int().positive().optional().describe("Only invites on this domain"),
+        status: z.enum(["pending", "expired"]).optional().describe("Omit for both"),
+        page: z.number().int().positive().optional(),
+        per_page: z.number().int().min(1).max(100).optional().describe("Default 50"),
+      },
+    },
+    async ({ domain_id, status, page, per_page }) =>
+      callApi(() => client.listInvites({ domain_id, status, page, per_page })),
+  );
+
+  server.registerTool(
+    "get_invite",
+    {
+      title: "Get Invite",
+      description:
+        "Read one mailbox setup invite: status (pending, expired, used, canceled), delivery_status of the invitation email, last_sent_at, expires_at and the address it creates. No setup link.",
+      inputSchema: { invite_id: inviteId },
+    },
+    async ({ invite_id }) => callApi(() => client.getInvite(invite_id)),
+  );
+
+  server.registerTool(
+    "resend_invite",
+    {
+      title: "Resend Invite",
+      description:
+        "Email a pending or expired mailbox setup invite again with a new setup link. The previous link stops working and the expiry starts over; an expired invite is revived when the domain still has room. Returns the invite with the new invite_url. A used or canceled invite cannot be resent (invite_already_used, invite_canceled). On a White Label account the email is branded by the address the connection calls. Counts toward the daily invitation allowance where one applies.",
+      inputSchema: {
+        invite_id: inviteId,
+        idempotency_key: z
+          .string()
+          .optional()
+          .describe(
+            "Optional idempotency key. If omitted, a deterministic key is generated from the params, so a repeat within 24 hours returns the first answer without emailing again; pass a new key to resend once more.",
+          ),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ invite_id, idempotency_key }) => {
+      if (!config?.allowSending) {
+        return errorResult(
+          "Sending operations are disabled. Set TREKMAIL_ALLOW_SENDING=true to resend invites (each resend emails the recipient).",
+        );
+      }
+      const idemKey = idempotencyKey("resend_invite", { invite_id }, idempotency_key);
+      return callApi(() => client.resendInvite(invite_id, idemKey));
+    },
+  );
+
+  server.registerTool(
+    "cancel_invite",
+    {
+      title: "Cancel Invite",
+      description:
+        "Cancel a pending mailbox setup invite: its setup link stops working and the mailbox name is free for a new invite at once. Canceling an already canceled invite returns it unchanged. A used invite (invite_already_used) or an expired one (invite_expired, nothing left to cancel) is refused.",
+      inputSchema: {
+        invite_id: inviteId,
+        confirm_cancel: z.boolean().describe("Must be true after reviewing the invite"),
+        idempotency_key: z
+          .string()
+          .optional()
+          .describe(
+            "Optional idempotency key. If omitted, a deterministic key is generated from the params.",
+          ),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ invite_id, confirm_cancel, idempotency_key }) => {
+      if (!config?.allowDestructive) {
+        return errorResult(
+          "Destructive operations are disabled. Set TREKMAIL_ALLOW_DESTRUCTIVE=true to cancel invites.",
+        );
+      }
+      if (!confirm_cancel) return errorResult("Cancel not confirmed. Set confirm_cancel=true.");
+      const idemKey = idempotencyKey("cancel_invite", { invite_id }, idempotency_key);
+      return callApi(() => client.cancelInvite(invite_id, idemKey));
     },
   );
 }

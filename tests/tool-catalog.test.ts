@@ -29,17 +29,17 @@ function registeredToolNames(): Set<string> {
 
 describe("tool catalog", () => {
   it("has an explicit version and deterministic parity hash", () => {
-    expect(TOOL_CATALOG_VERSION).toBe("2026-11-15.1");
-    expect(TOOL_CATALOG_HASH).toBe("4cc73901");
+    expect(TOOL_CATALOG_VERSION).toBe("2026-11-25.1");
+    expect(TOOL_CATALOG_HASH).toBe("12dacac6");
   });
 
-  it("covers all 285 registered tools exactly once", () => {
+  it("covers all 289 registered tools exactly once", () => {
     const registered = registeredToolNames();
     const catalogued = new Set(TOOL_CATALOG.map((entry) => entry.name));
 
-    expect(registered.size).toBe(285);
-    expect(TOOL_CATALOG).toHaveLength(285);
-    expect(TOOL_CATALOG_BY_NAME.size).toBe(285);
+    expect(registered.size).toBe(289);
+    expect(TOOL_CATALOG).toHaveLength(289);
+    expect(TOOL_CATALOG_BY_NAME.size).toBe(289);
     expect([...registered].filter((name) => !catalogued.has(name))).toEqual([]);
     expect([...catalogued].filter((name) => !registered.has(name))).toEqual([]);
   });
@@ -146,6 +146,29 @@ describe("tool catalog", () => {
       safetyGate: "destructive",
     });
     expect(toolsForToolsets(["white_label"]).size).toBe(23);
+
+    // Following an invite up (ticket #581): the scope that creates invites
+    // reads, resends (an email, so the sending gate) and cancels them.
+    for (const name of ["list_invites", "get_invite"]) {
+      expect(TOOL_CATALOG_BY_NAME.get(name), name).toMatchObject({
+        toolset: "mail_admin",
+        anyOfCapabilities: ["mailboxes:invites:create"],
+        access: "read",
+      });
+      expect(TOOL_CATALOG_BY_NAME.get(name)?.safetyGate, name).toBeUndefined();
+    }
+    expect(TOOL_CATALOG_BY_NAME.get("resend_invite")).toMatchObject({
+      toolset: "mail_admin",
+      anyOfCapabilities: ["mailboxes:invites:create"],
+      access: "write",
+      safetyGate: "sending",
+    });
+    expect(TOOL_CATALOG_BY_NAME.get("cancel_invite")).toMatchObject({
+      toolset: "mail_admin",
+      anyOfCapabilities: ["mailboxes:invites:create"],
+      access: "destructive",
+      safetyGate: "destructive",
+    });
 
     // Linking existing Cloudflare domains takes cloudflare:write alone; Laravel
     // asks for domains:create only when an entry adds a domain.

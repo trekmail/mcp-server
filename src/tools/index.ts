@@ -60,7 +60,10 @@ export function registerInfraTools(
   registerMailboxTools(server, client, { allowDestructive: config.allowDestructive });
   registerMailboxAppPasswordTools(server, client, { allowDestructive: config.allowDestructive });
   registerMailClientSetupTools(server, client);
-  registerInviteTools(server, client, { allowSending: config.allowSending });
+  registerInviteTools(server, client, {
+    allowSending: config.allowSending,
+    allowDestructive: config.allowDestructive,
+  });
   registerAliasTools(server, client, config);
   registerSharedMailboxMemberTools(server, client, config);
   registerSharedMailboxLifecycleTools(server, client, config);

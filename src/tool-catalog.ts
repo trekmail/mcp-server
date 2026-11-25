@@ -286,6 +286,10 @@ const NAMES_BY_TOOLSET: Readonly<Record<Toolset, readonly string[]>> = {
     "get_apple_mail_profile",
     "create_invite",
     "create_invites_bulk",
+    "list_invites",
+    "get_invite",
+    "resend_invite",
+    "cancel_invite",
     "list_aliases",
     "create_alias",
     "update_alias",
@@ -553,7 +557,9 @@ const POLICY_RULES: readonly PolicyRule[] = [
   rule("mailboxes:write", "destructive", [
     "delete_alias", "rotate_mailbox_app_password", "revoke_mailbox_app_password",
   ]),
-  rule("mailboxes:invites:create", "write", ["create_invite", "create_invites_bulk"]),
+  rule("mailboxes:invites:create", "read", ["list_invites", "get_invite"]),
+  rule("mailboxes:invites:create", "write", ["create_invite", "create_invites_bulk", "resend_invite"]),
+  rule("mailboxes:invites:create", "destructive", ["cancel_invite"]),
   rule("mailboxes:forwarding:read", "read", ["get_forwarding"]),
   rule("mailboxes:forwarding:write", "write", ["set_forwarding"]),
   rule("mailboxes:rules:read", "read", ["list_mail_rules", "get_mail_rule", "get_sieve_script"]),
@@ -656,6 +662,7 @@ const SENDING_GATED = new Set([
   "reschedule_message",
   "create_invite",
   "create_invites_bulk",
+  "resend_invite",
   "invite_white_label_member",
   "resend_white_label_invitation",
 ]);
@@ -762,7 +769,7 @@ for (const name of [...REQUIRES_ALL_DOMAINS, ...REQUIRES_ALL_MAILBOXES]) {
 export const TOOL_CATALOG: readonly ToolCatalogEntry[] = Object.freeze(entries);
 
 /** Bump whenever grouping/capability/safety semantics change. */
-export const TOOL_CATALOG_VERSION = "2026-11-15.1";
+export const TOOL_CATALOG_VERSION = "2026-11-25.1";
 
 function fnv1a(value: string): string {
   let hash = 0x811c9dc5;
