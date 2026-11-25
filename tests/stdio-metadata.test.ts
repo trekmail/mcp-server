@@ -37,8 +37,8 @@ describe("stdio release metadata", () => {
   }, 15000);
 
   /**
-   * A release bumps the version in four places (1.19.0: list_invites, get_invite,
-   * resend_invite and cancel_invite). The server advertises config.ts; the
+   * A release bumps the version in four places (1.19.1: refusals name the invite
+   * tools that move things on; 1.19.0 added list_invites, get_invite, resend_invite and cancel_invite). The server advertises config.ts; the
    * lockfile's own entries and the README's release line must say the same.
    */
   it("keeps config.ts, the lockfile and the README on the package version", () => {

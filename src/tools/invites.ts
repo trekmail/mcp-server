@@ -179,7 +179,7 @@ export function registerInviteTools(
     {
       title: "List Invites",
       description:
-        "List open mailbox setup invites (pending and expired) on the domains this connection can reach, newest first. Each has status (pending, expired), delivery_status of the invitation email and expires_at. Setup links are never listed. Use it to find an invite_id for resend_invite or cancel_invite.",
+        "List open setup invites (pending and expired), newest first, with status, email delivery_status and expires_at; never setup links. Finds the invite_id for resend_invite or cancel_invite.",
       inputSchema: {
         domain_id: z.number().int().positive().optional().describe("Only invites on this domain"),
         status: z.enum(["pending", "expired"]).optional().describe("Omit for both"),
@@ -196,7 +196,7 @@ export function registerInviteTools(
     {
       title: "Get Invite",
       description:
-        "Read one mailbox setup invite: status (pending, expired, used, canceled), delivery_status of the invitation email, last_sent_at, expires_at and the address it creates. No setup link.",
+        "Read one setup invite: status (pending, expired, used, canceled), email delivery_status, last_sent_at, expires_at and the address it creates. No setup link.",
       inputSchema: { invite_id: inviteId },
     },
     async ({ invite_id }) => callApi(() => client.getInvite(invite_id)),
@@ -207,14 +207,15 @@ export function registerInviteTools(
     {
       title: "Resend Invite",
       description:
-        "Email a pending or expired mailbox setup invite again with a new setup link. The previous link stops working and the expiry starts over; an expired invite is revived when the domain still has room. Returns the invite with the new invite_url. A used or canceled invite cannot be resent (invite_already_used, invite_canceled). On a White Label account the email is branded by the address the connection calls. Counts toward the daily invitation allowance where one applies.",
+        "Email a pending or expired setup invite again with a new link (returned as invite_url); the old link stops working and the expiry restarts. An expired invite is revived if the domain has room. Used or canceled invites are refused.",
       inputSchema: {
         invite_id: inviteId,
         idempotency_key: z
           .string()
+          .max(255)
           .optional()
           .describe(
-            "Optional idempotency key. If omitted, a deterministic key is generated from the params, so a repeat within 24 hours returns the first answer without emailing again; pass a new key to resend once more.",
+            "Optional. If omitted, a repeat within 24 hours returns the first result without emailing again; pass a new key to resend once more.",
           ),
       },
       annotations: { destructiveHint: true },
@@ -235,12 +236,13 @@ export function registerInviteTools(
     {
       title: "Cancel Invite",
       description:
-        "Cancel a pending mailbox setup invite: its setup link stops working and the mailbox name is free for a new invite at once. Canceling an already canceled invite returns it unchanged. A used invite (invite_already_used) or an expired one (invite_expired, nothing left to cancel) is refused.",
+        "Cancel a pending setup invite: its link stops working and the mailbox name is free for a new invite at once. Repeating returns it unchanged; used or expired invites are refused.",
       inputSchema: {
         invite_id: inviteId,
         confirm_cancel: z.boolean().describe("Must be true after reviewing the invite"),
         idempotency_key: z
           .string()
+          .max(255)
           .optional()
           .describe(
             "Optional idempotency key. If omitted, a deterministic key is generated from the params.",

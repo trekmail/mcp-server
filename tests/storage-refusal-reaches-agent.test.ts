@@ -89,10 +89,10 @@ describe("storage refusals reach the agent with an action", () => {
     expect(actionOf(refusal(422, "storage_pool_exceeded"))[0]).toContain("where the client has no mailbox size, shared storage");
     // Leaving the size out is the fix only where a size can be left out.
     expect(actionOf(refusal(422, "client_mailbox_size_exceeded"))[0]).toContain("when creating or inviting, leaving the size out");
-    // No tool lists or cancels an invitation: the agent is not sent to do it.
+    // A pending invitation counts and can be canceled (ticket #581), with the user's agreement.
     const full = actionOf(refusal(422, "client_mailbox_limit_reached"))[0];
-    expect(full).not.toContain("or cancel a pending invitation");
-    expect(full).toContain("a person cancels it in the dashboard; no tool cancels one");
+    expect(full).toContain("list_invites and, after the user agrees, cancel it with cancel_invite");
+    expect(full).not.toContain("no tool cancels one");
   });
 
   it("a bulk batch refused row by row for the client's mailbox maximum names the next step", () => {
@@ -124,7 +124,12 @@ describe("storage refusals reach the agent with an action", () => {
   });
 
   it("an unrelated refusal gets no storage action", () => {
-    expect(actionOf(refusal(422, "mailbox_limit_reached"))).toEqual([]);
+    // The plan's mailbox limit is not a storage refusal; it gets the invitation
+    // action alone (ticket #581).
+    const planLimit = actionOf(refusal(422, "mailbox_limit_reached"));
+    expect(planLimit).toHaveLength(1);
+    expect(planLimit[0]).toContain("cancel_invite");
+    expect(planLimit[0]).not.toContain("set_mailbox_storage");
     expect(actionOf(refusal(422, "validation_error"))).toEqual([]);
   });
 });

@@ -163,6 +163,8 @@ export class TrekMailApiError extends Error {
     if (storageAction) text += `\nAction: ${storageAction}`;
     const privateNoteAction = PRIVATE_NOTE_ACTIONS[this.code];
     if (privateNoteAction) text += `\nAction: ${privateNoteAction}`;
+    const inviteAction = INVITE_ACTIONS[this.code];
+    if (inviteAction) text += `\nAction: ${inviteAction}`;
     const details = this.extra["details"];
     if (
       this.code === "validation_error" &&
@@ -213,6 +215,26 @@ const PRIVATE_NOTE_ACTIONS: Readonly<Record<string, string>> = {
 };
 
 /**
+ * Mailbox setup invitation refusals (ticket #581) name the invite tool that
+ * moves things on. The API hint names the REST call. The same codes come from
+ * create_invite, create_invites_bulk (per row), resend_invite and cancel_invite.
+ */
+const INVITE_ACTIONS: Readonly<Record<string, string>> = {
+  localpart_pending:
+    "Do not create it again: a pending invitation already holds this mailbox name. Find it with list_invites, then resend_invite emails it again, or cancel_invite frees the name for a new invitation.",
+  localpart_exists:
+    "Do not invite this name again: the mailbox already exists. Choose another mailbox name, or manage the existing mailbox.",
+  invite_already_used:
+    "Do not retry: the recipient already set the mailbox up with this invitation. Manage the mailbox itself (list_mailboxes).",
+  invite_canceled:
+    "Do not retry: a canceled invitation cannot be resent. Send a new one with create_invite for the same mailbox name.",
+  invite_expired:
+    "Nothing to cancel: an expired invitation no longer holds the mailbox name. create_invite works for that name, or resend_invite revives this invitation with a new link.",
+  mailbox_limit_reached:
+    "Do not retry unchanged: this domain has no mailbox left on the plan, and pending invitations count. Free one first: cancel an invitation the user no longer needs (list_invites, then cancel_invite) or delete an unused mailbox (create_delete_intent).",
+};
+
+/**
  * Storage refusals, the account pool's and a White Label client storage
  * limit's (ticket #482), say which call frees room instead of leaving an agent
  * to retry the same size. The same code comes from several tools (create,
@@ -243,7 +265,7 @@ const STORAGE_ACTIONS: Readonly<Record<string, string>> = {
   client_storage_domains_conflict:
     "Do not retry unchanged: these domains are under different limits (client_limit_ids in Details), and one call cannot merge them. Change each limit on its own domains, or first take a domain out of its limit with set_client_limit (that client_limit_id and the domain_ids it keeps) or remove_client_limit.",
   client_mailbox_limit_reached:
-    "Do not retry unchanged: the client already has its most mailboxes, pending invitations included (max_mailboxes, mailboxes and pending_invites in Details when they are sent). Free one first: delete a mailbox in these domains (create_delete_intent). A pending invitation frees its place only when it expires or a person cancels it in the dashboard; no tool cancels one. Only a connection that reaches every domain can raise max_mailboxes (set_client_limit); any other connection asks the account administrator for more mailboxes.",
+    "Do not retry unchanged: the client already has its most mailboxes, pending invitations included (max_mailboxes, mailboxes and pending_invites in Details when they are sent). Free one first: delete a mailbox in these domains (create_delete_intent). A pending invitation frees its place when it expires or is canceled: find one the user no longer needs with list_invites and, after the user agrees, cancel it with cancel_invite. Only a connection that reaches every domain can raise max_mailboxes (set_client_limit); any other connection asks the account administrator for more mailboxes.",
   client_mailbox_size_exceeded:
     "Do not retry with the same size. Choose at most max_mailbox_size_mb from Details; when creating or inviting, leaving the size out gives exactly that size. Only a connection that reaches every domain can raise mailbox_size_mb (set_client_limit); any other connection asks the account administrator for larger mailboxes.",
   client_mailbox_size_required:

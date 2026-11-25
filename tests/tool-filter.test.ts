@@ -48,6 +48,22 @@ function namesFor(
 }
 
 describe("stdio toolset filtering", () => {
+  it("shows the invite follow-up tools to whoever may create invites, behind their gates (ticket #581)", () => {
+    const followUp = ["list_invites", "get_invite", "resend_invite", "cancel_invite"];
+    // A White Label role without the invite permission (Domain admin) gets none of them.
+    const domainAdmin = namesFor(undefined, ["domains:read", "domains:write", "mailboxes:read"]);
+    for (const name of followUp) expect(domainAdmin, name).not.toContain(name);
+    const inviter = namesFor(undefined, ["mailboxes:invites:create"]);
+    for (const name of followUp) expect(inviter, name).toContain(name);
+    // Reading stays available with every safety gate closed; resending sends, cancelling revokes.
+    const gated = namesFor(undefined, ["mailboxes:invites:create"], false, { destructive: false, sending: false, migration: false });
+    expect(gated).toEqual(expect.arrayContaining(["list_invites", "get_invite"]));
+    expect(gated).not.toContain("resend_invite");
+    expect(gated).not.toContain("cancel_invite");
+    expect(namesFor(undefined, ["mailboxes:invites:create"], true)).toEqual(expect.arrayContaining(["list_invites", "get_invite"]));
+    expect(namesFor(undefined, ["mailboxes:invites:create"], true)).not.toContain("cancel_invite");
+  });
+
   it("requires shared mailbox permissions in addition to mailbox grants", () => {
     const mailboxOnly = namesFor(undefined, ["mailboxes:read", "mailboxes:write", "mailboxes:create"]);
     expect(mailboxOnly).not.toContain("list_shared_mailbox_members");

@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 289 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
-Current release: package **1.19.0**, catalogue **2026-11-25.1**.
+Current release: package **1.19.1**, catalogue **2026-11-25.1**.
 
 ## Connect in Claude
 
@@ -72,7 +72,7 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.19.0` | User-Agent header |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.19.1` | User-Agent header |
 | `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable high-impact changes (White Label access/branding, mailbox storage sizes and client storage limits, delete intents, domain deletion, forwarding, password changes, SMTP, credential revocation, Drive trash/purge, and message deletion) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable external sends, including `send_message` and White Label invitations |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
@@ -627,7 +627,18 @@ Additionally, each write tool requires a per-call confirmation parameter (`confi
 ### Invite Flow
 ```
 1. create_invite(domain_id: 5, local_part: "bob", recipient_email: "bob@gmail.com")
-   → { id: 1, status: "pending", invite_url: "..." }
+   → { invite_id: 1, status: "pending", delivery_status: "pending", invite_url: "...", expires_at: "..." }
+```
+
+### Follow Up an Invite
+```
+1. list_invites(domain_id: 5, status: "pending")
+   → { data: [{ invite_id: 1, email_to_create: "bob@example.com", status: "pending", delivery_status: "sent", ... }] }
+2. resend_invite(invite_id: 1)                       # email lost: new link, the old one stops working
+   → { invite_id: 1, status: "pending", invite_url: "...", expires_at: "..." }
+3. cancel_invite(invite_id: 1, confirm_cancel: true) # no longer wanted: the name "bob" is free again
+   → { invite_id: 1, status: "canceled", ... }
+# A new invite for a name whose invite expired replaces the expired one.
 ```
 
 ### Invite with Pre-Allocated Storage

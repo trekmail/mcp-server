@@ -1,6 +1,6 @@
 {
   "name": "@trekmail/mcp-server",
-  "version": "1.19.0",
+  "version": "1.19.1",
   "packageManager": "npm@10.9.8",
   "description": "Model Context Protocol (MCP) server for TrekMail. Exposes 289 agent tools for email, domains, Drive, White Label and encrypted Private Notes.",
   "type": "module",
