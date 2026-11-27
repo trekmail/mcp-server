@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server that exposes the TrekMail API v1 as 289 agent tools. This is a thin adapter — all business logic lives in the TrekMail API; this server handles transport, authentication, retries, and safety gates.
 
-Current release: package **1.19.1**, catalogue **2026-11-25.1**.
+Current release: package **1.19.2**, catalogue **2026-11-25.1**.
 
 ## Connect in Claude
 
@@ -72,7 +72,7 @@ npm start
 | `TREKMAIL_API_TOKEN` | At least one token | — | Ops token (must start with `tm_live_`) |
 | `TREKMAIL_MESSAGE_TOKEN` | At least one token | — | Message token (must start with `tm_msg_`) |
 | `TREKMAIL_TIMEOUT_MS` | No | `30000` | Request timeout in milliseconds |
-| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.19.1` | User-Agent header |
+| `TREKMAIL_USER_AGENT` | No | `trekmail-mcp/1.19.2` | User-Agent header |
 | `TREKMAIL_ALLOW_DESTRUCTIVE` | No | `false` | Enable high-impact changes (White Label access/branding, mailbox storage sizes and client storage limits, delete intents, domain deletion, forwarding, password changes, SMTP, credential revocation, Drive trash/purge, and message deletion) |
 | `TREKMAIL_ALLOW_SENDING` | No | `false` | Enable external sends, including `send_message` and White Label invitations |
 | `TREKMAIL_ALLOW_MIGRATION` | No | `false` | Enable migration write tools (`start_migration`, `retry_migration`, `delete_migration`, `delete_bulk_migration`, `update_bulk_migration_job_password`, `test_migration_connection`) |
@@ -240,7 +240,7 @@ Shared mailboxes never authenticate directly. Call **get_mail_client_setup** wit
 ### Mail Filters (ops token)
 - **list_mail_rules** — List all mail filters for a mailbox
 - **get_mail_rule** — Get a single mail filter by ID
-- **create_mail_rule** — Create a new filter with conditions and actions
+- **create_mail_rule** — Create a new filter with conditions and actions (operators: `is`, `contains`, `matches` for a `*`/`?` wildcard, `regex`, `over`, `under`, `exists`; `from` and `to` compare the address only)
 - **update_mail_rule** — Update an existing filter
 - **delete_mail_rule** — Delete a filter (requires `TREKMAIL_ALLOW_DESTRUCTIVE=true`)
 - **reorder_mail_rules** — Change filter execution order

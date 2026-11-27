@@ -6,10 +6,25 @@ import { idempotencyKey } from "../idempotency.js";
 import { callApi, errorResult } from "./util.js";
 
 const conditionSchema = z.object({
-  field: z.enum(["from", "to", "subject", "body", "header", "size"]),
-  operator: z.enum(["is", "contains", "matches", "over", "under", "exists"]),
-  value: z.string().max(500).optional(),
-  header_name: z.string().max(100).optional(),
+  field: z
+    .enum(["from", "to", "subject", "body", "header", "size"])
+    .describe(
+      "'from' and 'to' compare the address only; to match the sender's display name use 'header' with header_name 'From'",
+    ),
+  operator: z
+    .enum(["is", "contains", "matches", "regex", "over", "under", "exists"])
+    .describe(
+      "'matches' is a wildcard pattern (* and ?), 'regex' a regular expression; text comparisons ignore the case of a-z. 'over' and 'under' are for size only. 'exists' takes no value and is not for body or size",
+    ),
+  value: z
+    .string()
+    .max(500)
+    .nullable()
+    .optional()
+    .describe(
+      "What to compare with; required unless the operator is 'exists'. For size: whole kilobytes from 1 to 2097151, e.g. \"10240\" for 10 MB",
+    ),
+  header_name: z.string().max(100).nullable().optional(),
 });
 
 const actionSchema = z.object({
@@ -18,10 +33,11 @@ const actionSchema = z.object({
     "redirect_copy",
     "redirect",
     "addflag",
+    "mark_read",
     "discard",
     "reject",
   ]),
-  value: z.string().max(500).optional(),
+  value: z.string().max(500).nullable().optional(),
 });
 
 export function registerRulesTools(
@@ -228,7 +244,7 @@ export function registerRulesTools(
     {
       title: "Reorder Mail Filters",
       description:
-        "Change the execution order of mail filters. Filters are checked in order — first match wins.",
+        "Change the execution order of mail filters. Filters run in this order and every matching filter applies, until one that has stop=true (or rejects the message) matches.",
       inputSchema: {
         mailbox_id: z.number().int().positive().describe("The mailbox ID"),
         order: z

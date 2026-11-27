@@ -17,7 +17,7 @@ export function registerMessageBlockedTools(
 
   server.registerTool("block_sender", {
     title: "Block Sender",
-    description: "Block an email address (e.g. spammer@evil.com) or entire domain (e.g. @evil.com). Max 50 per mailbox.",
+    description: "Block an email address (e.g. spammer@evil.com) or entire domain (e.g. @evil.com). Max 1000 per mailbox.",
     inputSchema: {
       email_or_domain: z
         .string()
